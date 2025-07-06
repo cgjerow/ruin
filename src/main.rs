@@ -5,6 +5,10 @@ use std::{
     thread::sleep,
     time::{Duration, Instant},
 };
+use winit::application::ApplicationHandler;
+use winit::event::WindowEvent;
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::window::{Window, WindowId};
 
 #[derive(Debug)]
 struct Config {
@@ -13,26 +17,83 @@ struct Config {
 }
 
 static CONFIG: OnceCell<Config> = OnceCell::new();
+static SAFETY_MAX_FOR_DEV: u64 = 100;
 
-fn main() {
-    const SAFETY_MAX_FOR_DEV: u16 = 100;
-    let mut count: u16 = 0;
+struct App {
+    window: Option<Window>,
+    last_frame: Instant,
+    count: u64,
+}
 
-    setup();
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            window: None,
+            last_frame: Instant::now(),
+            count: 0,
+        }
+    }
+}
 
-    println!("Starting Game Loop");
-    let mut last_frame: Instant = Instant::now();
-    loop {
-        update(last_frame);
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        self.window = Some(
+            event_loop
+                .create_window(Window::default_attributes())
+                .unwrap(),
+        );
+        setup();
+        self.last_frame = Instant::now();
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        update(self.last_frame);
         draw();
-        last_frame = Instant::now();
-        count += 1;
-        if count > SAFETY_MAX_FOR_DEV {
-            break;
+        self.last_frame = Instant::now();
+        self.count += 1;
+        if self.count > SAFETY_MAX_FOR_DEV {
+            event_loop.exit()
         }
     }
 
-    cleanup()
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+        match event {
+            WindowEvent::CloseRequested => {
+                println!("The close button was pressed; stopping");
+                event_loop.exit();
+            }
+            WindowEvent::RedrawRequested => {
+                // Redraw the application.
+                //
+                // It's preferable for applications that do not render continuously to render in
+                // this event rather than in AboutToWait, since rendering in here allows
+                // the program to gracefully handle redraws requested by the OS.
+
+                // Draw.
+
+                // Queue a RedrawRequested event.
+                //
+                // You only need to call this if you've determined that you need to redraw in
+                // applications which do not always need to. Applications that redraw continuously
+                // can render here instead.
+                self.window.as_ref().unwrap().request_redraw();
+            }
+            _ => (),
+        }
+    }
+
+    fn exiting(&mut self, event_loop: &ActiveEventLoop) {
+        cleanup()
+    }
+}
+
+fn main() {
+    let event_loop = EventLoop::new().unwrap();
+    // ControlFlow::Poll continuously runs the event loop, even if the OS hasn't
+    // dispatched any events. This is ideal for games and similar applications.
+    event_loop.set_control_flow(ControlFlow::Poll);
+    let mut app = App::default();
+    event_loop.run_app(&mut app).expect("Unable to open window");
 }
 
 fn setup() {
