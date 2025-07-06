@@ -15,21 +15,19 @@ struct Config {
 static CONFIG: OnceCell<Config> = OnceCell::new();
 
 fn main() {
-    println!("Starting Game Loop");
-    const MAX: u16 = 100;
-    let mut last_frame: Instant = Instant::now();
+    const SAFETY_MAX_FOR_DEV: u16 = 100;
     let mut count: u16 = 0;
 
     setup();
 
-    println!("CONFIG in main: {:?}", CONFIG.get());
-
+    println!("Starting Game Loop");
+    let mut last_frame: Instant = Instant::now();
     loop {
         update(last_frame);
         draw();
         last_frame = Instant::now();
         count += 1;
-        if count > MAX {
+        if count > SAFETY_MAX_FOR_DEV {
             break;
         }
     }
