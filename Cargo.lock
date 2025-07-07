@@ -1335,7 +1335,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "mlua",
- "once_cell",
  "pollster",
  "wgpu",
  "winit",

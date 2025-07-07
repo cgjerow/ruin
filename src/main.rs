@@ -1,5 +1,4 @@
 use mlua::prelude::*;
-use once_cell::sync::OnceCell;
 use std::fs;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -9,14 +8,6 @@ use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::Window;
 
-#[derive(Debug)]
-struct Config {
-    #[allow(dead_code)]
-    fps: Duration,
-    target_rate: Duration,
-}
-
-static CONFIG: OnceCell<Config> = OnceCell::new();
 static SAFETY_MAX_FOR_DEV: u64 = 10000;
 
 struct Graphics {
@@ -152,8 +143,10 @@ impl Graphics {
 
 pub struct Engine {
     graphics: Option<Graphics>,
-    last_frame: Instant,
     count: u64,
+    #[allow(dead_code)]
+    fps: Duration,
+    target_rate: Duration,
 }
 
 impl Engine {
@@ -169,15 +162,11 @@ impl Engine {
         let setup_fn: LuaFunction = globals.get("setup").expect("Failed to setup Lua");
         let config_table: LuaTable = setup_fn.call(()).expect("Setup call failed");
 
-        let _ = CONFIG.set(Config {
-            fps: Duration::from_millis(config_table.get("fps").unwrap_or(60)),
-            target_rate: Duration::from_millis(1000 / (config_table.get("fps").unwrap_or(60))),
-        });
-
         Self {
             graphics: None,
-            last_frame: Instant::now(),
             count: 0,
+            fps: Duration::from_millis(config_table.get("fps").unwrap_or(60)),
+            target_rate: Duration::from_millis(1000 / (config_table.get("fps").unwrap_or(60))),
         }
     }
 
@@ -192,6 +181,9 @@ impl Engine {
 
 impl ApplicationHandler<Graphics> for Engine {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let frame_start = Instant::now();
+        let target = frame_start + self.target_rate;
+
         self.update();
 
         let _ = match &mut self.graphics {
@@ -200,16 +192,12 @@ impl ApplicationHandler<Graphics> for Engine {
         }
         .render();
 
-        let now = Instant::now();
-        let next_frame = now + CONFIG.get().unwrap().target_rate;
-        self.last_frame = now;
-
         self.count += 1;
         if self.count > SAFETY_MAX_FOR_DEV {
             event_loop.exit()
         }
 
-        event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(next_frame));
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(target));
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
@@ -218,7 +206,6 @@ impl ApplicationHandler<Graphics> for Engine {
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
         #[cfg(not(target_arch = "wasm32"))]
         {
-            // If we are not on web we can use pollster to await
             self.graphics = Some(pollster::block_on(Graphics::new(window)).unwrap());
         }
     }
