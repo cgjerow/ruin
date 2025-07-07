@@ -1,3 +1,7 @@
+#[macro_use]
+mod debug;
+
+use debug::Debug;
 use mlua::prelude::*;
 use std::fs;
 use std::sync::Arc;
@@ -154,6 +158,7 @@ pub struct Engine {
     fps_specified: bool,
     target_rate: Option<Duration>,
     last_frame: Instant,
+    debugger: Debug,
 }
 
 impl Engine {
@@ -178,8 +183,11 @@ impl Engine {
 
         let target_rate = fps_opt.map(|fps| Duration::from_millis(1000 / fps));
 
+        let debug_enabled: bool = config_table.get("debug_enabled").unwrap_or(false);
+
         Self {
             graphics: None,
+            debugger: Debug::new(debug_enabled),
             count: 0,
             fps_specified: fps_opt != None,
             target_rate: target_rate,
@@ -198,10 +206,11 @@ impl Engine {
             g: rand::random(),
             a: rand::random(),
         });
+        debug_log!(self.debugger, "Updated it? {}", true)
     }
 
     fn cleanup(&mut self) {
-        println!("clean!")
+        debug_log!(self.debugger, "Cleaned it? {}", true)
     }
 }
 
