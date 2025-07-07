@@ -9,3 +9,4 @@ mlua = { version = "0.10.5", features = ["lua54", "vendored"] }
 wgpu = "25.0"
 winit = "0.30.11"
 pollster = "0.3"
+rand = "0.9.1"

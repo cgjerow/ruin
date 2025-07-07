@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::event::{KeyEvent, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::Window;
 
@@ -16,11 +16,16 @@ struct Graphics {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     is_surface_configured: bool,
+    background_color: wgpu::Color,
     #[allow(dead_code)]
     window: Arc<Window>,
 }
 
 impl Graphics {
+    pub fn set_background(&mut self, color: wgpu::Color) {
+        self.background_color = color;
+    }
+
     async fn new(window: Arc<Window>) -> anyhow::Result<Graphics> {
         let size = window.inner_size();
         // The instance is a handle to our GPU
@@ -74,6 +79,12 @@ impl Graphics {
             queue,
             config,
             is_surface_configured: false,
+            background_color: wgpu::Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            },
             window,
         })
     }
@@ -110,12 +121,7 @@ impl Graphics {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
+                        load: wgpu::LoadOp::Clear(self.background_color),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -145,8 +151,9 @@ pub struct Engine {
     graphics: Option<Graphics>,
     count: u64,
     #[allow(dead_code)]
-    fps: Duration,
-    target_rate: Duration,
+    fps_specified: bool,
+    target_rate: Option<Duration>,
+    last_frame: Instant,
 }
 
 impl Engine {
@@ -154,7 +161,7 @@ impl Engine {
         let lua = Lua::new();
 
         let lua_code =
-            fs::read_to_string("src/lua-scripts/setup.lua").expect("Failed to read setup.lua");
+            fs::read_to_string("src/scripts/setup.lua").expect("Failed to read setup.lua");
         lua.load(&lua_code)
             .exec()
             .expect("Failed to execute setup.lua");
@@ -162,16 +169,35 @@ impl Engine {
         let setup_fn: LuaFunction = globals.get("setup").expect("Failed to setup Lua");
         let config_table: LuaTable = setup_fn.call(()).expect("Setup call failed");
 
+        let fps_str: String = config_table.get("fps").unwrap_or("auto".to_string());
+        let fps_opt = if fps_str.trim().eq_ignore_ascii_case("auto") {
+            None
+        } else {
+            fps_str.parse::<u64>().ok()
+        };
+
+        let target_rate = fps_opt.map(|fps| Duration::from_millis(1000 / fps));
+
         Self {
             graphics: None,
             count: 0,
-            fps: Duration::from_millis(config_table.get("fps").unwrap_or(60)),
-            target_rate: Duration::from_millis(1000 / (config_table.get("fps").unwrap_or(60))),
+            fps_specified: fps_opt != None,
+            target_rate: target_rate,
+            last_frame: Instant::now() - target_rate.unwrap_or_default(),
         }
     }
 
     fn update(&mut self) {
-        println!("update!")
+        let _ = match &mut self.graphics {
+            Some(canvas) => canvas,
+            None => return,
+        }
+        .set_background(wgpu::Color {
+            r: rand::random(),
+            b: rand::random(),
+            g: rand::random(),
+            a: rand::random(),
+        });
     }
 
     fn cleanup(&mut self) {
@@ -181,9 +207,17 @@ impl Engine {
 
 impl ApplicationHandler<Graphics> for Engine {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        let frame_start = Instant::now();
-        let target = frame_start + self.target_rate;
+        let now = Instant::now();
 
+        if self.fps_specified {
+            let target = self.last_frame + self.target_rate.unwrap_or_default();
+            if now < target {
+                event_loop.set_control_flow(ControlFlow::WaitUntil(target));
+                return;
+            }
+        }
+
+        self.last_frame = Instant::now();
         self.update();
 
         let _ = match &mut self.graphics {
@@ -197,7 +231,7 @@ impl ApplicationHandler<Graphics> for Engine {
             event_loop.exit()
         }
 
-        event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(target));
+        event_loop.set_control_flow(ControlFlow::Poll);
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
