@@ -2,10 +2,7 @@ use mlua::prelude::*;
 use once_cell::sync::OnceCell;
 use std::fs;
 use std::sync::Arc;
-use std::{
-    thread::sleep,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::event::{KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
@@ -20,7 +17,7 @@ struct Config {
 }
 
 static CONFIG: OnceCell<Config> = OnceCell::new();
-static SAFETY_MAX_FOR_DEV: u64 = 100;
+static SAFETY_MAX_FOR_DEV: u64 = 10000;
 
 struct Graphics {
     surface: wgpu::Surface<'static>,
@@ -185,19 +182,7 @@ impl Engine {
     }
 
     fn update(&mut self) {
-        println!("{}", CONFIG.get().unwrap().target_rate.as_millis());
-        println!("{}", self.last_frame.elapsed().as_millis());
-        sleep(
-            CONFIG
-                .get()
-                .unwrap()
-                .target_rate
-                .saturating_sub(self.last_frame.elapsed()), // panics if negative, use sat_sub
-        );
-        println!(
-            "update: time since last frame {}",
-            self.last_frame.elapsed().as_millis()
-        )
+        println!("update!")
     }
 
     fn cleanup(&mut self) {
@@ -215,11 +200,16 @@ impl ApplicationHandler<Graphics> for Engine {
         }
         .render();
 
-        self.last_frame = Instant::now();
+        let now = Instant::now();
+        let next_frame = now + CONFIG.get().unwrap().target_rate;
+        self.last_frame = now;
+
         self.count += 1;
         if self.count > SAFETY_MAX_FOR_DEV {
             event_loop.exit()
         }
+
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(next_frame));
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
