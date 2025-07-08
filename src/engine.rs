@@ -4,7 +4,7 @@ use graphics::Graphics;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
-use winit::event::{KeyEvent, WindowEvent};
+use winit::event::{KeyEvent, MouseButton, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::Window;
@@ -53,17 +53,21 @@ impl Engine {
         }
     }
 
+    fn random_color() -> wgpu::Color {
+        return wgpu::Color {
+            r: rand::random(),
+            b: rand::random(),
+            g: rand::random(),
+            a: rand::random(),
+        };
+    }
+
     fn update(&mut self) {
         let _ = match &mut self.graphics {
             Some(canvas) => canvas,
             None => return,
         }
-        .set_background(wgpu::Color {
-            r: rand::random(),
-            b: rand::random(),
-            g: rand::random(),
-            a: rand::random(),
-        });
+        .set_background(Engine::random_color());
         debug_log!(self.debugger, "Updated it? {}", true)
     }
 
@@ -130,6 +134,14 @@ impl ApplicationHandler<Graphics> for Engine {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => graphics.resize(size.width, size.height),
+            WindowEvent::MouseInput {
+                device_id: _,
+                state: _,
+                button: _,
+            } => {
+                graphics.set_background(Engine::random_color());
+                let _ = graphics.render();
+            }
             WindowEvent::RedrawRequested => {
                 let _ = graphics.render();
             }
