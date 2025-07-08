@@ -1,6 +1,6 @@
+use bytemuck::{Pod, Zeroable};
 use rand::Rng;
 use std::sync::Arc;
-use wgpu::util::DeviceExt;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
@@ -15,6 +15,8 @@ pub struct Graphics {
     #[allow(dead_code)]
     window: Arc<Window>,
     render_pipeline: wgpu::RenderPipeline,
+    vertex_buffer: wgpu::Buffer,
+    num_vertices: u32,
 }
 
 impl Graphics {
@@ -124,6 +126,13 @@ impl Graphics {
             cache: None,     // 6.
         });
 
+        let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Primary Vertex Buffer"),
+            mapped_at_creation: false,
+            size: (std::mem::size_of::<Vertex>() * 6 * 1000) as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+
         Ok(Self {
             surface,
             device,
@@ -138,6 +147,8 @@ impl Graphics {
             },
             window,
             render_pipeline,
+            vertex_buffer,
+            num_vertices: 0,
         })
     }
 
@@ -185,6 +196,7 @@ impl Graphics {
 
             render_pass.set_pipeline(&self.render_pipeline);
 
+            let mut all_vertices = Vec::new();
             for enemy in game_state.enemies.iter() {
                 println!(
                     "drawing enemy {} at ({}, {})",
@@ -193,23 +205,29 @@ impl Graphics {
                 //
                 // 1. Create rectangle (1x1 unit size) at enemy location
                 let rect = world_to_clip(enemy.location.x, enemy.location.y, 1.0, 1.0);
-                let vertex_data = rect.vertices();
-
-                // 2. Create vertex buffer
-                let vertex_buffer =
-                    self.device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("Enemy Vertex Buffer"),
-                            contents: bytemuck::cast_slice(&vertex_data),
-                            usage: wgpu::BufferUsages::VERTEX,
-                        });
-
-                // 3. Set vertex buffer
-                render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-
-                // 4. Draw 6 vertices (2 triangles)
-                render_pass.draw(0..6, 0..1);
+                all_vertices.extend_from_slice(&rect.vertices());
             }
+            const VERTICES: &[Vertex] = &[
+                Vertex {
+                    position: [0.0, 0.5, 0.0],
+                    color: [1.0, 0.0, 0.0],
+                },
+                Vertex {
+                    position: [-0.5, -0.5, 0.0],
+                    color: [0.0, 1.0, 0.0],
+                },
+                Vertex {
+                    position: [0.5, -0.5, 0.0],
+                    color: [0.0, 0.0, 1.0],
+                },
+            ];
+            all_vertices.extend_from_slice(VERTICES);
+            // 3. Set vertex buffer
+            self.num_vertices = all_vertices.len() as u32;
+            self.queue
+                .write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&all_vertices));
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.draw(0..self.num_vertices, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
@@ -227,24 +245,32 @@ impl Graphics {
         }
     }
 }
-use bytemuck::{Pod, Zeroable};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Vertex {
-    pub position: [f32; 2],
+    position: [f32; 3],
+    color: [f32; 3],
 }
+
 impl Vertex {
     pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         use std::mem;
         wgpu::VertexBufferLayout {
             array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[wgpu::VertexAttribute {
-                offset: 0,
-                shader_location: 0, // matches @location(0) in shader for position
-                format: wgpu::VertexFormat::Float32x2,
-            }],
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+            ],
         }
     }
 }
@@ -275,20 +301,30 @@ impl Rectangle {
 
         [
             // Triangle 1
-            Vertex { position: [x, y] }, // bottom-left
             Vertex {
-                position: [x + w, y],
+                position: [x, y, 0.0],
+                color: [x, y, 0.0],
+            }, // bottom-left
+            Vertex {
+                position: [x + w, y, 0.0],
+                color: [x, y, 0.0],
             }, // bottom-right
             Vertex {
-                position: [x + w, y + h],
+                position: [x + w, y + h, 0.0],
+                color: [x, y, 0.0],
             }, // top-right
             // Triangle 2
-            Vertex { position: [x, y] }, // bottom-left
             Vertex {
-                position: [x + w, y + h],
+                position: [x, y, 0.0],
+                color: [x, y, 0.0],
+            }, // bottom-left
+            Vertex {
+                position: [x + w, y + h, 0.0],
+                color: [x, y, 0.0],
             }, // top-right
             Vertex {
-                position: [x, y + h],
+                position: [x, y + h, 0.0],
+                color: [x, y, 0.0],
             }, // top-left
         ]
     }
