@@ -4,7 +4,7 @@ use graphics::Graphics;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
-use winit::event::{KeyEvent, MouseButton, WindowEvent};
+use winit::event::{KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::Window;
@@ -63,11 +63,6 @@ impl Engine {
     }
 
     fn update(&mut self) {
-        let _ = match &mut self.graphics {
-            Some(canvas) => canvas,
-            None => return,
-        }
-        .set_background(Engine::random_color());
         debug_log!(self.debugger, "Updated it? {}", true)
     }
 
