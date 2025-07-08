@@ -1,9 +1,12 @@
 use bytemuck::{Pod, Zeroable};
-use rand::Rng;
+use image::DynamicImage;
 use std::sync::Arc;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
+
+use crate::engine::GameState;
+use crate::texture::Texture;
 
 pub struct Graphics {
     surface: wgpu::Surface<'static>,
@@ -16,7 +19,8 @@ pub struct Graphics {
     window: Arc<Window>,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
-    num_vertices: u32,
+    index_buffer: wgpu::Buffer,
+    texture_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl Graphics {
@@ -77,11 +81,36 @@ impl Graphics {
             desired_maximum_frame_latency: 2,
         };
 
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        // This should match the filterable field of the
+                        // corresponding Texture entry above.
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: Some("texture_bind_group_layout"),
+            });
+
         let shader = device.create_shader_module(wgpu::include_wgsl!("./shaders/shader-1.wgsl"));
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Primary Render Pipeline Layout"),
-                bind_group_layouts: &[],   // TODO
+                bind_group_layouts: &[&texture_bind_group_layout],
                 push_constant_ranges: &[], // TODO
             });
 
@@ -133,6 +162,14 @@ impl Graphics {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
+        let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Primary Index Buffer"),
+            mapped_at_creation: false,
+            // this doens't need to be this big but I didn't want to do math rn
+            size: (std::mem::size_of::<Vertex>() * 6 * 1000) as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+        });
+
         Ok(Self {
             surface,
             device,
@@ -148,8 +185,18 @@ impl Graphics {
             window,
             render_pipeline,
             vertex_buffer,
-            num_vertices: 0,
+            index_buffer,
+            texture_bind_group_layout,
         })
+    }
+
+    pub fn load_texture_from_path(&self, path: &str) -> Texture {
+        let image = image::open(path).expect(&format!("Unable to open asset: {}", path));
+        self.create_gpu_texture(&image, path)
+    }
+
+    pub fn create_gpu_texture(&self, image: &DynamicImage, label: &str) -> Texture {
+        Texture::from_image(&self.device, &self.queue, image, Some(label)).unwrap()
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -161,13 +208,14 @@ impl Graphics {
         }
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    pub fn load_image(&mut self) {}
+
+    pub fn render(&mut self, game_state: GameState) -> Result<(), wgpu::SurfaceError> {
         // We can't render unless the surface is configured
         if !self.is_surface_configured {
             return Ok(());
         }
 
-        let game_state = generate_fake_game_state(); // <-- call it here
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
@@ -196,7 +244,26 @@ impl Graphics {
 
             render_pass.set_pipeline(&self.render_pipeline);
 
+            let diffuse_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &self.texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&game_state.tree.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&game_state.tree.sampler),
+                    },
+                ],
+                label: Some("diffuse_bind_group"),
+            });
+
+            render_pass.set_bind_group(0, &diffuse_bind_group, &[]);
+
             let mut all_vertices = Vec::new();
+            let mut all_indices = Vec::new();
+            /*
             for enemy in game_state.enemies.iter() {
                 println!(
                     "drawing enemy {} at ({}, {})",
@@ -207,27 +274,75 @@ impl Graphics {
                 let rect = world_to_clip(enemy.location.x, enemy.location.y, 1.0, 1.0);
                 all_vertices.extend_from_slice(&rect.vertices());
             }
+            */
+            /*
             const VERTICES: &[Vertex] = &[
                 Vertex {
-                    position: [0.0, 0.5, 0.0],
-                    color: [1.0, 0.0, 0.0],
-                },
+                    position: [-0.0868241, 0.49240386, 0.0],
+                    color: [0.5, 0.0, 0.5],
+                }, // A
                 Vertex {
-                    position: [-0.5, -0.5, 0.0],
-                    color: [0.0, 1.0, 0.0],
-                },
+                    position: [-0.49513406, 0.06958647, 0.0],
+                    color: [0.5, 0.0, 0.5],
+                }, // B
                 Vertex {
-                    position: [0.5, -0.5, 0.0],
-                    color: [0.0, 0.0, 1.0],
-                },
+                    position: [-0.21918549, -0.44939706, 0.0],
+                    color: [0.5, 0.0, 0.5],
+                }, // C
+                Vertex {
+                    position: [0.35966998, -0.3473291, 0.0],
+                    color: [0.5, 0.0, 0.5],
+                }, // D
+                Vertex {
+                    position: [0.44147372, 0.2347359, 0.0],
+                    color: [0.5, 0.0, 0.5],
+                }, // E
             ];
+            */
+            const VERTICES: &[Vertex] = &[
+                // Changed
+                Vertex {
+                    position: [-0.0868241, 0.49240386, 0.0],
+                    tex_coords: [0.4131759, 0.00759614],
+                }, // A
+                Vertex {
+                    position: [-0.49513406, 0.06958647, 0.0],
+                    tex_coords: [0.0048659444, 0.43041354],
+                }, // B
+                Vertex {
+                    position: [-0.21918549, -0.44939706, 0.0],
+                    tex_coords: [0.28081453, 0.949397],
+                }, // C
+                Vertex {
+                    position: [0.35966998, -0.3473291, 0.0],
+                    tex_coords: [0.85967, 0.84732914],
+                }, // D
+                Vertex {
+                    position: [0.44147372, 0.2347359, 0.0],
+                    tex_coords: [0.9414737, 0.2652641],
+                }, // E
+            ];
+
+            const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4];
+
             all_vertices.extend_from_slice(VERTICES);
-            // 3. Set vertex buffer
-            self.num_vertices = all_vertices.len() as u32;
+            all_indices.extend_from_slice(INDICES);
+
+            let padded_indices = if all_indices.len() % 2 != 0 {
+                let mut padded = all_indices.to_vec();
+                padded.push(0); // pad with one extra u16
+                padded
+            } else {
+                all_indices.clone()
+            };
+
             self.queue
                 .write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&all_vertices));
+            self.queue
+                .write_buffer(&self.index_buffer, 0, bytemuck::cast_slice(&padded_indices));
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.draw(0..self.num_vertices, 0..1);
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..padded_indices.len() as u32, 0, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
@@ -250,7 +365,8 @@ impl Graphics {
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Vertex {
     position: [f32; 3],
-    color: [f32; 3],
+    // color: [f32; 3], this was previously used for just rendering objects with filled colors
+    tex_coords: [f32; 2],
 }
 
 impl Vertex {
@@ -268,13 +384,14 @@ impl Vertex {
                 wgpu::VertexAttribute {
                     offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
                     shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x3,
+                    format: wgpu::VertexFormat::Float32x2,
                 },
             ],
         }
     }
 }
 
+/*
 pub struct Rectangle {
     pub x: f32,
     pub y: f32,
@@ -330,51 +447,6 @@ impl Rectangle {
     }
 }
 
-#[derive(Debug)]
-pub struct Position {
-    pub x: f32,
-    pub y: f32,
-}
-
-#[derive(Debug)]
-pub struct Player {
-    pub location: Position,
-}
-
-#[derive(Debug)]
-pub struct Enemy {
-    pub id: String,
-    pub location: Position,
-}
-
-#[derive(Debug)]
-pub struct GameState {
-    pub player: Player,
-    pub enemies: Vec<Enemy>,
-}
-
-pub fn generate_fake_game_state() -> GameState {
-    let mut rng = rand::rng();
-
-    // Player always starts at (1, 1)
-    let player = Player {
-        location: Position { x: 1.0, y: 1.0 },
-    };
-
-    // Generate 5 enemies with random locations
-    let enemies = (0..5)
-        .map(|i| Enemy {
-            id: format!("enemy_{}", i),
-            location: Position {
-                x: rng.random_range(0.0..10.0),
-                y: rng.random_range(0.0..10.0),
-            },
-        })
-        .collect();
-
-    GameState { player, enemies }
-}
-
 fn world_to_clip(x: f32, y: f32, width: f32, height: f32) -> Rectangle {
     // assuming world coordinates in 0..10 range for both axes,
     // map to -1..1 clip space for rendering
@@ -384,3 +456,4 @@ fn world_to_clip(x: f32, y: f32, width: f32, height: f32) -> Rectangle {
     let clip_h = (height / 10.0) * 2.0;
     Rectangle::new(clip_x, clip_y, clip_w, clip_h)
 }
+*/

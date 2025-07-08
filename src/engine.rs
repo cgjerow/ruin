@@ -1,6 +1,9 @@
+use crate::texture::Texture;
 use crate::{debug, graphics};
 use debug::Debug;
 use graphics::Graphics;
+use rand::Rng;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
@@ -19,6 +22,7 @@ pub struct Engine {
     target_rate: Option<Duration>,
     last_frame: Instant,
     debugger: Debug,
+    asset_cache: HashMap<String, Texture>,
 }
 
 pub struct EngineConfig {
@@ -50,7 +54,19 @@ impl Engine {
             fps_specified: fps_opt != None,
             target_rate: target_rate,
             last_frame: Instant::now() - target_rate.unwrap_or_default(),
+            asset_cache: HashMap::new(),
         }
+    }
+
+    fn get_texture(&mut self, path: &str) -> Texture {
+        let texture = self.asset_cache.entry(path.to_string()).or_insert_with(|| {
+            self.graphics
+                .as_mut()
+                .expect("Graphics not initialized")
+                .load_texture_from_path(&format!("./src/assets/{}", path))
+        });
+
+        texture.clone()
     }
 
     fn random_color() -> wgpu::Color {
@@ -69,6 +85,37 @@ impl Engine {
     fn cleanup(&mut self) {
         debug_log!(self.debugger, "Cleaned it? {}", true)
     }
+
+    fn game_state(&mut self) -> GameState {
+        self.generate_fake_game_state()
+    }
+
+    fn generate_fake_game_state(&mut self) -> GameState {
+        let tree = self.get_texture("happy_tree.png");
+        let mut rng = rand::rng();
+
+        // Player always starts at (1, 1)
+        let player = Player {
+            location: Position { x: 1.0, y: 1.0 },
+        };
+
+        // Generate 5 enemies with random locations
+        let enemies = (0..5)
+            .map(|i| Enemy {
+                id: format!("enemy_{}", i),
+                location: Position {
+                    x: rng.random_range(0.0..10.0),
+                    y: rng.random_range(0.0..10.0),
+                },
+            })
+            .collect();
+
+        GameState {
+            player,
+            enemies,
+            tree,
+        }
+    }
 }
 
 impl ApplicationHandler<Graphics> for Engine {
@@ -85,12 +132,13 @@ impl ApplicationHandler<Graphics> for Engine {
 
         self.last_frame = Instant::now();
         self.update();
+        let game_state = self.game_state();
 
         let _ = match &mut self.graphics {
             Some(canvas) => canvas,
             None => return,
         }
-        .render();
+        .render(game_state);
 
         self.count += 1;
         if self.count > SAFETY_MAX_FOR_DEV {
@@ -108,6 +156,8 @@ impl ApplicationHandler<Graphics> for Engine {
         {
             self.graphics = Some(pollster::block_on(Graphics::new(window)).unwrap());
         }
+        self.get_texture("happy_tree.png");
+        return;
     }
 
     #[allow(unused_mut)]
@@ -121,6 +171,7 @@ impl ApplicationHandler<Graphics> for Engine {
         _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
+        let game_state = self.game_state();
         let graphics = match &mut self.graphics {
             Some(canvas) => canvas,
             None => return,
@@ -135,10 +186,10 @@ impl ApplicationHandler<Graphics> for Engine {
                 button: _,
             } => {
                 graphics.set_background(Engine::random_color());
-                let _ = graphics.render();
+                let _ = graphics.render(game_state);
             }
             WindowEvent::RedrawRequested => {
-                let _ = graphics.render();
+                let _ = graphics.render(game_state);
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -159,4 +210,28 @@ impl ApplicationHandler<Graphics> for Engine {
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
         self.cleanup()
     }
+}
+
+#[derive(Debug)]
+pub struct Position {
+    pub x: f32,
+    pub y: f32,
+}
+
+#[derive(Debug)]
+pub struct Player {
+    pub location: Position,
+}
+
+#[derive(Debug)]
+pub struct Enemy {
+    pub id: String,
+    pub location: Position,
+}
+
+#[derive(Debug)]
+pub struct GameState {
+    pub player: Player,
+    pub enemies: Vec<Enemy>,
+    pub tree: Texture,
 }

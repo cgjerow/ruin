@@ -3,6 +3,7 @@ mod debug;
 mod engine;
 mod graphics;
 mod lua_scriptor;
+mod texture;
 
 use engine::{Engine, EngineConfig};
 use mlua::prelude::*;
