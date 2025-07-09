@@ -1,3 +1,4 @@
+use crate::camera::Camera;
 use crate::lua_scriptor::LuaExtendedExecutor;
 use crate::texture::Texture;
 use crate::{debug, graphics};
@@ -8,6 +9,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
+use winit::dpi::LogicalSize;
 use winit::event::{KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
@@ -27,11 +29,15 @@ pub struct Engine {
     asset_cache: HashMap<String, Texture>,
     game_state: Option<GameState>,
     lua_context: Arc<LuaExtendedExecutor>,
+    width: f32,
+    height: f32,
 }
 
 pub struct EngineConfig {
     pub fps: String,
     pub debug_enabled: bool,
+    pub width: f32,
+    pub height: f32,
 }
 
 impl Engine {
@@ -62,6 +68,8 @@ impl Engine {
             last_frame: Instant::now() - target_rate.unwrap_or_default(),
             asset_cache: HashMap::new(),
             game_state: None,
+            width: config.width,
+            height: config.height,
         }
     }
 
@@ -102,6 +110,14 @@ impl Engine {
         debug_log!(self.debugger, "Updated it? {}", true);
         let update: mlua::Function = self.lua_context.get_function("update");
         let _ = update.call::<()>(1);
+
+        let graphics = match &mut self.graphics {
+            Some(canvas) => canvas,
+            None => return Ok(()),
+        };
+
+        graphics.update_camera();
+
         return Ok(());
     }
 
@@ -219,10 +235,12 @@ impl ApplicationHandler<Graphics> for Engine {
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window_attributes = Window::default_attributes();
+        let window_attributes =
+            Window::default_attributes().with_inner_size(LogicalSize::new(self.width, self.height));
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        let camera = Camera::new(self.width, self.height);
 
-        self.graphics = Some(pollster::block_on(Graphics::new(window.clone())).unwrap());
+        self.graphics = Some(pollster::block_on(Graphics::new(window.clone(), camera)).unwrap());
         self.window = Some(window);
 
         self.load_initial_assets();
@@ -289,6 +307,11 @@ impl ApplicationHandler<Graphics> for Engine {
             },
             _ => {}
         }
+        let graphics = match &mut self.graphics {
+            Some(canvas) => canvas,
+            None => return,
+        };
+        graphics.camera_controller.process_events(&event);
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {

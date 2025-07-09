@@ -1,10 +1,12 @@
 use bytemuck::{Pod, Zeroable};
 use image::DynamicImage;
 use std::sync::Arc;
+use wgpu::util::DeviceExt;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
 
+use crate::camera::{Camera, CameraController};
 use crate::engine::GameState;
 use crate::texture::Texture;
 
@@ -17,10 +19,17 @@ pub struct Graphics {
     background_color: wgpu::Color,
     #[allow(dead_code)]
     window: Arc<Window>,
+    #[allow(dead_code)]
+    camera: Camera,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
+    camera_buffer: wgpu::Buffer,
+    camera_uniform: CameraUniform,
     texture_bind_group_layout: wgpu::BindGroupLayout,
+    camera_bind_group_layout: wgpu::BindGroupLayout,
+    // maybe move to engine?
+    pub camera_controller: CameraController,
 }
 
 impl Graphics {
@@ -28,7 +37,7 @@ impl Graphics {
         self.background_color = color;
     }
 
-    pub async fn new(window: Arc<Window>) -> anyhow::Result<Graphics> {
+    pub async fn new(window: Arc<Window>, camera: Camera) -> anyhow::Result<Graphics> {
         let size = window.inner_size();
         // The instance is a handle to our GPU
         // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
@@ -106,11 +115,26 @@ impl Graphics {
                 label: Some("texture_bind_group_layout"),
             });
 
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("camera_bind_group_layout"),
+            });
+
         let shader = device.create_shader_module(wgpu::include_wgsl!("./shaders/shader-1.wgsl"));
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Primary Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout],
+                bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
                 push_constant_ranges: &[], // TODO
             });
 
@@ -170,6 +194,15 @@ impl Graphics {
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
         });
 
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_view_proj(&camera);
+
+        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Camera Buffer"),
+            contents: bytemuck::cast_slice(&[camera_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         Ok(Self {
             surface,
             device,
@@ -183,10 +216,15 @@ impl Graphics {
                 a: 1.0,
             },
             window,
+            camera,
             render_pipeline,
             vertex_buffer,
             index_buffer,
+            camera_buffer,
+            camera_uniform,
             texture_bind_group_layout,
+            camera_bind_group_layout,
+            camera_controller: CameraController::new(0.2),
         })
     }
 
@@ -206,6 +244,16 @@ impl Graphics {
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
         }
+    }
+
+    pub fn update_camera(&mut self) {
+        self.camera_controller.update_camera(&mut self.camera);
+        self.camera_uniform.update_view_proj(&self.camera);
+        self.queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::cast_slice(&[self.camera_uniform]),
+        );
     }
 
     pub fn load_image(&mut self) {}
@@ -264,7 +312,17 @@ impl Graphics {
                 label: Some("diffuse_bind_group"),
             });
 
+            let camera_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &self.camera_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.camera_buffer.as_entire_binding(),
+                }],
+                label: Some("camera_bind_group"),
+            });
+
             render_pass.set_bind_group(0, &diffuse_bind_group, &[]);
+            render_pass.set_bind_group(1, &camera_bind_group, &[]);
 
             let mut all_vertices = Vec::new();
             let mut all_indices = Vec::new();
@@ -393,6 +451,27 @@ impl Vertex {
                 },
             ],
         }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct CameraUniform {
+    // We can't use cgmath with bytemuck directly, so we'll have
+    // to convert the Matrix4 into a 4x4 f32 array
+    view_proj: [[f32; 4]; 4],
+}
+
+impl CameraUniform {
+    fn new() -> Self {
+        use cgmath::SquareMatrix;
+        Self {
+            view_proj: cgmath::Matrix4::identity().into(),
+        }
+    }
+
+    fn update_view_proj(&mut self, camera: &crate::camera::Camera) {
+        self.view_proj = camera.build_view_projection_matrix().into();
     }
 }
 
