@@ -1,3 +1,4 @@
+use crate::lua_scriptor::LuaExtendedExecutor;
 use crate::texture::Texture;
 use crate::{debug, graphics};
 use debug::Debug;
@@ -25,6 +26,7 @@ pub struct Engine {
     debugger: Debug,
     asset_cache: HashMap<String, Texture>,
     game_state: Option<GameState>,
+    lua_context: Arc<LuaExtendedExecutor>,
 }
 
 pub struct EngineConfig {
@@ -50,6 +52,7 @@ impl Engine {
         let target_rate = fps_opt.map(|fps| Duration::from_millis(1000 / fps));
 
         Self {
+            lua_context: (Arc::new(LuaExtendedExecutor::new("main"))),
             window: None,
             graphics: None,
             debugger: Debug::new(config.debug_enabled),
@@ -87,7 +90,7 @@ impl Engine {
     }
 
     fn redraw(&self) {
-        if (self.is_targetting_fps()) {
+        if self.is_targetting_fps() {
             self.window
                 .as_ref()
                 .expect("Window does not exist")
@@ -95,8 +98,11 @@ impl Engine {
         }
     }
 
-    fn update(&mut self) {
+    fn update(&mut self) -> anyhow::Result<()> {
         debug_log!(self.debugger, "Updated it? {}", true);
+        let update: mlua::Function = self.lua_context.get_function("update");
+        let _ = update.call::<()>(1);
+        return Ok(());
     }
 
     fn cleanup(&mut self) {
@@ -163,8 +169,22 @@ impl Engine {
     }
 
     fn load_initial_assets(&mut self) {
-        self.get_texture("happy_tree.png");
-        self.get_texture("mittens-goblin-art.png");
+        let result_table: mlua::Table = self
+            .lua_context
+            .get_function("load")
+            .call::<mlua::Table>({})
+            .expect("Unable to load initial assets.");
+
+        let assets = result_table
+            .get::<mlua::Table>("assets")
+            .unwrap_or_else(|_| self.lua_context.create_table());
+        for asset in assets.sequence_values::<String>() {
+            let asset = asset.unwrap_or("".to_string());
+            if asset != "" {
+                println!("Initialized asset: {}", asset);
+                let _ = self.get_texture(&asset);
+            };
+        }
     }
 }
 
@@ -181,7 +201,7 @@ impl ApplicationHandler<Graphics> for Engine {
         }
 
         self.last_frame = Instant::now();
-        self.update();
+        let _ = self.update();
         let game_state = self.game_state();
 
         let _ = match &mut self.graphics {
