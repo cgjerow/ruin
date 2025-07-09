@@ -6,7 +6,10 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
 
-use crate::camera::{Camera, CameraController};
+use crate::camera::{
+    Camera, CameraAction, CameraController, CameraInputMap, ThreeDimensionalCameraController,
+    TwoDimensionalCameraController, UniversalCameraController,
+};
 use crate::engine::GameState;
 use crate::texture::Texture;
 
@@ -29,7 +32,7 @@ pub struct Graphics {
     texture_bind_group_layout: wgpu::BindGroupLayout,
     camera_bind_group_layout: wgpu::BindGroupLayout,
     // maybe move to engine?
-    pub camera_controller: CameraController,
+    pub camera_controller: Box<dyn CameraController>,
 }
 
 impl Graphics {
@@ -202,6 +205,17 @@ impl Graphics {
             contents: bytemuck::cast_slice(&[camera_uniform]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
+        let input_map = CameraInputMap::new()
+            .insert(KeyCode::KeyW, CameraAction::MoveForward)
+            .insert(KeyCode::KeyS, CameraAction::MoveBackward)
+            .insert(KeyCode::KeyA, CameraAction::MoveLeft)
+            .insert(KeyCode::KeyD, CameraAction::MoveRight)
+            .insert(KeyCode::KeyQ, CameraAction::RollLeft)
+            .insert(KeyCode::KeyE, CameraAction::RollRight)
+            .insert(KeyCode::ArrowUp, CameraAction::PitchUp)
+            .insert(KeyCode::ArrowDown, CameraAction::PitchDown)
+            .insert(KeyCode::ArrowLeft, CameraAction::YawLeft)
+            .insert(KeyCode::ArrowRight, CameraAction::YawRight);
 
         Ok(Self {
             surface,
@@ -224,7 +238,7 @@ impl Graphics {
             camera_uniform,
             texture_bind_group_layout,
             camera_bind_group_layout,
-            camera_controller: CameraController::new(0.2),
+            camera_controller: Box::new(UniversalCameraController::new(10.0, 5.0, input_map)),
         })
     }
 
