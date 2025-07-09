@@ -244,16 +244,21 @@ impl Graphics {
 
             render_pass.set_pipeline(&self.render_pipeline);
 
+            let tex = if game_state.show_mittens {
+                &game_state.mittens
+            } else {
+                &game_state.tree
+            };
             let diffuse_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &self.texture_bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&game_state.tree.view),
+                        resource: wgpu::BindingResource::TextureView(&tex.view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&game_state.tree.sampler),
+                        resource: wgpu::BindingResource::Sampler(&tex.sampler),
                     },
                 ],
                 label: Some("diffuse_bind_group"),

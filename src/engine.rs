@@ -15,6 +15,7 @@ use winit::window::Window;
 static SAFETY_MAX_FOR_DEV: u64 = 10000;
 
 pub struct Engine {
+    window: Option<Arc<Window>>,
     graphics: Option<Graphics>,
     count: u64,
     #[allow(dead_code)]
@@ -23,6 +24,7 @@ pub struct Engine {
     last_frame: Instant,
     debugger: Debug,
     asset_cache: HashMap<String, Texture>,
+    game_state: Option<GameState>,
 }
 
 pub struct EngineConfig {
@@ -48,6 +50,7 @@ impl Engine {
         let target_rate = fps_opt.map(|fps| Duration::from_millis(1000 / fps));
 
         Self {
+            window: None,
             graphics: None,
             debugger: Debug::new(config.debug_enabled),
             count: 0,
@@ -55,6 +58,7 @@ impl Engine {
             target_rate: target_rate,
             last_frame: Instant::now() - target_rate.unwrap_or_default(),
             asset_cache: HashMap::new(),
+            game_state: None,
         }
     }
 
@@ -78,8 +82,21 @@ impl Engine {
         };
     }
 
+    fn is_targetting_fps(&self) -> bool {
+        return self.fps_specified;
+    }
+
+    fn redraw(&self) {
+        if (self.is_targetting_fps()) {
+            self.window
+                .as_ref()
+                .expect("Window does not exist")
+                .request_redraw();
+        }
+    }
+
     fn update(&mut self) {
-        debug_log!(self.debugger, "Updated it? {}", true)
+        debug_log!(self.debugger, "Updated it? {}", true);
     }
 
     fn cleanup(&mut self) {
@@ -87,12 +104,14 @@ impl Engine {
     }
 
     fn game_state(&mut self) -> GameState {
-        self.generate_fake_game_state()
-    }
-
-    fn generate_fake_game_state(&mut self) -> GameState {
         let tree = self.get_texture("happy_tree.png");
+        let mittens = self.get_texture("mittens-goblin-art.png");
+        let previous_game_state = self.game_state.take();
         let mut rng = rand::rng();
+        let show_mittens = previous_game_state
+            .as_ref()
+            .map(|s| s.show_mittens)
+            .unwrap_or(true); // default to true if no previous state
 
         // Player always starts at (1, 1)
         let player = Player {
@@ -110,11 +129,42 @@ impl Engine {
             })
             .collect();
 
-        GameState {
+        self.game_state = Some(GameState {
             player,
             enemies,
             tree,
+            mittens,
+            show_mittens,
+        });
+
+        return GameState {
+            player: Player {
+                location: Position { x: 1.0, y: 1.0 },
+            },
+            enemies: (0..5)
+                .map(|i| Enemy {
+                    id: format!("enemy_{}", i),
+                    location: Position {
+                        x: rng.random_range(0.0..10.0),
+                        y: rng.random_range(0.0..10.0),
+                    },
+                })
+                .collect(),
+            tree: self.get_texture("happy_tree.png"),
+            mittens: self.get_texture("mittens-goblin-art.png"),
+            show_mittens,
+        };
+    }
+
+    fn flip_mittens(&mut self) {
+        if let Some(state) = self.game_state.as_mut() {
+            state.show_mittens = !state.show_mittens;
         }
+    }
+
+    fn load_initial_assets(&mut self) {
+        self.get_texture("happy_tree.png");
+        self.get_texture("mittens-goblin-art.png");
     }
 }
 
@@ -149,14 +199,13 @@ impl ApplicationHandler<Graphics> for Engine {
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        #[allow(unused_mut)]
-        let mut window_attributes = Window::default_attributes();
+        let window_attributes = Window::default_attributes();
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.graphics = Some(pollster::block_on(Graphics::new(window)).unwrap());
-        }
-        self.get_texture("happy_tree.png");
+
+        self.graphics = Some(pollster::block_on(Graphics::new(window.clone())).unwrap());
+        self.window = Some(window);
+
+        self.load_initial_assets();
         return;
     }
 
@@ -171,24 +220,35 @@ impl ApplicationHandler<Graphics> for Engine {
         _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
-        let game_state = self.game_state();
-        let graphics = match &mut self.graphics {
-            Some(canvas) => canvas,
-            None => return,
-        };
-
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(size) => graphics.resize(size.width, size.height),
+            WindowEvent::Resized(size) => {
+                let graphics = match &mut self.graphics {
+                    Some(canvas) => canvas,
+                    None => return,
+                };
+                graphics.resize(size.width, size.height)
+            }
             WindowEvent::MouseInput {
                 device_id: _,
                 state: _,
                 button: _,
             } => {
+                let graphics = match &mut self.graphics {
+                    Some(canvas) => canvas,
+                    None => return,
+                };
                 graphics.set_background(Engine::random_color());
-                let _ = graphics.render(game_state);
+                self.redraw();
             }
             WindowEvent::RedrawRequested => {
+                let game_state = self.game_state();
+                let graphics = match &mut self.graphics {
+                    Some(canvas) => canvas,
+                    None => return,
+                };
+                // this is the only place we want to call graphics.render()
+                // any other situation should use self.redraw();
                 let _ = graphics.render(game_state);
             }
             WindowEvent::KeyboardInput {
@@ -200,6 +260,10 @@ impl ApplicationHandler<Graphics> for Engine {
                     },
                 ..
             } => match (code, state.is_pressed()) {
+                (KeyCode::Space, true) => {
+                    self.flip_mittens();
+                    self.redraw();
+                }
                 (KeyCode::Escape, true) => event_loop.exit(),
                 _ => {}
             },
@@ -234,4 +298,6 @@ pub struct GameState {
     pub player: Player,
     pub enemies: Vec<Enemy>,
     pub tree: Texture,
+    pub mittens: Texture,
+    pub show_mittens: bool,
 }
