@@ -15,7 +15,7 @@ pub struct TwoDimensionalCameraController {
 impl TwoDimensionalCameraController {
     pub fn new(speed: f32) -> Self {
         Self {
-            speed,
+            speed: speed / 1000.0,
             is_forward_pressed: false,
             is_backward_pressed: false,
             is_left_pressed: false,
@@ -96,7 +96,7 @@ pub struct ThreeDimensionalCameraController {
 impl ThreeDimensionalCameraController {
     pub fn new(speed: f32) -> Self {
         Self {
-            speed,
+            speed: speed / 1000.0,
             is_forward_pressed: false,
             is_backward_pressed: false,
             is_left_pressed: false,

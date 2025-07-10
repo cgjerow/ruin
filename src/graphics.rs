@@ -217,6 +217,8 @@ impl Graphics {
             .insert(KeyCode::ArrowLeft, CameraAction::YawLeft)
             .insert(KeyCode::ArrowRight, CameraAction::YawRight);
 
+        // let camera_controller = Box::new(UniversalCameraController::new(10.0, 5.0, input_map));
+        let camera_controller = Box::new(TwoDimensionalCameraController::new(10.0));
         Ok(Self {
             surface,
             device,
@@ -238,7 +240,7 @@ impl Graphics {
             camera_uniform,
             texture_bind_group_layout,
             camera_bind_group_layout,
-            camera_controller: Box::new(UniversalCameraController::new(10.0, 5.0, input_map)),
+            camera_controller,
         })
     }
 
