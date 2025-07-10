@@ -33,7 +33,7 @@ impl LuaScriptor {
 }
 
 pub struct LuaExtendedExecutor {
-    lua: Lua,
+    pub lua: Lua,
 }
 
 impl LuaExtendedExecutor {

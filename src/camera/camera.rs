@@ -15,7 +15,7 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(width: f32, height: f32) -> Self {
+    pub fn new(width: u32, height: u32) -> Self {
         Self {
             // position the camera 1 unit up and 2 units back
             // +z is out of the screen
@@ -24,7 +24,7 @@ impl Camera {
             target: (0.0, 0.0, 0.0).into(),
             // which way is "up"
             up: cgmath::Vector3::unit_y(),
-            aspect: width / height,
+            aspect: (width / height) as f32,
             fovy: 45.0,
             znear: 0.1,
             zfar: 100.0,

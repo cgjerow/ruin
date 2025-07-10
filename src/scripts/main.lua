@@ -16,7 +16,7 @@ end
 
 function update(dt)
 	STATE.counter = STATE.counter + 1
-	print("LUA: Update {}", STATE.counter)
+	print("LUA: Update: ", STATE.counter, engine.get_window_size())
 end
 
 function draw()

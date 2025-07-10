@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::{KeyEvent, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::Window;
 
@@ -28,27 +28,20 @@ pub struct Engine {
     debugger: Debug,
     asset_cache: HashMap<String, Texture>,
     game_state: Option<GameState>,
-    lua_context: Arc<LuaExtendedExecutor>,
-    width: f32,
-    height: f32,
+    lua_context: LuaExtendedExecutor,
+    width: u32,
+    height: u32,
 }
 
 pub struct EngineConfig {
     pub fps: String,
     pub debug_enabled: bool,
-    pub width: f32,
-    pub height: f32,
+    pub width: u32,
+    pub height: u32,
 }
 
 impl Engine {
-    pub fn run_event_loop(config: EngineConfig) -> anyhow::Result<()> {
-        let event_loop = EventLoop::with_user_event().build()?;
-        let mut app = Engine::new(config);
-        event_loop.run_app(&mut app)?;
-        return Ok(());
-    }
-
-    pub fn new(config: EngineConfig) -> Self {
+    pub fn new(config: EngineConfig, lua_executor: LuaExtendedExecutor) -> Self {
         let fps_opt = if config.fps.trim().eq_ignore_ascii_case("auto") {
             None
         } else {
@@ -58,7 +51,7 @@ impl Engine {
         let target_rate = fps_opt.map(|fps| Duration::from_millis(1000 / fps));
 
         Self {
-            lua_context: (Arc::new(LuaExtendedExecutor::new("main"))),
+            lua_context: lua_executor,
             window: None,
             graphics: None,
             debugger: Debug::new(config.debug_enabled),
@@ -184,14 +177,38 @@ impl Engine {
         }
     }
 
-    fn load_initial_assets(&mut self) {
-        let result_table: mlua::Table = self
+    fn get_window_size(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    fn setup(&mut self) {
+        let self_ptr = self as *mut Self;
+        let get_window_size = self
+            .lua_context
+            .lua
+            .create_function(move |_, ()| {
+                let engine = unsafe { &*self_ptr };
+                Ok(engine.get_window_size())
+            })
+            .expect("Could not create function");
+
+        let lua_engine = self.lua_context.create_table();
+        lua_engine
+            .set("get_window_size", get_window_size)
+            .expect("Could not set engine function");
+        self.lua_context
+            .lua
+            .globals()
+            .set("engine", lua_engine)
+            .expect("Could not define global engine");
+
+        let config: mlua::Table = self
             .lua_context
             .get_function("load")
             .call::<mlua::Table>({})
             .expect("Unable to load initial assets.");
 
-        let assets = result_table
+        let assets = config
             .get::<mlua::Table>("assets")
             .unwrap_or_else(|_| self.lua_context.create_table());
         for asset in assets.sequence_values::<String>() {
@@ -243,7 +260,7 @@ impl ApplicationHandler<Graphics> for Engine {
         self.graphics = Some(pollster::block_on(Graphics::new(window.clone(), camera)).unwrap());
         self.window = Some(window);
 
-        self.load_initial_assets();
+        self.setup();
         return;
     }
 
@@ -261,6 +278,8 @@ impl ApplicationHandler<Graphics> for Engine {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
+                self.width = size.width;
+                self.height = size.height;
                 let graphics = match &mut self.graphics {
                     Some(canvas) => canvas,
                     None => return,
