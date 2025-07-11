@@ -1,11 +1,10 @@
 use crate::camera::Camera;
-use crate::game_element::{Animation, StatefulElement, VisualState};
+use crate::game_element::{Animation, DrawableElement, StatefulElement, VisualState};
 use crate::lua_scriptor::LuaExtendedExecutor;
 use crate::texture::Texture;
 use crate::{debug, graphics};
 use debug::Debug;
 use graphics::Graphics;
-use rand::Rng;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -28,7 +27,6 @@ pub struct Engine {
     last_frame: Instant,
     debugger: Debug,
     asset_cache: HashMap<String, Texture>,
-    game_state: Option<GameState>,
     lua_context: LuaExtendedExecutor,
     character_cache: HashMap<String, StatefulElement>,
     width: u32,
@@ -62,7 +60,6 @@ impl Engine {
             target_rate: target_rate,
             last_frame: Instant::now() - target_rate.unwrap_or_default(),
             asset_cache: HashMap::new(),
-            game_state: None,
             width: config.width,
             height: config.height,
             character_cache: HashMap::new(),
@@ -71,6 +68,8 @@ impl Engine {
 
     fn get_texture(&mut self, path: &str) -> Texture {
         let texture = self.asset_cache.entry(path.to_string()).or_insert_with(|| {
+            println!("Initialized asset: {}", path);
+
             self.graphics
                 .as_mut()
                 .expect("Graphics not initialized")
@@ -125,75 +124,14 @@ impl Engine {
         debug_log!(self.debugger, "Cleaned it? {}", true)
     }
 
-    fn game_state(&mut self) -> GameState {
-        let tree = self.get_texture("happy_tree.png");
-        let mittens = self.get_texture("mittens-goblin-art.png");
-        let braid = self.get_texture("braid-sprite-sheet.webp");
-        let previous_game_state = self.game_state.take();
-        let mut rng = rand::rng();
-        let show_mittens = previous_game_state
-            .as_ref()
-            .map(|s| s.show_mittens)
-            .unwrap_or(true); // default to true if no previous state
-
-        // Player always starts at (1, 1)
-        let player = Player {
-            location: Position { x: 1.0, y: 1.0 },
-        };
-
-        // Generate 5 enemies with random locations
-        let enemies = (0..5)
-            .map(|i| Enemy {
-                id: format!("enemy_{}", i),
-                location: Position {
-                    x: rng.random_range(0.0..10.0),
-                    y: rng.random_range(0.0..10.0),
-                },
-            })
-            .collect();
-
-        self.game_state = Some(GameState {
-            player,
-            enemies,
-            tree,
-            mittens,
-            braid,
-            braid_char: self
+    fn to_render(&self) -> ElementsToRender {
+        ElementsToRender {
+            elements: self
                 .character_cache
-                .get("braid")
-                .expect("I need you!")
-                .clone(),
-            show_mittens,
-        });
-
-        return GameState {
-            player: Player {
-                location: Position { x: 1.0, y: 1.0 },
-            },
-            enemies: (0..5)
-                .map(|i| Enemy {
-                    id: format!("enemy_{}", i),
-                    location: Position {
-                        x: rng.random_range(0.0..10.0),
-                        y: rng.random_range(0.0..10.0),
-                    },
-                })
+                .values()
+                .cloned()
+                .map(|el| Box::new(el) as Box<dyn DrawableElement>)
                 .collect(),
-            tree: self.get_texture("happy_tree.png"),
-            mittens: self.get_texture("mittens-goblin-art.png"),
-            braid: self.get_texture("braid-sprite-sheet.webp"),
-            braid_char: self
-                .character_cache
-                .get("braid")
-                .expect("I need him!")
-                .clone(),
-            show_mittens,
-        };
-    }
-
-    fn flip_mittens(&mut self) {
-        if let Some(state) = self.game_state.as_mut() {
-            state.show_mittens = !state.show_mittens;
         }
     }
 
@@ -226,6 +164,7 @@ impl Engine {
 
         let texture = self.get_texture(&sprite);
 
+        println!("CHAR {} x {} y {}", id, x, y);
         let character = StatefulElement {
             id: id.clone(),
             state,
@@ -306,7 +245,6 @@ impl Engine {
         for asset in assets.sequence_values::<String>() {
             let asset = asset.unwrap_or("".to_string());
             if asset != "" {
-                println!("Initialized asset: {}", asset);
                 let _ = self.get_texture(&asset);
             };
         }
@@ -328,13 +266,13 @@ impl ApplicationHandler<Graphics> for Engine {
 
         self.last_frame = Instant::now();
         let _ = self.update(dt);
-        let game_state = self.game_state();
+        let to_render = { self.to_render() };
 
-        let _ = match &mut self.graphics {
+        let graphics = match &mut self.graphics {
             Some(canvas) => canvas,
             None => return,
-        }
-        .render(game_state);
+        };
+        graphics.render(to_render);
 
         self.count += 1;
         if self.count > SAFETY_MAX_FOR_DEV {
@@ -392,7 +330,7 @@ impl ApplicationHandler<Graphics> for Engine {
                 self.redraw();
             }
             WindowEvent::RedrawRequested => {
-                let game_state = self.game_state();
+                let game_state = self.to_render();
                 let graphics = match &mut self.graphics {
                     Some(canvas) => canvas,
                     None => return,
@@ -411,7 +349,6 @@ impl ApplicationHandler<Graphics> for Engine {
                 ..
             } => match (code, state.is_pressed()) {
                 (KeyCode::Space, true) => {
-                    self.flip_mittens();
                     self.redraw();
                 }
                 (KeyCode::Escape, true) => event_loop.exit(),
@@ -431,30 +368,6 @@ impl ApplicationHandler<Graphics> for Engine {
     }
 }
 
-#[derive(Debug)]
-pub struct Position {
-    pub x: f32,
-    pub y: f32,
-}
-
-#[derive(Debug)]
-pub struct Player {
-    pub location: Position,
-}
-
-#[derive(Debug)]
-pub struct Enemy {
-    pub id: String,
-    pub location: Position,
-}
-
-#[derive(Debug)]
-pub struct GameState {
-    pub player: Player,
-    pub enemies: Vec<Enemy>,
-    pub tree: Texture,
-    pub mittens: Texture,
-    pub braid: Texture,
-    pub show_mittens: bool,
-    pub braid_char: StatefulElement,
+pub struct ElementsToRender {
+    pub elements: Vec<Box<dyn DrawableElement>>,
 }

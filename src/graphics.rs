@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use image::DynamicImage;
-use rand::Rng;
+use std::collections::HashMap;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::event_loop::ActiveEventLoop;
@@ -11,7 +11,8 @@ use crate::camera::{
     Camera, CameraAction, CameraController, CameraInputMap, ThreeDimensionalCameraController,
     TwoDimensionalCameraController, UniversalCameraController,
 };
-use crate::engine::GameState;
+use crate::engine::ElementsToRender;
+use crate::game_element::DrawableElement;
 use crate::texture::Texture;
 
 pub struct Graphics {
@@ -246,12 +247,14 @@ impl Graphics {
     }
 
     pub fn load_texture_from_path(&self, path: &str) -> Texture {
-        let image = image::open(path).expect(&format!("Unable to open asset: {}", path));
-        self.create_gpu_texture(&image, path)
+        let image = image::open(path)
+            .expect(&format!("Unable to open asset: {}", path))
+            .flipv();
+        self.create_gpu_texture(path.to_string(), &image, path)
     }
 
-    pub fn create_gpu_texture(&self, image: &DynamicImage, label: &str) -> Texture {
-        Texture::from_image(&self.device, &self.queue, image, Some(label)).unwrap()
+    pub fn create_gpu_texture(&self, id: String, image: &DynamicImage, label: &str) -> Texture {
+        Texture::from_image(id, &self.device, &self.queue, image, Some(label)).unwrap()
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -275,7 +278,7 @@ impl Graphics {
 
     pub fn load_image(&mut self) {}
 
-    pub fn render(&mut self, game_state: GameState) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&mut self, to_render: ElementsToRender) -> Result<(), wgpu::SurfaceError> {
         // We can't render unless the surface is configured
         if !self.is_surface_configured {
             return Ok(());
@@ -308,30 +311,6 @@ impl Graphics {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-
-            /*
-            let tex = if game_state.show_mittens {
-                &game_state.mittens
-            } else {
-                &game_state.tree
-            };
-            */
-            let tex = &game_state.braid;
-            let diffuse_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &self.texture_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&tex.view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&tex.sampler),
-                    },
-                ],
-                label: Some("diffuse_bind_group"),
-            });
-
             let camera_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &self.camera_bind_group_layout,
                 entries: &[wgpu::BindGroupEntry {
@@ -340,165 +319,146 @@ impl Graphics {
                 }],
                 label: Some("camera_bind_group"),
             });
-
-            render_pass.set_bind_group(0, &diffuse_bind_group, &[]);
             render_pass.set_bind_group(1, &camera_bind_group, &[]);
 
-            let mut all_vertices = Vec::new();
-            let mut all_indices = Vec::new();
             /*
-            for enemy in game_state.enemies.iter() {
-                println!(
-                    "drawing enemy {} at ({}, {})",
-                    enemy.id, enemy.location.x, enemy.location.y
-                );
+                let mut bind_group_cache = HashMap::new();
+
+                // PER ELEMENT
                 //
-                // 1. Create rectangle (1x1 unit size) at enemy location
-                let rect = world_to_clip(enemy.location.x, enemy.location.y, 1.0, 1.0);
-                all_vertices.extend_from_slice(&rect.vertices());
+                //
+                for element in to_render.elements.iter() {
+                    let tex_id = element.get_texture_id();
+
+                    let diffuse_bind_group =
+                        bind_group_cache.entry(tex_id.clone()).or_insert_with(|| {
+                            let tex = element.get_texture();
+                            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                layout: &self.texture_bind_group_layout,
+                                entries: &[
+                                    wgpu::BindGroupEntry {
+                                        binding: 0,
+                                        resource: wgpu::BindingResource::TextureView(&tex.view),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 1,
+                                        resource: wgpu::BindingResource::Sampler(&tex.sampler),
+                                    },
+                                ],
+                                label: Some("cached_diffuse_bind_group"),
+                            })
+                        });
+                    render_pass.set_bind_group(0, &*diffuse_bind_group, &[]);
+
+                    let mut all_vertices = Vec::new();
+                    let mut all_indices = Vec::new();
+
+                    all_vertices.extend_from_slice(&element.build_vertices().unwrap());
+                    const QUAD_INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
+                    all_indices.extend_from_slice(QUAD_INDICES);
+
+                    let padded_indices = if all_indices.len() % 2 != 0 {
+                        let mut padded = all_indices.to_vec();
+                        padded.push(0); // pad with one extra u16
+                        padded
+                    } else {
+                        all_indices.clone()
+                    };
+
+                    self.queue.write_buffer(
+                        &self.vertex_buffer,
+                        0,
+                        bytemuck::cast_slice(&all_vertices),
+                    );
+                    self.queue.write_buffer(
+                        &self.index_buffer,
+                        0,
+                        bytemuck::cast_slice(&padded_indices),
+                    );
+                    render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                    render_pass
+                        .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    render_pass.draw_indexed(0..padded_indices.len() as u32, 0, 0..1);
+                }
             }
-            */
-            /*
-            const VERTICES: &[Vertex] = &[
-                Vertex {
-                    position: [-0.0868241, 0.49240386, 0.0],
-                    color: [0.5, 0.0, 0.5],
-                }, // A
-                Vertex {
-                    position: [-0.49513406, 0.06958647, 0.0],
-                    color: [0.5, 0.0, 0.5],
-                }, // B
-                Vertex {
-                    position: [-0.21918549, -0.44939706, 0.0],
-                    color: [0.5, 0.0, 0.5],
-                }, // C
-                Vertex {
-                    position: [0.35966998, -0.3473291, 0.0],
-                    color: [0.5, 0.0, 0.5],
-                }, // D
-                Vertex {
-                    position: [0.44147372, 0.2347359, 0.0],
-                    color: [0.5, 0.0, 0.5],
-                }, // E
-            ];
-            */
-            const QUAD_VERTICES_POSITIONS: [[f32; 3]; 4] = [
-                [-0.5, 0.5, -1.0], // top-left
-                [0.5, 0.5, -1.0],  // top-right
-                [0.5, -0.5, 0.0],  // bottom-right
-                [-0.5, -0.5, 0.0], // bottom-left
-            ];
 
-            const VERTICES: &[Vertex] = &[
-                // Changed
-                Vertex {
-                    position: [-0.0868241, 0.49240386, 0.0],
-                    tex_coords: [0.4131759, 0.00759614],
-                }, // A
-                Vertex {
-                    position: [-0.49513406, 0.06958647, 0.0],
-                    tex_coords: [0.0048659444, 0.43041354],
-                }, // B
-                Vertex {
-                    position: [-0.21918549, -0.44939706, 0.0],
-                    tex_coords: [0.28081453, 0.949397],
-                }, // C
-                Vertex {
-                    position: [0.35966998, -0.3473291, 0.0],
-                    tex_coords: [0.85967, 0.84732914],
-                }, // D
-                Vertex {
-                    position: [0.44147372, 0.2347359, 0.0],
-                    tex_coords: [0.9414737, 0.2652641],
-                }, // E
-            ];
-            let sprite_cols = 7.0;
-            let sprite_rows = 4.0;
+            // submit will accept anything that implements IntoIter
+            self.queue.submit(std::iter::once(encoder.finish()));
+            output.present();
 
-            let uv_width = 1.0 / sprite_cols; // width of one sprite in UV space
-            let uv_height = 1.0 / sprite_rows; // height of one sprite in UV space
-                                               // let mut rng = rand::thread_rng();
-            let sprite_index = rand::rng().random_range(0..28);
+            Ok(())
+                */
+            // Cache bind groups to avoid recreating them repeatedly
+            let mut bind_group_cache: HashMap<String, wgpu::BindGroup> = HashMap::new();
 
-            let sprite_col = (sprite_index % 7) as f32;
-            let sprite_row = (sprite_index / 7) as f32;
-            let u0 = sprite_col * uv_width;
-            let v0 = sprite_row * uv_height;
-            let u1 = u0 + uv_width;
-            let v1 = v0 + uv_height;
-            let quad_tex_coords: [[f32; 2]; 4] = [
-                [u0, v0], // top-left
-                [u1, v0], // top-right
-                [u1, v1], // bottom-right
-                [u0, v1], // bottom-left
-            ];
+            // Group elements by texture id
+            let mut groups: HashMap<String, Vec<&Box<dyn DrawableElement>>> = HashMap::new();
 
-            // Generate the vertices array for this sprite:
-            let vertices: [Vertex; 4] = [
-                Vertex {
-                    position: QUAD_VERTICES_POSITIONS[0],
-                    tex_coords: quad_tex_coords[0],
-                },
-                Vertex {
-                    position: QUAD_VERTICES_POSITIONS[1],
-                    tex_coords: quad_tex_coords[1],
-                },
-                Vertex {
-                    position: QUAD_VERTICES_POSITIONS[2],
-                    tex_coords: quad_tex_coords[2],
-                },
-                Vertex {
-                    position: QUAD_VERTICES_POSITIONS[3],
-                    tex_coords: quad_tex_coords[3],
-                },
-            ];
-            const indices: &[u16] = &[0, 1, 2, 2, 3, 0];
-            const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4];
-            // Instead of random sprite calculation:
-            println!("BRAID!!! {:?}", game_state.braid_char);
-            let quad_tex_coords = game_state.braid_char.get_uv_coords().expect("Need em");
-            let quad_tex_coords_flipped: [[f32; 2]; 4] = quad_tex_coords.map(|[u, v]| [u, 1.0 - v]);
+            for element in &to_render.elements {
+                let tex_id = element.get_texture_id();
+                groups.entry(tex_id).or_default().push(element);
+            }
 
-            // Build vertices using the braid's current UVs:
-            let vertices: [Vertex; 4] = [
-                Vertex {
-                    position: QUAD_VERTICES_POSITIONS[0],
-                    tex_coords: quad_tex_coords_flipped[0],
-                },
-                Vertex {
-                    position: QUAD_VERTICES_POSITIONS[1],
-                    tex_coords: quad_tex_coords_flipped[1],
-                },
-                Vertex {
-                    position: QUAD_VERTICES_POSITIONS[2],
-                    tex_coords: quad_tex_coords_flipped[2],
-                },
-                Vertex {
-                    position: QUAD_VERTICES_POSITIONS[3],
-                    tex_coords: quad_tex_coords_flipped[3],
-                },
-            ];
-            all_vertices.extend_from_slice(&vertices);
-            all_indices.extend_from_slice(indices);
+            // Cache bind groups to avoid recreating them repeatedly
+            let mut bind_group_cache: HashMap<String, wgpu::BindGroup> = HashMap::new();
 
-            let padded_indices = if all_indices.len() % 2 != 0 {
-                let mut padded = all_indices.to_vec();
-                padded.push(0); // pad with one extra u16
-                padded
-            } else {
-                all_indices.clone()
-            };
+            for (tex_id, group_elements) in groups {
+                let mut all_vertices = Vec::new();
+                let mut all_indices = Vec::new();
+                let mut vertex_offset = 0;
 
-            self.queue
-                .write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&all_vertices));
-            self.queue
-                .write_buffer(&self.index_buffer, 0, bytemuck::cast_slice(&padded_indices));
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..padded_indices.len() as u32, 0, 0..1);
+                for element in group_elements.iter() {
+                    if let Some(vertices) = element.build_vertices() {
+                        // println!("HMMM {:?} {}", vertices, group_elements.iter().len());
+                        all_vertices.extend_from_slice(&vertices);
+
+                        const QUAD_INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
+                        for &i in QUAD_INDICES {
+                            all_indices.push(i + vertex_offset as u16);
+                        }
+                        vertex_offset += vertices.len();
+                    }
+                }
+
+                // Create or reuse diffuse bind group for this texture
+                let diffuse_bind_group =
+                    bind_group_cache.entry(tex_id.clone()).or_insert_with(|| {
+                        let tex = group_elements[0].get_texture(); // all share the same texture
+
+                        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                            layout: &self.texture_bind_group_layout,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(&tex.view),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(&tex.sampler),
+                                },
+                            ],
+                            label: Some("cached_diffuse_bind_group"),
+                        })
+                    });
+
+                render_pass.set_bind_group(0, &*diffuse_bind_group, &[]);
+
+                // Upload buffers for all vertices and indices in this group
+                self.queue.write_buffer(
+                    &self.vertex_buffer,
+                    0,
+                    bytemuck::cast_slice(&all_vertices),
+                );
+                self.queue
+                    .write_buffer(&self.index_buffer, 0, bytemuck::cast_slice(&all_indices));
+
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                render_pass
+                    .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(0..all_indices.len() as u32, 0, 0..1);
+            }
         }
 
-        // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
@@ -517,9 +477,9 @@ impl Graphics {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Vertex {
-    position: [f32; 3],
+    pub position: [f32; 3],
     // color: [f32; 3], this was previously used for just rendering objects with filled colors
-    tex_coords: [f32; 2],
+    pub tex_coords: [f32; 2],
 }
 
 impl Vertex {
@@ -564,70 +524,3 @@ impl CameraUniform {
         self.view_proj = camera.build_view_projection_matrix().into();
     }
 }
-
-/*
-pub struct Rectangle {
-    pub x: f32,
-    pub y: f32,
-    pub width: f32,
-    pub height: f32,
-}
-
-impl Rectangle {
-    pub fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
-        Self {
-            x,
-            y,
-            width,
-            height,
-        }
-    }
-
-    /// Returns the 6 vertices forming 2 triangles for this rectangle
-    pub fn vertices(&self) -> [Vertex; 6] {
-        let x = self.x;
-        let y = self.y;
-        let w = self.width;
-        let h = self.height;
-
-        [
-            // Triangle 1
-            Vertex {
-                position: [x, y, 0.0],
-                color: [x, y, 0.0],
-            }, // bottom-left
-            Vertex {
-                position: [x + w, y, 0.0],
-                color: [x, y, 0.0],
-            }, // bottom-right
-            Vertex {
-                position: [x + w, y + h, 0.0],
-                color: [x, y, 0.0],
-            }, // top-right
-            // Triangle 2
-            Vertex {
-                position: [x, y, 0.0],
-                color: [x, y, 0.0],
-            }, // bottom-left
-            Vertex {
-                position: [x + w, y + h, 0.0],
-                color: [x, y, 0.0],
-            }, // top-right
-            Vertex {
-                position: [x, y + h, 0.0],
-                color: [x, y, 0.0],
-            }, // top-left
-        ]
-    }
-}
-
-fn world_to_clip(x: f32, y: f32, width: f32, height: f32) -> Rectangle {
-    // assuming world coordinates in 0..10 range for both axes,
-    // map to -1..1 clip space for rendering
-    let clip_x = (x / 10.0) * 2.0 - 1.0;
-    let clip_y = (y / 10.0) * 2.0 - 1.0;
-    let clip_w = (width / 10.0) * 2.0;
-    let clip_h = (height / 10.0) * 2.0;
-    Rectangle::new(clip_x, clip_y, clip_w, clip_h)
-}
-*/

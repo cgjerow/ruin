@@ -8,20 +8,23 @@ pub struct Texture {
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
     pub size: wgpu::Extent3d,
+    pub id: String,
 }
 
 impl Texture {
     pub fn from_bytes(
+        id: String,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         bytes: &[u8],
         label: &str,
     ) -> Result<Self> {
         let img = image::load_from_memory(bytes)?;
-        Self::from_image(device, queue, &img, Some(label))
+        Self::from_image(id, device, queue, &img, Some(label))
     }
 
     pub fn from_image(
+        id: String,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         img: &image::DynamicImage,
@@ -74,6 +77,7 @@ impl Texture {
         });
 
         Ok(Self {
+            id,
             texture,
             view,
             sampler,

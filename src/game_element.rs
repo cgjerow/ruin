@@ -1,12 +1,14 @@
 use std::{collections::HashMap, u16};
 
-use crate::texture::Texture;
+use crate::{graphics::Vertex, texture::Texture};
 
 // Maybe?
-pub trait DrawableEntity {
-    fn update(&mut self, dt: f32);
+pub trait DrawableElement {
+    fn get_texture_id(&self) -> String;
+    fn get_texture(&self) -> Texture;
     fn get_position(&self) -> [f32; 3];
     fn get_uv_coords(&self) -> Option<[[f32; 2]; 4]>;
+    fn build_vertices(&self) -> Option<[Vertex; 4]>;
 }
 
 #[derive(Debug, Clone)]
@@ -43,14 +45,16 @@ impl Animation {
                 let y: f32 = frame_data.get("y").unwrap_or(0.0);
                 let w: f32 = frame_data.get("width").unwrap_or(1.0);
                 let h: f32 = frame_data.get("height").unwrap_or(1.0);
+                println!("DIMENSIONS: {} {} {} {}", x, y, w, h);
                 let duration: f32 = frame_data.get("duration").unwrap_or(1.0);
 
                 // Convert to UVs (and optionally flip Y if needed)
                 let u0 = x / tex_w;
-                let v0 = y / tex_h;
                 let u1 = (x + w) / tex_w;
-                let v1 = (y + h) / tex_h;
+                let v1 = 1.0 - (y / tex_h);
+                let v0 = 1.0 - ((y + h) / tex_h);
 
+                println!("UV DIM: {} {} {} {}", u0, v0, u1, v1);
                 // WGPU uses origin at top-left by default. Flip V if needed.
                 let uv_coords = [
                     [u0, v1], // bottom-left
@@ -141,5 +145,64 @@ impl StatefulElement {
             .get(&self.state)
             .and_then(|anim| anim.frames.get(self.current_frame))
             .map(|frame| frame.uv_coords)
+    }
+
+    pub fn build_vertices(&self) -> Option<[Vertex; 4]> {
+        let uv = self.get_uv_coords()?;
+        let [w, h] = self.size;
+        let [x, y, z] = self.position;
+
+        let hw = w / 2.0;
+        let hh = h / 2.0;
+
+        let top_left = [x - hw, y + hh, z];
+        let top_right = [x + hw, y + hh, z];
+        let bottom_right = [x + hw, y - hh, z];
+        let bottom_left = [x - hw, y - hh, z];
+
+        Some([
+            Vertex {
+                position: top_left,
+                tex_coords: uv[0],
+            },
+            Vertex {
+                position: top_right,
+                tex_coords: uv[1],
+            },
+            Vertex {
+                position: bottom_right,
+                tex_coords: uv[2],
+            },
+            Vertex {
+                position: bottom_left,
+                tex_coords: uv[3],
+            },
+        ])
+    }
+
+    pub fn get_position(&self) -> [f32; 3] {
+        self.position
+    }
+}
+
+impl DrawableElement for StatefulElement {
+    fn get_uv_coords(&self) -> Option<[[f32; 2]; 4]> {
+        self.get_uv_coords()
+    }
+
+    fn build_vertices(&self) -> Option<[Vertex; 4]> {
+        self.build_vertices()
+    }
+
+    fn get_position(&self) -> [f32; 3] {
+        self.get_position()
+    }
+
+    fn get_texture_id(&self) -> String {
+        self.sprite_sheet.id.clone()
+    }
+
+    fn get_texture(&self) -> Texture {
+        self.sprite_sheet.clone()
     }
 }
