@@ -1,4 +1,4 @@
-running = {
+local running = {
 	frames = {
 		{
 			x = 0,

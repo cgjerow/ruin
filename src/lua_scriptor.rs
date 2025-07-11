@@ -39,6 +39,14 @@ pub struct LuaExtendedExecutor {
 impl LuaExtendedExecutor {
     pub fn new(script: &str) -> Self {
         let lua = Lua::new();
+        let lua_path = "./src/scripts/?.lua";
+        let code = format!(
+            r#"
+            package.path = package.path .. ";{}"
+            "#,
+            lua_path
+        );
+        let _ = lua.load(&code).exec();
         let path = format!("./src/scripts/{}.lua", script);
         let contents = fs::read_to_string(&path).expect("Unable to read Lua script file");
         lua.load(&contents)
