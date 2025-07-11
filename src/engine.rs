@@ -1,4 +1,5 @@
 use crate::camera::Camera;
+use crate::game_element::{Animation, StatefulElement, VisualState};
 use crate::lua_scriptor::LuaExtendedExecutor;
 use crate::texture::Texture;
 use crate::{debug, graphics};
@@ -29,6 +30,7 @@ pub struct Engine {
     asset_cache: HashMap<String, Texture>,
     game_state: Option<GameState>,
     lua_context: LuaExtendedExecutor,
+    character_cache: HashMap<String, StatefulElement>,
     width: u32,
     height: u32,
 }
@@ -63,6 +65,7 @@ impl Engine {
             game_state: None,
             width: config.width,
             height: config.height,
+            character_cache: HashMap::new(),
         }
     }
 
@@ -99,10 +102,14 @@ impl Engine {
         }
     }
 
-    fn update(&mut self) -> anyhow::Result<()> {
+    fn update(&mut self, dt: Duration) -> anyhow::Result<()> {
         debug_log!(self.debugger, "Updated it? {}", true);
         let update: mlua::Function = self.lua_context.get_function("update");
-        let _ = update.call::<()>(1);
+        let _ = update.call::<()>(dt.as_secs_f32());
+
+        for character in self.character_cache.values_mut() {
+            character.update(dt.as_secs_f32()); // or pass actual dt if you have it
+        }
 
         let graphics = match &mut self.graphics {
             Some(canvas) => canvas,
@@ -121,6 +128,7 @@ impl Engine {
     fn game_state(&mut self) -> GameState {
         let tree = self.get_texture("happy_tree.png");
         let mittens = self.get_texture("mittens-goblin-art.png");
+        let braid = self.get_texture("braid-sprite-sheet.webp");
         let previous_game_state = self.game_state.take();
         let mut rng = rand::rng();
         let show_mittens = previous_game_state
@@ -149,6 +157,12 @@ impl Engine {
             enemies,
             tree,
             mittens,
+            braid,
+            braid_char: self
+                .character_cache
+                .get("braid")
+                .expect("I need you!")
+                .clone(),
             show_mittens,
         });
 
@@ -167,6 +181,12 @@ impl Engine {
                 .collect(),
             tree: self.get_texture("happy_tree.png"),
             mittens: self.get_texture("mittens-goblin-art.png"),
+            braid: self.get_texture("braid-sprite-sheet.webp"),
+            braid_char: self
+                .character_cache
+                .get("braid")
+                .expect("I need him!")
+                .clone(),
             show_mittens,
         };
     }
@@ -181,6 +201,67 @@ impl Engine {
         (self.width, self.height)
     }
 
+    fn create_character(&mut self, character_table: mlua::Table) {
+        let id: String = character_table.get("id").unwrap_or("unknown".to_string());
+        let state: VisualState = character_table
+            .get("state")
+            .unwrap_or("Idle".to_string())
+            .into();
+        let x: f32 = character_table.get("x").unwrap_or(0.0);
+        let y: f32 = character_table.get("y").unwrap_or(0.0);
+        let width: f32 = character_table.get("width").unwrap_or(1.0);
+        let height: f32 = character_table.get("height").unwrap_or(1.0);
+        let animations: mlua::Table = character_table
+            .get("animations")
+            .unwrap_or(self.lua_context.create_table());
+        let sprite: String = character_table
+            .get("sprite")
+            .expect("Sprite Sheet required for Character");
+        let sheet_width = character_table
+            .get("sprite_sheet_width")
+            .expect("Sprite Sheet Width required");
+        let sheet_height = character_table
+            .get("sprite_sheet_height")
+            .expect("Sprite Sheet Height required");
+
+        let texture = self.get_texture(&sprite);
+
+        let character = StatefulElement {
+            id: id.clone(),
+            state,
+            position: [x, y, 0.0],
+            size: [width, height],
+            sprite_sheet: texture,
+            current_frame: 0,
+            frame_timer: 0.0,
+            animations: Self::table_to_map(animations, VisualState::from, |tbl| {
+                Animation::from_lua_table(tbl, sheet_width, sheet_height)
+            }),
+        };
+
+        println!("Created {}", id);
+        self.character_cache.insert(id, character);
+    }
+
+    fn table_to_map<K, V>(
+        table: mlua::Table,
+        key_converter: impl Fn(String) -> K,
+        value_converter: impl Fn(mlua::Table) -> V,
+    ) -> HashMap<K, V>
+    where
+        K: std::cmp::Eq + std::hash::Hash,
+    {
+        let mut map = HashMap::new();
+
+        for pair in table.pairs::<String, mlua::Table>() {
+            if let Ok((key, value)) = pair {
+                map.insert(key_converter(key), value_converter(value));
+            }
+        }
+
+        map
+    }
+
     fn setup(&mut self) {
         let self_ptr = self as *mut Self;
         let get_window_size = self
@@ -191,10 +272,21 @@ impl Engine {
                 Ok(engine.get_window_size())
             })
             .expect("Could not create function");
+        let create_character = self
+            .lua_context
+            .lua
+            .create_function(move |_, character_table: mlua::Table| {
+                let engine = unsafe { &mut *self_ptr };
+                Ok(engine.create_character(character_table))
+            })
+            .expect("Could not create function");
 
         let lua_engine = self.lua_context.create_table();
         lua_engine
             .set("get_window_size", get_window_size)
+            .expect("Could not set engine function");
+        lua_engine
+            .set("create_character", create_character)
             .expect("Could not set engine function");
         self.lua_context
             .lua
@@ -224,6 +316,7 @@ impl Engine {
 impl ApplicationHandler<Graphics> for Engine {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         let now = Instant::now();
+        let dt = self.last_frame.elapsed();
 
         if self.fps_specified {
             let target = self.last_frame + self.target_rate.unwrap_or_default();
@@ -234,7 +327,7 @@ impl ApplicationHandler<Graphics> for Engine {
         }
 
         self.last_frame = Instant::now();
-        let _ = self.update();
+        let _ = self.update(dt);
         let game_state = self.game_state();
 
         let _ = match &mut self.graphics {
@@ -361,5 +454,7 @@ pub struct GameState {
     pub enemies: Vec<Enemy>,
     pub tree: Texture,
     pub mittens: Texture,
+    pub braid: Texture,
     pub show_mittens: bool,
+    pub braid_char: StatefulElement,
 }

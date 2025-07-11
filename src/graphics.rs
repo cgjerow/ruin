@@ -1,10 +1,11 @@
 use bytemuck::{Pod, Zeroable};
 use image::DynamicImage;
+use rand::Rng;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
-use winit::window::Window;
+use winit::window::Window; // bring Rng trait into scope
 
 use crate::camera::{
     Camera, CameraAction, CameraController, CameraInputMap, ThreeDimensionalCameraController,
@@ -308,11 +309,14 @@ impl Graphics {
 
             render_pass.set_pipeline(&self.render_pipeline);
 
+            /*
             let tex = if game_state.show_mittens {
                 &game_state.mittens
             } else {
                 &game_state.tree
             };
+            */
+            let tex = &game_state.braid;
             let diffuse_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &self.texture_bind_group_layout,
                 entries: &[
@@ -378,6 +382,13 @@ impl Graphics {
                 }, // E
             ];
             */
+            const QUAD_VERTICES_POSITIONS: [[f32; 3]; 4] = [
+                [-0.5, 0.5, -1.0], // top-left
+                [0.5, 0.5, -1.0],  // top-right
+                [0.5, -0.5, 0.0],  // bottom-right
+                [-0.5, -0.5, 0.0], // bottom-left
+            ];
+
             const VERTICES: &[Vertex] = &[
                 // Changed
                 Vertex {
@@ -401,11 +412,74 @@ impl Graphics {
                     tex_coords: [0.9414737, 0.2652641],
                 }, // E
             ];
+            let sprite_cols = 7.0;
+            let sprite_rows = 4.0;
 
+            let uv_width = 1.0 / sprite_cols; // width of one sprite in UV space
+            let uv_height = 1.0 / sprite_rows; // height of one sprite in UV space
+                                               // let mut rng = rand::thread_rng();
+            let sprite_index = rand::rng().random_range(0..28);
+
+            let sprite_col = (sprite_index % 7) as f32;
+            let sprite_row = (sprite_index / 7) as f32;
+            let u0 = sprite_col * uv_width;
+            let v0 = sprite_row * uv_height;
+            let u1 = u0 + uv_width;
+            let v1 = v0 + uv_height;
+            let quad_tex_coords: [[f32; 2]; 4] = [
+                [u0, v0], // top-left
+                [u1, v0], // top-right
+                [u1, v1], // bottom-right
+                [u0, v1], // bottom-left
+            ];
+
+            // Generate the vertices array for this sprite:
+            let vertices: [Vertex; 4] = [
+                Vertex {
+                    position: QUAD_VERTICES_POSITIONS[0],
+                    tex_coords: quad_tex_coords[0],
+                },
+                Vertex {
+                    position: QUAD_VERTICES_POSITIONS[1],
+                    tex_coords: quad_tex_coords[1],
+                },
+                Vertex {
+                    position: QUAD_VERTICES_POSITIONS[2],
+                    tex_coords: quad_tex_coords[2],
+                },
+                Vertex {
+                    position: QUAD_VERTICES_POSITIONS[3],
+                    tex_coords: quad_tex_coords[3],
+                },
+            ];
+            const indices: &[u16] = &[0, 1, 2, 2, 3, 0];
             const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4];
+            // Instead of random sprite calculation:
+            println!("BRAID!!! {:?}", game_state.braid_char);
+            let quad_tex_coords = game_state.braid_char.get_uv_coords().expect("Need em");
+            let quad_tex_coords_flipped: [[f32; 2]; 4] = quad_tex_coords.map(|[u, v]| [u, 1.0 - v]);
 
-            all_vertices.extend_from_slice(VERTICES);
-            all_indices.extend_from_slice(INDICES);
+            // Build vertices using the braid's current UVs:
+            let vertices: [Vertex; 4] = [
+                Vertex {
+                    position: QUAD_VERTICES_POSITIONS[0],
+                    tex_coords: quad_tex_coords_flipped[0],
+                },
+                Vertex {
+                    position: QUAD_VERTICES_POSITIONS[1],
+                    tex_coords: quad_tex_coords_flipped[1],
+                },
+                Vertex {
+                    position: QUAD_VERTICES_POSITIONS[2],
+                    tex_coords: quad_tex_coords_flipped[2],
+                },
+                Vertex {
+                    position: QUAD_VERTICES_POSITIONS[3],
+                    tex_coords: quad_tex_coords_flipped[3],
+                },
+            ];
+            all_vertices.extend_from_slice(&vertices);
+            all_indices.extend_from_slice(indices);
 
             let padded_indices = if all_indices.len() % 2 != 0 {
                 let mut padded = all_indices.to_vec();

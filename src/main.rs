@@ -2,6 +2,7 @@
 mod debug;
 mod camera;
 mod engine;
+mod game_element;
 mod graphics;
 mod lua_scriptor;
 mod texture;
