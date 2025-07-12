@@ -1,5 +1,6 @@
 use crate::camera::{Camera, CameraAction, CameraInputMap, TwoDimensionalCameraController};
 use crate::game_element::{Animation, StatefulElement, VisualState};
+use crate::graphics::ElementsToRender;
 use crate::lua_scriptor::LuaExtendedExecutor;
 use crate::texture::Texture;
 use crate::{debug, graphics};
@@ -380,8 +381,4 @@ impl ApplicationHandler<Graphics> for Engine {
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
         self.cleanup()
     }
-}
-
-pub struct ElementsToRender {
-    pub elements: Vec<StatefulElement>,
 }

@@ -7,7 +7,6 @@ use winit::keyboard::KeyCode;
 use winit::window::Window; // bring Rng trait into scope
 
 use crate::camera::{Camera, CameraController};
-use crate::engine::ElementsToRender;
 use crate::game_element::StatefulElement;
 use crate::graphics::CameraUniform;
 use crate::graphics::Vertex;
@@ -33,6 +32,10 @@ pub struct Graphics {
     camera_bind_group_layout: wgpu::BindGroupLayout,
     // maybe move to engine?
     pub camera_controller: Box<dyn CameraController>,
+}
+
+pub struct ElementsToRender {
+    pub elements: Vec<StatefulElement>,
 }
 
 impl Graphics {
