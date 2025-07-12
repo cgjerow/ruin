@@ -1,8 +1,10 @@
 use std::collections::HashMap;
-use winit::{
-    event::{ElementState, KeyEvent, WindowEvent},
-    keyboard::{KeyCode, PhysicalKey},
-};
+use winit::{event::WindowEvent, keyboard::KeyCode};
+
+pub enum CameraMode {
+    Perspective3D,
+    Orthographic2D,
+}
 
 pub struct Camera {
     pub eye: cgmath::Point3<f32>,
@@ -12,10 +14,12 @@ pub struct Camera {
     pub fovy: f32,
     pub znear: f32,
     pub zfar: f32,
+    zoom: f32,
+    mode: CameraMode,
 }
 
 impl Camera {
-    pub fn new(width: u32, height: u32) -> Self {
+    pub fn new(width: u32, height: u32, mode: CameraMode) -> Self {
         Self {
             // position the camera 1 unit up and 2 units back
             // +z is out of the screen
@@ -24,27 +28,54 @@ impl Camera {
             target: (0.0, 0.0, 0.0).into(),
             // which way is "up"
             up: cgmath::Vector3::unit_y(),
-            aspect: (width / height) as f32,
-            fovy: 45.0,
+            aspect: Self::aspect_ratio(width, height),
+            // this may need to update based on screen for 3D games
+            fovy: 30.0,
             znear: 0.1,
             zfar: 100.0,
+            zoom: 1.0,
+            mode,
         }
     }
 
-    pub fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
-        // move world to position/rotation of camera
-        let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
-        // warp scene to give effect of depth
-        let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
+    fn aspect_ratio(width: u32, height: u32) -> f32 {
+        width as f32 / height as f32
+    }
 
-        #[rustfmt::skip]
-        let opengl_to_wgpu_matrix_correction: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
-            cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
-            cgmath::Vector4::new(0.0, 1.0, 0.0, 0.0),
-            cgmath::Vector4::new(0.0, 0.0, 0.5, 0.0),
-            cgmath::Vector4::new(0.0, 0.0, 0.5, 1.0),
-        );
-        return opengl_to_wgpu_matrix_correction * (proj * view);
+    pub fn update_aspect_ratio(&mut self, width: u32, height: u32) {
+        self.aspect = Self::aspect_ratio(width, height);
+        self.build_view_projection_matrix();
+    }
+
+    pub fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
+        match self.mode {
+            CameraMode::Perspective3D => {
+                // move world to position/rotation of camera
+                let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
+                // make warp a little more dynamic based on aspect
+                let fovy = (self.fovy / self.aspect.max(1.0)).clamp(30.0, 60.0);
+                // warp scene to give effect of depth
+                let proj =
+                    cgmath::perspective(cgmath::Deg(fovy), self.aspect, self.znear, self.zfar);
+                let opengl_to_wgpu_matrix_correction = cgmath::Matrix4::from_cols(
+                    cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
+                    cgmath::Vector4::new(0.0, 1.0, 0.0, 0.0),
+                    cgmath::Vector4::new(0.0, 0.0, 0.5, 0.0),
+                    cgmath::Vector4::new(0.0, 0.0, 0.5, 1.0),
+                );
+                opengl_to_wgpu_matrix_correction * (proj * view)
+            }
+            CameraMode::Orthographic2D => {
+                let left = -self.aspect * self.zoom;
+                let right = self.aspect * self.zoom;
+                let bottom = -1.0 * self.zoom;
+                let top = 1.0 * self.zoom;
+
+                let proj = cgmath::ortho(left, right, bottom, top, self.znear, self.zfar);
+                let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
+                proj * view
+            }
+        }
     }
 }
 
