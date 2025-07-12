@@ -20,8 +20,6 @@ function table.clone(tbl)
 end
 
 function load()
-	-- print("LUA: Load Game")
-
 	engine.create_character(MAIN_CHARACTER)
 	camera_config = CameraBuilder()
 		:mode(Enums.CameraMode.Universal)
@@ -57,12 +55,9 @@ end
 
 function update(dt)
 	STATE.counter = STATE.counter + 1
-	-- print("LUA: Update: ", STATE.counter, engine.get_window_size())
 end
 
-function draw()
-	-- print("LUA Draw")
-end
+function draw() end
 
 function getState()
 	return STATE

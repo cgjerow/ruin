@@ -74,8 +74,7 @@ impl Engine {
 
     fn get_texture(&mut self, path: &str) -> Texture {
         let texture = self.asset_cache.entry(path.to_string()).or_insert_with(|| {
-            println!("Initialized asset: {}", path);
-
+            debug_log!(self.debugger, "Initialized asset: {}", path);
             self.graphics
                 .as_mut()
                 .expect("Graphics not initialized")
