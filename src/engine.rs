@@ -1,4 +1,4 @@
-use crate::camera::Camera;
+use crate::camera::{Camera, CameraAction, CameraInputMap, TwoDimensionalCameraController};
 use crate::game_element::{Animation, StatefulElement, VisualState};
 use crate::lua_scriptor::LuaExtendedExecutor;
 use crate::texture::Texture;
@@ -284,10 +284,26 @@ impl ApplicationHandler<Graphics> for Engine {
         let camera = Camera::new(
             self.width,
             self.height,
-            crate::camera::camera::CameraMode::Perspective3D,
+            crate::camera::camera::CameraMode::Simple2D,
         );
 
-        self.graphics = Some(pollster::block_on(Graphics::new(window.clone(), camera)).unwrap());
+        let input_map = CameraInputMap::new()
+            .insert(KeyCode::KeyW, CameraAction::MoveForward)
+            .insert(KeyCode::KeyS, CameraAction::MoveBackward)
+            .insert(KeyCode::KeyA, CameraAction::MoveLeft)
+            .insert(KeyCode::KeyD, CameraAction::MoveRight)
+            .insert(KeyCode::KeyQ, CameraAction::RollLeft)
+            .insert(KeyCode::KeyE, CameraAction::RollRight)
+            .insert(KeyCode::ArrowUp, CameraAction::PitchUp)
+            .insert(KeyCode::ArrowDown, CameraAction::PitchDown)
+            .insert(KeyCode::ArrowLeft, CameraAction::YawLeft)
+            .insert(KeyCode::ArrowRight, CameraAction::YawRight);
+
+        //let camera_controller = Box::new(UniversalCameraController::new(10.0, 5.0, input_map));
+        let camera_controller = Box::new(TwoDimensionalCameraController::new(10.0));
+        self.graphics = Some(
+            pollster::block_on(Graphics::new(window.clone(), camera, camera_controller)).unwrap(),
+        );
         self.window = Some(window);
 
         self.setup();

@@ -42,7 +42,11 @@ impl Graphics {
         self.background_color = color;
     }
 
-    pub async fn new(window: Arc<Window>, camera: Camera) -> anyhow::Result<Graphics> {
+    pub async fn new(
+        window: Arc<Window>,
+        camera: Camera,
+        camera_controller: Box<dyn CameraController>,
+    ) -> anyhow::Result<Graphics> {
         let size = window.inner_size();
         // The instance is a handle to our GPU
         // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
@@ -207,20 +211,7 @@ impl Graphics {
             contents: bytemuck::cast_slice(&[camera_uniform]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
-        let input_map = CameraInputMap::new()
-            .insert(KeyCode::KeyW, CameraAction::MoveForward)
-            .insert(KeyCode::KeyS, CameraAction::MoveBackward)
-            .insert(KeyCode::KeyA, CameraAction::MoveLeft)
-            .insert(KeyCode::KeyD, CameraAction::MoveRight)
-            .insert(KeyCode::KeyQ, CameraAction::RollLeft)
-            .insert(KeyCode::KeyE, CameraAction::RollRight)
-            .insert(KeyCode::ArrowUp, CameraAction::PitchUp)
-            .insert(KeyCode::ArrowDown, CameraAction::PitchDown)
-            .insert(KeyCode::ArrowLeft, CameraAction::YawLeft)
-            .insert(KeyCode::ArrowRight, CameraAction::YawRight);
 
-        let camera_controller = Box::new(UniversalCameraController::new(10.0, 5.0, input_map));
-        // let camera_controller = Box::new(TwoDimensionalCameraController::new(10.0));
         Ok(Self {
             surface,
             device,

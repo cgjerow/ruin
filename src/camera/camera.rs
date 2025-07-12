@@ -1,9 +1,10 @@
+use cgmath::SquareMatrix;
 use std::collections::HashMap;
 use winit::{event::WindowEvent, keyboard::KeyCode};
 
 pub enum CameraMode {
     Perspective3D,
-    Orthographic2D,
+    Simple2D,
 }
 
 pub struct Camera {
@@ -64,14 +65,22 @@ impl Camera {
                 );
                 opengl_to_wgpu_matrix_correction * (proj * view)
             }
-            CameraMode::Orthographic2D => {
-                let left = -self.aspect * self.zoom;
-                let right = self.aspect * self.zoom;
-                let bottom = -1.0 * self.zoom;
-                let top = 1.0 * self.zoom;
+            CameraMode::Simple2D => {
+                // Zoom controls how much of the world is visible: higher = see more
+                let half_width = self.aspect * self.zoom;
+                let half_height = 1.0 * self.zoom;
 
-                let proj = cgmath::ortho(left, right, bottom, top, self.znear, self.zfar);
-                let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
+                let center_x = self.eye.x;
+                let center_y = self.eye.y;
+
+                let left = center_x - half_width;
+                let right = center_x + half_width;
+                let bottom = center_y - half_height;
+                let top = center_y + half_height;
+
+                let proj = cgmath::ortho(left, right, bottom, top, -1.0, 1.0);
+                let view = cgmath::Matrix4::identity(); // no rotation or offset needed in view
+
                 proj * view
             }
         }
