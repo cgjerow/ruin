@@ -4,7 +4,7 @@ use winit::{event::WindowEvent, keyboard::KeyCode};
 
 pub enum CameraMode {
     Perspective3D,
-    Simple2D,
+    Orthographic2D,
 }
 
 pub struct Camera {
@@ -65,7 +65,7 @@ impl Camera {
                 );
                 opengl_to_wgpu_matrix_correction * (proj * view)
             }
-            CameraMode::Simple2D => {
+            CameraMode::Orthographic2D => {
                 // Zoom controls how much of the world is visible: higher = see more
                 let half_width = self.aspect * self.zoom;
                 let half_height = 1.0 * self.zoom;

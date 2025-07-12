@@ -159,7 +159,6 @@ impl Engine {
 
         let texture = self.get_texture(&sprite);
 
-        println!("CHAR {} x {} y {}", id, x, y);
         let character = StatefulElement {
             id: id.clone(),
             state,
@@ -284,7 +283,7 @@ impl ApplicationHandler<Graphics> for Engine {
         let camera = Camera::new(
             self.width,
             self.height,
-            crate::camera::camera::CameraMode::Simple2D,
+            crate::camera::camera::CameraMode::Orthographic2D,
         );
 
         let input_map = CameraInputMap::new()

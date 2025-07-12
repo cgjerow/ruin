@@ -82,7 +82,6 @@ impl TwoDimensionalCameraController {
 
         camera.eye += movement;
         camera.target += movement;
-        println!("Camera: {:?} {:?} ", camera.eye, camera.target)
     }
 }
 

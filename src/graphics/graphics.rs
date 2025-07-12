@@ -1,4 +1,3 @@
-use bytemuck::{Pod, Zeroable};
 use image::DynamicImage;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -7,12 +6,11 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window; // bring Rng trait into scope
 
-use crate::camera::{
-    Camera, CameraAction, CameraController, CameraInputMap, ThreeDimensionalCameraController,
-    TwoDimensionalCameraController, UniversalCameraController,
-};
+use crate::camera::{Camera, CameraController};
 use crate::engine::ElementsToRender;
 use crate::game_element::StatefulElement;
+use crate::graphics::CameraUniform;
+use crate::graphics::Vertex;
 use crate::texture::Texture;
 
 pub struct Graphics {
@@ -139,7 +137,7 @@ impl Graphics {
                 label: Some("camera_bind_group_layout"),
             });
 
-        let shader = device.create_shader_module(wgpu::include_wgsl!("./shaders/shader-1.wgsl"));
+        let shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/shader-1.wgsl"));
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Primary Render Pipeline Layout"),
@@ -313,7 +311,6 @@ impl Graphics {
             });
             render_pass.set_bind_group(1, &camera_bind_group, &[]);
 
-            println!("RENDERING {} ELEMENTS", to_render.elements.len());
             // Group elements by texture id
             let mut groups: HashMap<String, Vec<StatefulElement>> = HashMap::new();
 
@@ -326,14 +323,12 @@ impl Graphics {
             let mut bind_group_cache: HashMap<String, wgpu::BindGroup> = HashMap::new();
 
             for (tex_id, group_elements) in groups {
-                // fprintln!("IN GROUP {:?}", group_elements);
                 let mut all_vertices = Vec::new();
                 let mut all_indices = Vec::new();
                 const QUAD_INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
 
                 for element in group_elements.iter() {
                     if let Some(vertices) = element.build_vertices() {
-                        // println!("HMMM {:?} {}", vertices, group_elements.iter().len());
                         let base_index = all_vertices.len() as u16;
                         all_vertices.extend_from_slice(&vertices);
                         // Offset indices by base_index
@@ -394,56 +389,5 @@ impl Graphics {
             (KeyCode::Escape, true) => event_loop.exit(),
             _ => {}
         }
-    }
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct Vertex {
-    pub position: [f32; 3],
-    // color: [f32; 3], this was previously used for just rendering objects with filled colors
-    pub tex_coords: [f32; 2],
-}
-
-impl Vertex {
-    pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
-        use std::mem;
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-            ],
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct CameraUniform {
-    // We can't use cgmath with bytemuck directly, so we'll have
-    // to convert the Matrix4 into a 4x4 f32 array
-    view_proj: [[f32; 4]; 4],
-}
-
-impl CameraUniform {
-    fn new() -> Self {
-        use cgmath::SquareMatrix;
-        Self {
-            view_proj: cgmath::Matrix4::identity().into(),
-        }
-    }
-
-    fn update_view_proj(&mut self, camera: &crate::camera::Camera) {
-        self.view_proj = camera.build_view_projection_matrix().into();
     }
 }

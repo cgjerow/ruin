@@ -1,6 +1,7 @@
 use std::{collections::HashMap, u16};
 
-use crate::{graphics::Vertex, texture::Texture};
+use crate::graphics::Vertex;
+use crate::texture::Texture;
 
 #[derive(Debug, Clone)]
 pub struct SpriteFrame {
