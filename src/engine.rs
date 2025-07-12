@@ -1,5 +1,5 @@
 use crate::camera::Camera;
-use crate::game_element::{Animation, DrawableElement, StatefulElement, VisualState};
+use crate::game_element::{Animation, StatefulElement, VisualState};
 use crate::lua_scriptor::LuaExtendedExecutor;
 use crate::texture::Texture;
 use crate::{debug, graphics};
@@ -102,7 +102,7 @@ impl Engine {
     }
 
     fn update(&mut self, dt: Duration) -> anyhow::Result<()> {
-        debug_log!(self.debugger, "Updated it? {}", true);
+        // debug_log!(self.debugger, "Updated it? {}", true);
         let update: mlua::Function = self.lua_context.get_function("update");
         let _ = update.call::<()>(dt.as_secs_f32());
 
@@ -126,12 +126,7 @@ impl Engine {
 
     fn to_render(&self) -> ElementsToRender {
         ElementsToRender {
-            elements: self
-                .character_cache
-                .values()
-                .cloned()
-                .map(|el| Box::new(el) as Box<dyn DrawableElement>)
-                .collect(),
+            elements: self.character_cache.values().cloned().collect(),
         }
     }
 
@@ -286,7 +281,11 @@ impl ApplicationHandler<Graphics> for Engine {
         let window_attributes =
             Window::default_attributes().with_inner_size(LogicalSize::new(self.width, self.height));
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        let camera = Camera::new(self.width, self.height);
+        let camera = Camera::new(
+            self.width,
+            self.height,
+            crate::camera::camera::CameraMode::Perspective3D,
+        );
 
         self.graphics = Some(pollster::block_on(Graphics::new(window.clone(), camera)).unwrap());
         self.window = Some(window);
@@ -369,5 +368,5 @@ impl ApplicationHandler<Graphics> for Engine {
 }
 
 pub struct ElementsToRender {
-    pub elements: Vec<Box<dyn DrawableElement>>,
+    pub elements: Vec<StatefulElement>,
 }

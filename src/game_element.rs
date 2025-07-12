@@ -2,15 +2,6 @@ use std::{collections::HashMap, u16};
 
 use crate::{graphics::Vertex, texture::Texture};
 
-// Maybe?
-pub trait DrawableElement {
-    fn get_texture_id(&self) -> String;
-    fn get_texture(&self) -> Texture;
-    fn get_position(&self) -> [f32; 3];
-    fn get_uv_coords(&self) -> Option<[[f32; 2]; 4]>;
-    fn build_vertices(&self) -> Option<[Vertex; 4]>;
-}
-
 #[derive(Debug, Clone)]
 pub struct SpriteFrame {
     pub uv_coords: [[f32; 2]; 4], // bottom-left, bottom-right, top-right, top-left
@@ -183,26 +174,12 @@ impl StatefulElement {
     pub fn get_position(&self) -> [f32; 3] {
         self.position
     }
-}
 
-impl DrawableElement for StatefulElement {
-    fn get_uv_coords(&self) -> Option<[[f32; 2]; 4]> {
-        self.get_uv_coords()
-    }
-
-    fn build_vertices(&self) -> Option<[Vertex; 4]> {
-        self.build_vertices()
-    }
-
-    fn get_position(&self) -> [f32; 3] {
-        self.get_position()
-    }
-
-    fn get_texture_id(&self) -> String {
+    pub fn get_texture_id(&self) -> String {
         self.sprite_sheet.id.clone()
     }
 
-    fn get_texture(&self) -> Texture {
+    pub fn get_texture(&self) -> Texture {
         self.sprite_sheet.clone()
     }
 }

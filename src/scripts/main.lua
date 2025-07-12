@@ -19,7 +19,7 @@ function table.clone(tbl)
 end
 
 function load()
-	print("LUA: Load Game")
+	-- print("LUA: Load Game")
 
 	engine.create_character(MAIN_CHARACTER)
 	for x = 0, 99 do
@@ -39,11 +39,11 @@ end
 
 function update(dt)
 	STATE.counter = STATE.counter + 1
-	print("LUA: Update: ", STATE.counter, engine.get_window_size())
+	-- print("LUA: Update: ", STATE.counter, engine.get_window_size())
 end
 
 function draw()
-	print("LUA Draw")
+	-- print("LUA Draw")
 end
 
 function getState()

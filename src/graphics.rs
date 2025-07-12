@@ -12,7 +12,7 @@ use crate::camera::{
     TwoDimensionalCameraController, UniversalCameraController,
 };
 use crate::engine::ElementsToRender;
-use crate::game_element::DrawableElement;
+use crate::game_element::StatefulElement;
 use crate::texture::Texture;
 
 pub struct Graphics {
@@ -219,8 +219,8 @@ impl Graphics {
             .insert(KeyCode::ArrowLeft, CameraAction::YawLeft)
             .insert(KeyCode::ArrowRight, CameraAction::YawRight);
 
-        // let camera_controller = Box::new(UniversalCameraController::new(10.0, 5.0, input_map));
-        let camera_controller = Box::new(TwoDimensionalCameraController::new(10.0));
+        let camera_controller = Box::new(UniversalCameraController::new(10.0, 5.0, input_map));
+        // let camera_controller = Box::new(TwoDimensionalCameraController::new(10.0));
         Ok(Self {
             surface,
             device,
@@ -263,6 +263,7 @@ impl Graphics {
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
+            self.camera.update_aspect_ratio(width, height);
         }
     }
 
@@ -321,80 +322,11 @@ impl Graphics {
             });
             render_pass.set_bind_group(1, &camera_bind_group, &[]);
 
-            /*
-                let mut bind_group_cache = HashMap::new();
-
-                // PER ELEMENT
-                //
-                //
-                for element in to_render.elements.iter() {
-                    let tex_id = element.get_texture_id();
-
-                    let diffuse_bind_group =
-                        bind_group_cache.entry(tex_id.clone()).or_insert_with(|| {
-                            let tex = element.get_texture();
-                            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                layout: &self.texture_bind_group_layout,
-                                entries: &[
-                                    wgpu::BindGroupEntry {
-                                        binding: 0,
-                                        resource: wgpu::BindingResource::TextureView(&tex.view),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 1,
-                                        resource: wgpu::BindingResource::Sampler(&tex.sampler),
-                                    },
-                                ],
-                                label: Some("cached_diffuse_bind_group"),
-                            })
-                        });
-                    render_pass.set_bind_group(0, &*diffuse_bind_group, &[]);
-
-                    let mut all_vertices = Vec::new();
-                    let mut all_indices = Vec::new();
-
-                    all_vertices.extend_from_slice(&element.build_vertices().unwrap());
-                    const QUAD_INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
-                    all_indices.extend_from_slice(QUAD_INDICES);
-
-                    let padded_indices = if all_indices.len() % 2 != 0 {
-                        let mut padded = all_indices.to_vec();
-                        padded.push(0); // pad with one extra u16
-                        padded
-                    } else {
-                        all_indices.clone()
-                    };
-
-                    self.queue.write_buffer(
-                        &self.vertex_buffer,
-                        0,
-                        bytemuck::cast_slice(&all_vertices),
-                    );
-                    self.queue.write_buffer(
-                        &self.index_buffer,
-                        0,
-                        bytemuck::cast_slice(&padded_indices),
-                    );
-                    render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-                    render_pass
-                        .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                    render_pass.draw_indexed(0..padded_indices.len() as u32, 0, 0..1);
-                }
-            }
-
-            // submit will accept anything that implements IntoIter
-            self.queue.submit(std::iter::once(encoder.finish()));
-            output.present();
-
-            Ok(())
-                */
-            // Cache bind groups to avoid recreating them repeatedly
-            let mut bind_group_cache: HashMap<String, wgpu::BindGroup> = HashMap::new();
-
+            println!("RENDERING {} ELEMENTS", to_render.elements.len());
             // Group elements by texture id
-            let mut groups: HashMap<String, Vec<&Box<dyn DrawableElement>>> = HashMap::new();
+            let mut groups: HashMap<String, Vec<StatefulElement>> = HashMap::new();
 
-            for element in &to_render.elements {
+            for element in to_render.elements {
                 let tex_id = element.get_texture_id();
                 groups.entry(tex_id).or_default().push(element);
             }
@@ -403,20 +335,20 @@ impl Graphics {
             let mut bind_group_cache: HashMap<String, wgpu::BindGroup> = HashMap::new();
 
             for (tex_id, group_elements) in groups {
+                // fprintln!("IN GROUP {:?}", group_elements);
                 let mut all_vertices = Vec::new();
                 let mut all_indices = Vec::new();
-                let mut vertex_offset = 0;
+                const QUAD_INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
 
                 for element in group_elements.iter() {
                     if let Some(vertices) = element.build_vertices() {
                         // println!("HMMM {:?} {}", vertices, group_elements.iter().len());
+                        let base_index = all_vertices.len() as u16;
                         all_vertices.extend_from_slice(&vertices);
-
-                        const QUAD_INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
-                        for &i in QUAD_INDICES {
-                            all_indices.push(i + vertex_offset as u16);
-                        }
-                        vertex_offset += vertices.len();
+                        // Offset indices by base_index
+                        let offset_indices: Vec<u16> =
+                            QUAD_INDICES.iter().map(|i| i + base_index).collect();
+                        all_indices.extend_from_slice(&offset_indices);
                     }
                 }
 
