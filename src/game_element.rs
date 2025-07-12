@@ -37,7 +37,6 @@ impl Animation {
                 let y: f32 = frame_data.get("y").unwrap_or(0.0);
                 let w: f32 = frame_data.get("width").unwrap_or(1.0);
                 let h: f32 = frame_data.get("height").unwrap_or(1.0);
-                println!("DIMENSIONS: {} {} {} {}", x, y, w, h);
                 let duration: f32 = frame_data.get("duration").unwrap_or(1.0);
 
                 // Convert to UVs (and optionally flip Y if needed)
@@ -46,7 +45,6 @@ impl Animation {
                 let v1 = 1.0 - (y / tex_h);
                 let v0 = 1.0 - ((y + h) / tex_h);
 
-                println!("UV DIM: {} {} {} {}", u0, v0, u1, v1);
                 // WGPU uses origin at top-left by default. Flip V if needed.
                 let uv_coords = [
                     [u0, v1], // bottom-left

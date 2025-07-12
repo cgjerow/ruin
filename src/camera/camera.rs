@@ -2,9 +2,11 @@ use cgmath::SquareMatrix;
 use std::collections::HashMap;
 use winit::{event::WindowEvent, keyboard::KeyCode};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CameraMode {
     Perspective3D,
     Orthographic2D,
+    Universal3D,
 }
 
 pub struct Camera {
@@ -49,7 +51,7 @@ impl Camera {
 
     pub fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
         match self.mode {
-            CameraMode::Perspective3D => {
+            CameraMode::Perspective3D | CameraMode::Universal3D => {
                 // move world to position/rotation of camera
                 let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
                 // make warp a little more dynamic based on aspect

@@ -5,6 +5,7 @@ STATE = {
 }
 
 require("main_character")
+require("game_asset_builders")
 
 function table.clone(tbl)
 	local copy = {}
@@ -22,6 +23,23 @@ function load()
 	-- print("LUA: Load Game")
 
 	engine.create_character(MAIN_CHARACTER)
+	camera_config = CameraBuilder()
+		:mode(Enums.CameraMode.Universal)
+		:speed(10.0)
+		:key("W", "MoveForward")
+		:key("S", "MoveBackward")
+		:key("A", "MoveLeft")
+		:key("D", "MoveRight")
+		:key("Q", "RollLeft")
+		:key("E", "RollRight")
+		:key("Up", "PitchUp")
+		:key("Down", "PitchDown")
+		:key("Left", "YawLeft")
+		:key("Right", "YawRight")
+		:build()
+
+	engine.configure_camera(camera_config)
+
 	for x = 0, 99 do
 		for y = 0, 9 do
 			local character = table.clone(MAIN_CHARACTER)

@@ -259,6 +259,17 @@ impl Graphics {
         }
     }
 
+    pub fn update_camera_config(
+        &mut self,
+        camera: Camera,
+        camera_controller: Box<dyn CameraController>,
+    ) {
+        self.camera = camera;
+        self.camera_controller = camera_controller;
+    }
+
+    // Right now this runs every cycle, maybe need to optimize later but will also need to then
+    // make sure this gets called whenever an update that affects camera occurs
     pub fn update_camera(&mut self) {
         self.camera_controller.update_camera(&mut self.camera);
         self.camera_uniform.update_view_proj(&self.camera);

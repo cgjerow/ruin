@@ -1,4 +1,8 @@
-use crate::camera::{Camera, CameraAction, CameraInputMap, TwoDimensionalCameraController};
+use crate::camera::camera::CameraMode;
+use crate::camera::{
+    Camera, CameraAction, CameraController, CameraInputMap, ThreeDimensionalCameraController,
+    TwoDimensionalCameraController, UniversalCameraController,
+};
 use crate::game_element::{Animation, StatefulElement, VisualState};
 use crate::graphics::ElementsToRender;
 use crate::lua_scriptor::LuaExtendedExecutor;
@@ -6,6 +10,7 @@ use crate::texture::Texture;
 use crate::{debug, graphics};
 use debug::Debug;
 use graphics::Graphics;
+use mlua::{Result, Table};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -173,8 +178,62 @@ impl Engine {
             }),
         };
 
-        println!("Created {}", id);
         self.character_cache.insert(id, character);
+    }
+
+    pub fn configure_camera(&mut self, config: mlua::Table) -> Result<()> {
+        let config = LuaCameraConfig::from_lua_table(config)?;
+
+        // Convert mode string to enum
+        let mode = match config.mode.as_str() {
+            "Orthographic2D" => CameraMode::Orthographic2D,
+            "Perspective3D" => CameraMode::Perspective3D,
+            "Universal" => CameraMode::Universal3D,
+            other => {
+                return Err(mlua::Error::RuntimeError(format!(
+                    "Invalid camera mode: {}",
+                    other
+                )))
+            }
+        };
+
+        // Create camera
+        let camera = Camera::new(self.width, self.height, mode.clone());
+
+        // Create input map from key bindings
+        let mut input_map = CameraInputMap::new();
+        for binding in config.keys {
+            let key = LuaCameraConfig::parse_keycode(&binding.key)?;
+            let action = LuaCameraConfig::parse_camera_action(&binding.action)?;
+            input_map = input_map.insert(key, action);
+        }
+
+        // Build controller
+        let controller: Box<dyn CameraController> = match mode {
+            CameraMode::Orthographic2D => {
+                // TODO fix inputs, take input controls
+                Box::new(TwoDimensionalCameraController::new(config.speed))
+            }
+            CameraMode::Perspective3D => {
+                // TODO fix inputs, take input controls
+                Box::new(ThreeDimensionalCameraController::new(config.speed))
+            }
+            CameraMode::Universal3D => {
+                // TODO fix inputs, take speed
+                Box::new(UniversalCameraController::new(
+                    config.speed,
+                    config.speed,
+                    input_map,
+                ))
+            }
+        };
+        let graphics = match &mut self.graphics {
+            Some(canvas) => canvas,
+            None => return Ok(()),
+        };
+
+        graphics.update_camera_config(camera, controller);
+        Ok(())
     }
 
     fn table_to_map<K, V>(
@@ -214,6 +273,14 @@ impl Engine {
                 Ok(engine.create_character(character_table))
             })
             .expect("Could not create function");
+        let configure_camera = self
+            .lua_context
+            .lua
+            .create_function(move |_, config: mlua::Table| {
+                let engine = unsafe { &mut *self_ptr };
+                Ok(engine.configure_camera(config))
+            })
+            .expect("Could not create function");
 
         let lua_engine = self.lua_context.create_table();
         lua_engine
@@ -222,6 +289,10 @@ impl Engine {
         lua_engine
             .set("create_character", create_character)
             .expect("Could not set engine function");
+        lua_engine
+            .set("configure_camera", configure_camera)
+            .expect("Could not set engine function");
+
         self.lua_context
             .lua
             .globals()
@@ -380,5 +451,80 @@ impl ApplicationHandler<Graphics> for Engine {
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
         self.cleanup()
+    }
+}
+
+#[derive(Debug)]
+struct LuaCameraKeyBinding {
+    key: String,
+    action: String,
+}
+
+#[derive(Debug)]
+struct LuaCameraConfig {
+    mode: String,
+    speed: f32,
+    keys: Vec<LuaCameraKeyBinding>,
+}
+
+impl LuaCameraConfig {
+    fn from_lua_table(table: Table) -> Result<Self> {
+        let mode: String = table.get("mode")?;
+        let speed: f32 = table.get("speed")?;
+
+        let keys_table: Table = table.get("keys")?;
+        let mut keys = Vec::new();
+
+        for pair in keys_table.sequence_values::<Table>() {
+            let key_binding_table = pair?;
+            let key: String = key_binding_table.get("key")?;
+            let action: String = key_binding_table.get("action")?;
+
+            keys.push(LuaCameraKeyBinding { key, action });
+        }
+
+        Ok(LuaCameraConfig { mode, speed, keys })
+    }
+    fn parse_keycode(s: &str) -> Result<KeyCode> {
+        use KeyCode::*;
+        let code = match s {
+            "W" => KeyW,
+            "A" => KeyA,
+            "S" => KeyS,
+            "D" => KeyD,
+            "Q" => KeyQ,
+            "E" => KeyE,
+            "Up" => ArrowUp,
+            "Down" => ArrowDown,
+            "Left" => ArrowLeft,
+            "Right" => ArrowRight,
+            other => return Err(mlua::Error::RuntimeError(format!("Unknown key: {}", other))),
+        };
+        Ok(code)
+    }
+
+    fn parse_camera_action(s: &str) -> Result<CameraAction> {
+        use CameraAction::*;
+        let action = match s {
+            "MoveForward" => MoveForward,
+            "MoveBackward" => MoveBackward,
+            "MoveLeft" => MoveLeft,
+            "MoveRight" => MoveRight,
+            "MoveUp" => MoveUp,
+            "MoveDown" => MoveDown,
+            "YawLeft" => YawLeft,
+            "YawRight" => YawRight,
+            "PitchUp" => PitchUp,
+            "PitchDown" => PitchDown,
+            "RollLeft" => RollLeft,
+            "RollRight" => RollRight,
+            other => {
+                return Err(mlua::Error::RuntimeError(format!(
+                    "Unknown camera action: {}",
+                    other
+                )))
+            }
+        };
+        Ok(action)
     }
 }
