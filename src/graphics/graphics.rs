@@ -31,7 +31,7 @@ pub struct Graphics {
     texture_bind_group_layout: wgpu::BindGroupLayout,
     camera_bind_group_layout: wgpu::BindGroupLayout,
     // maybe move to engine?
-    pub camera_controller: Box<dyn CameraController>,
+    pub camera_controller: Option<Box<dyn CameraController>>,
 }
 
 pub struct ElementsToRender {
@@ -43,11 +43,7 @@ impl Graphics {
         self.background_color = color;
     }
 
-    pub async fn new(
-        window: Arc<Window>,
-        camera: Camera,
-        camera_controller: Box<dyn CameraController>,
-    ) -> anyhow::Result<Graphics> {
+    pub async fn new(window: Arc<Window>, camera: Camera) -> anyhow::Result<Graphics> {
         let size = window.inner_size();
         // The instance is a handle to our GPU
         // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
@@ -234,7 +230,7 @@ impl Graphics {
             camera_uniform,
             texture_bind_group_layout,
             camera_bind_group_layout,
-            camera_controller,
+            camera_controller: None,
         })
     }
 
@@ -265,19 +261,27 @@ impl Graphics {
         camera_controller: Box<dyn CameraController>,
     ) {
         self.camera = camera;
-        self.camera_controller = camera_controller;
+        self.camera_controller = Some(camera_controller);
     }
 
     // Right now this runs every cycle, maybe need to optimize later but will also need to then
     // make sure this gets called whenever an update that affects camera occurs
     pub fn update_camera(&mut self) {
-        self.camera_controller.update_camera(&mut self.camera);
+        if let Some(controller) = &self.camera_controller {
+            controller.update_camera(&mut self.camera);
+        }
         self.camera_uniform.update_view_proj(&self.camera);
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
             bytemuck::cast_slice(&[self.camera_uniform]),
         );
+    }
+
+    pub fn process_camera_events(&mut self, event: &winit::event::WindowEvent) {
+        if let Some(controller) = &mut self.camera_controller {
+            controller.process_events(event);
+        }
     }
 
     pub fn load_image(&mut self) {}

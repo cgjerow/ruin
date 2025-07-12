@@ -351,29 +351,13 @@ impl ApplicationHandler<Graphics> for Engine {
         let window_attributes =
             Window::default_attributes().with_inner_size(LogicalSize::new(self.width, self.height));
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        let camera = Camera::new(
+        let default_camera = Camera::new(
             self.width,
             self.height,
             crate::camera::camera::CameraMode::Orthographic2D,
         );
-
-        let input_map = CameraInputMap::new()
-            .insert(KeyCode::KeyW, CameraAction::MoveForward)
-            .insert(KeyCode::KeyS, CameraAction::MoveBackward)
-            .insert(KeyCode::KeyA, CameraAction::MoveLeft)
-            .insert(KeyCode::KeyD, CameraAction::MoveRight)
-            .insert(KeyCode::KeyQ, CameraAction::RollLeft)
-            .insert(KeyCode::KeyE, CameraAction::RollRight)
-            .insert(KeyCode::ArrowUp, CameraAction::PitchUp)
-            .insert(KeyCode::ArrowDown, CameraAction::PitchDown)
-            .insert(KeyCode::ArrowLeft, CameraAction::YawLeft)
-            .insert(KeyCode::ArrowRight, CameraAction::YawRight);
-
-        //let camera_controller = Box::new(UniversalCameraController::new(10.0, 5.0, input_map));
-        let camera_controller = Box::new(TwoDimensionalCameraController::new(10.0));
-        self.graphics = Some(
-            pollster::block_on(Graphics::new(window.clone(), camera, camera_controller)).unwrap(),
-        );
+        self.graphics =
+            Some(pollster::block_on(Graphics::new(window.clone(), default_camera)).unwrap());
         self.window = Some(window);
 
         self.setup();
@@ -445,7 +429,7 @@ impl ApplicationHandler<Graphics> for Engine {
             Some(canvas) => canvas,
             None => return,
         };
-        graphics.camera_controller.process_events(&event);
+        graphics.process_camera_events(&event);
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
