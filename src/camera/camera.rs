@@ -44,7 +44,6 @@ impl Camera {
 
     pub fn update_aspect_ratio(&mut self, width: u32, height: u32) {
         self.aspect = Self::aspect_ratio(width, height);
-        self.build_view_projection_matrix();
     }
 
     pub fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {

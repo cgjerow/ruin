@@ -267,7 +267,7 @@ impl ApplicationHandler<Graphics> for Engine {
             Some(canvas) => canvas,
             None => return,
         };
-        graphics.render(to_render);
+        let _ = graphics.render(to_render);
 
         self.count += 1;
         if self.count > SAFETY_MAX_FOR_DEV {
