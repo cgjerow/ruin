@@ -6,6 +6,7 @@ mod game_element;
 mod graphics;
 mod lua_scriptor;
 mod texture;
+mod world;
 
 use engine::{Engine, EngineConfig};
 use mlua::prelude::*;

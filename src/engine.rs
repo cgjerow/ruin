@@ -3,10 +3,10 @@ use crate::camera::{
     Camera, CameraAction, CameraController, CameraInputMap, ThreeDimensionalCameraController,
     TwoDimensionalCameraController, UniversalCameraController,
 };
-use crate::game_element::{Animation, StatefulElement, VisualState};
-use crate::graphics::ElementsToRender;
+use crate::game_element::{animation_system_update_frames, ActionState, Animation, Entity};
 use crate::lua_scriptor::LuaExtendedExecutor;
 use crate::texture::Texture;
+use crate::world::World;
 use crate::{debug, graphics};
 use debug::Debug;
 use graphics::Graphics;
@@ -34,7 +34,7 @@ pub struct Engine {
     debugger: Debug,
     asset_cache: HashMap<String, Texture>,
     lua_context: LuaExtendedExecutor,
-    character_cache: HashMap<String, StatefulElement>,
+    world: World,
     width: u32,
     height: u32,
 }
@@ -68,7 +68,7 @@ impl Engine {
             asset_cache: HashMap::new(),
             width: config.width,
             height: config.height,
-            character_cache: HashMap::new(),
+            world: World::new(),
         }
     }
 
@@ -111,9 +111,7 @@ impl Engine {
         let update: mlua::Function = self.lua_context.get_function("update");
         let _ = update.call::<()>(dt.as_secs_f32());
 
-        for character in self.character_cache.values_mut() {
-            character.update(dt.as_secs_f32()); // or pass actual dt if you have it
-        }
+        animation_system_update_frames(&mut self.world, dt.as_secs_f32());
 
         let graphics = match &mut self.graphics {
             Some(canvas) => canvas,
@@ -129,19 +127,13 @@ impl Engine {
         debug_log!(self.debugger, "Cleaned it? {}", true)
     }
 
-    fn to_render(&self) -> ElementsToRender {
-        ElementsToRender {
-            elements: self.character_cache.values().cloned().collect(),
-        }
-    }
-
     fn get_window_size(&self) -> (u32, u32) {
         (self.width, self.height)
     }
 
     fn create_character(&mut self, character_table: mlua::Table) {
         let id: String = character_table.get("id").unwrap_or("unknown".to_string());
-        let state: VisualState = character_table
+        let state: ActionState = character_table
             .get("state")
             .unwrap_or("Idle".to_string())
             .into();
@@ -161,23 +153,40 @@ impl Engine {
         let sheet_height = character_table
             .get("sprite_sheet_height")
             .expect("Sprite Sheet Height required");
-
         let texture = self.get_texture(&sprite);
+        let animations = Self::table_to_map(animations, ActionState::from, |tbl| {
+            Animation::from_lua_table(tbl, sheet_width, sheet_height)
+        });
+        let current_frame = animations.get(&state).unwrap().frames[0].clone();
 
-        let character = StatefulElement {
-            id: id.clone(),
-            state,
-            position: [x, y, 0.0],
-            size: [width, height],
-            sprite_sheet: texture,
-            current_frame: 0,
-            frame_timer: 0.0,
-            animations: Self::table_to_map(animations, VisualState::from, |tbl| {
-                Animation::from_lua_table(tbl, sheet_width, sheet_height)
-            }),
-        };
-
-        self.character_cache.insert(id, character);
+        let entity: Entity = self.world.new_entity();
+        self.world.sprite_sheets.insert(
+            entity.clone(),
+            crate::game_element::SpriteSheetComponent {
+                texture_id: sprite,
+                texture,
+            },
+        );
+        self.world.transforms.insert(
+            entity.clone(),
+            crate::game_element::TransformComponent {
+                position: [x, y, 0.0],
+                size: [width, height],
+            },
+        );
+        self.world.animations.insert(
+            entity.clone(),
+            crate::game_element::AnimationComponent {
+                animations,
+                current_frame_index: 0,
+                current_frame,
+                frame_timer: 0.0,
+            },
+        );
+        self.world.action_states.insert(
+            entity.clone(),
+            crate::game_element::ActionStateComponent { state },
+        );
     }
 
     pub fn configure_camera(&mut self, config: mlua::Table) -> Result<()> {
@@ -331,13 +340,13 @@ impl ApplicationHandler<Graphics> for Engine {
 
         self.last_frame = Instant::now();
         let _ = self.update(dt);
-        let to_render = { self.to_render() };
+        // let to_render = { self.to_render() };
 
         let graphics = match &mut self.graphics {
             Some(canvas) => canvas,
             None => return,
         };
-        let _ = graphics.render(to_render);
+        let _ = graphics.render(self.world.extract_render_queue());
 
         self.count += 1;
         if self.count > SAFETY_MAX_FOR_DEV {
@@ -399,14 +408,13 @@ impl ApplicationHandler<Graphics> for Engine {
                 self.redraw();
             }
             WindowEvent::RedrawRequested => {
-                let game_state = self.to_render();
                 let graphics = match &mut self.graphics {
                     Some(canvas) => canvas,
                     None => return,
                 };
                 // this is the only place we want to call graphics.render()
                 // any other situation should use self.redraw();
-                let _ = graphics.render(game_state);
+                let _ = graphics.render(self.world.extract_render_queue());
             }
             WindowEvent::KeyboardInput {
                 event:

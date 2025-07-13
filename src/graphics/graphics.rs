@@ -7,7 +7,6 @@ use winit::keyboard::KeyCode;
 use winit::window::Window; // bring Rng trait into scope
 
 use crate::camera::{Camera, CameraController};
-use crate::game_element::StatefulElement;
 use crate::graphics::CameraUniform;
 use crate::graphics::Vertex;
 use crate::texture::Texture;
@@ -34,8 +33,16 @@ pub struct Graphics {
     pub camera_controller: Option<Box<dyn CameraController>>,
 }
 
-pub struct ElementsToRender {
-    pub elements: Vec<StatefulElement>,
+pub struct RenderElement {
+    pub position: [f32; 3],
+    pub size: [f32; 2],
+    pub texture: Texture,
+    pub texture_id: String,
+    pub uv_coords: [[f32; 2]; 4],
+}
+
+pub struct RenderQueue {
+    pub elements: Vec<RenderElement>,
 }
 
 impl Graphics {
@@ -158,7 +165,7 @@ impl Graphics {
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -285,8 +292,41 @@ impl Graphics {
     }
 
     pub fn load_image(&mut self) {}
+    fn build_vertices(element: &RenderElement) -> [Vertex; 4] {
+        let [w, h] = element.size;
+        let [x, y, z] = element.position;
+        let hw = w / 2.0;
+        let hh = h / 2.0;
 
-    pub fn render(&mut self, to_render: ElementsToRender) -> Result<(), wgpu::SurfaceError> {
+        let positions = [
+            [x - hw, y + hh, z], // top-left
+            [x + hw, y + hh, z], // top-right
+            [x + hw, y - hh, z], // bottom-right
+            [x - hw, y - hh, z], // bottom-left
+        ];
+
+        let tex = element.uv_coords;
+
+        [
+            Vertex {
+                position: positions[0],
+                tex_coords: tex[0],
+            },
+            Vertex {
+                position: positions[1],
+                tex_coords: tex[1],
+            },
+            Vertex {
+                position: positions[2],
+                tex_coords: tex[2],
+            },
+            Vertex {
+                position: positions[3],
+                tex_coords: tex[3],
+            },
+        ]
+    }
+    pub fn render(&mut self, to_render: RenderQueue) -> Result<(), wgpu::SurfaceError> {
         // We can't render unless the surface is configured
         if !self.is_surface_configured {
             return Ok(());
@@ -330,10 +370,10 @@ impl Graphics {
             render_pass.set_bind_group(1, &camera_bind_group, &[]);
 
             // Group elements by texture id
-            let mut groups: HashMap<String, Vec<StatefulElement>> = HashMap::new();
+            let mut groups: HashMap<String, Vec<RenderElement>> = HashMap::new();
 
             for element in to_render.elements {
-                let tex_id = element.get_texture_id();
+                let tex_id = element.texture_id.clone();
                 groups.entry(tex_id).or_default().push(element);
             }
 
@@ -346,20 +386,19 @@ impl Graphics {
                 const QUAD_INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
 
                 for element in group_elements.iter() {
-                    if let Some(vertices) = element.build_vertices() {
-                        let base_index = all_vertices.len() as u16;
-                        all_vertices.extend_from_slice(&vertices);
-                        // Offset indices by base_index
-                        let offset_indices: Vec<u16> =
-                            QUAD_INDICES.iter().map(|i| i + base_index).collect();
-                        all_indices.extend_from_slice(&offset_indices);
-                    }
+                    let vertices = Self::build_vertices(element);
+                    let base_index = all_vertices.len() as u16;
+                    all_vertices.extend_from_slice(&vertices);
+                    // Offset indices by base_index
+                    let offset_indices: Vec<u16> =
+                        QUAD_INDICES.iter().map(|i| i + base_index).collect();
+                    all_indices.extend_from_slice(&offset_indices);
                 }
 
                 // Create or reuse diffuse bind group for this texture
                 let diffuse_bind_group =
                     bind_group_cache.entry(tex_id.clone()).or_insert_with(|| {
-                        let tex = group_elements[0].get_texture(); // all share the same texture
+                        let tex = group_elements[0].texture.clone(); // all share the same texture
 
                         self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                             layout: &self.texture_bind_group_layout,

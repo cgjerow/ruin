@@ -2,6 +2,10 @@ use std::{collections::HashMap, u16};
 
 use crate::graphics::Vertex;
 use crate::texture::Texture;
+use crate::world::World;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Entity(pub u32);
 
 #[derive(Debug, Clone)]
 pub struct SpriteFrame {
@@ -13,6 +17,24 @@ pub struct SpriteFrame {
 pub struct Animation {
     pub frames: Vec<SpriteFrame>,
     pub looped: bool,
+}
+
+pub struct AnimationComponent {
+    pub animations: HashMap<ActionState, Animation>,
+    pub current_frame: SpriteFrame,
+    pub current_frame_index: usize,
+    pub frame_timer: f32,
+}
+
+#[derive(Clone)]
+pub struct SpriteSheetComponent {
+    pub texture_id: String,
+    pub texture: Texture,
+}
+
+pub struct TransformComponent {
+    pub position: [f32; 3],
+    pub size: [f32; 2],
 }
 
 impl Animation {
@@ -65,7 +87,7 @@ impl Animation {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum VisualState {
+pub enum ActionState {
     Idle,
     Walking,
     Running,
@@ -76,109 +98,56 @@ pub enum VisualState {
     Custom(String),
 }
 
-impl From<String> for VisualState {
+pub struct ActionStateComponent {
+    pub state: ActionState,
+}
+
+impl From<String> for ActionState {
     fn from(s: String) -> Self {
         match s.as_str() {
-            "Idle" => VisualState::Idle,
-            "Walking" => VisualState::Walking,
-            "Running" => VisualState::Running,
-            "Jumping" => VisualState::Jumping,
-            "Landing" => VisualState::Landing,
-            "Dying" => VisualState::Dying,
-            "Colliding" => VisualState::Colliding,
-            other => VisualState::Custom(other.to_string()),
+            "Idle" => ActionState::Idle,
+            "Walking" => ActionState::Walking,
+            "Running" => ActionState::Running,
+            "Jumping" => ActionState::Jumping,
+            "Landing" => ActionState::Landing,
+            "Dying" => ActionState::Dying,
+            "Colliding" => ActionState::Colliding,
+            other => ActionState::Custom(other.to_string()),
         }
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct StatefulElement {
-    pub id: String,
-    pub position: [f32; 3],
-    pub size: [f32; 2],
-    pub state: VisualState,
-    pub animations: HashMap<VisualState, Animation>,
-    pub current_frame: usize,
-    pub frame_timer: f32,
-    pub sprite_sheet: Texture,
-}
+pub fn animation_system_update_frames(world: &mut World, dt: f32) {
+    for (entity, animation) in world.animations.iter_mut() {
+        if let Some(action_state) = world.action_states.get(entity) {
+            if let Some(anim) = animation.animations.get(&action_state.state) {
+                if anim.frames.is_empty() {
+                    return;
+                }
 
-impl StatefulElement {
-    pub fn update(&mut self, dt: f32) {
-        if let Some(anim) = self.animations.get(&self.state) {
-            if anim.frames.is_empty() {
-                return;
-            }
+                animation.frame_timer += dt;
 
-            self.frame_timer += dt;
+                let current = animation.current_frame_index.min(anim.frames.len() - 1);
+                let frame_duration = anim.frames[current].duration;
 
-            let current = self.current_frame.min(anim.frames.len() - 1);
-            let frame_duration = anim.frames[current].duration;
-
-            if self.frame_timer >= frame_duration {
-                self.frame_timer -= frame_duration; // carry over extra time
-                self.current_frame += 1;
-
-                if self.current_frame >= anim.frames.len() {
-                    self.current_frame = if anim.looped {
-                        0
-                    } else {
-                        anim.frames.len() - 1
-                    };
+                if animation.frame_timer >= frame_duration {
+                    animation.frame_timer -= frame_duration; // carry over extra time
+                    animation.current_frame_index += 1;
+                    if animation.current_frame_index >= anim.frames.len() {
+                        animation.current_frame_index = if anim.looped {
+                            0
+                        } else {
+                            anim.frames.len() - 1
+                        };
+                    }
+                    animation.current_frame = animation
+                        .animations
+                        .get(&action_state.state)
+                        .unwrap()
+                        .frames[animation.current_frame_index]
+                        .clone();
                 }
             }
         }
-    }
-
-    pub fn get_uv_coords(&self) -> Option<[[f32; 2]; 4]> {
-        self.animations
-            .get(&self.state)
-            .and_then(|anim| anim.frames.get(self.current_frame))
-            .map(|frame| frame.uv_coords)
-    }
-
-    pub fn build_vertices(&self) -> Option<[Vertex; 4]> {
-        let uv = self.get_uv_coords()?;
-        let [w, h] = self.size;
-        let [x, y, z] = self.position;
-
-        let hw = w / 2.0;
-        let hh = h / 2.0;
-
-        let top_left = [x - hw, y + hh, z];
-        let top_right = [x + hw, y + hh, z];
-        let bottom_right = [x + hw, y - hh, z];
-        let bottom_left = [x - hw, y - hh, z];
-
-        Some([
-            Vertex {
-                position: top_left,
-                tex_coords: uv[0],
-            },
-            Vertex {
-                position: top_right,
-                tex_coords: uv[1],
-            },
-            Vertex {
-                position: bottom_right,
-                tex_coords: uv[2],
-            },
-            Vertex {
-                position: bottom_left,
-                tex_coords: uv[3],
-            },
-        ])
-    }
-
-    pub fn get_position(&self) -> [f32; 3] {
-        self.position
-    }
-
-    pub fn get_texture_id(&self) -> String {
-        self.sprite_sheet.id.clone()
-    }
-
-    pub fn get_texture(&self) -> Texture {
-        self.sprite_sheet.clone()
     }
 }
