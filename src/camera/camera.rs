@@ -26,7 +26,7 @@ impl Camera {
         Self {
             // position the camera 1 unit up and 2 units back
             // +z is out of the screen
-            eye: (0.0, 1.0, 3.0).into(),
+            eye: (0.0, 0.0, 5.0).into(),
             // have it look at the origin
             target: (0.0, 0.0, 0.0).into(),
             // which way is "up"
@@ -80,7 +80,7 @@ impl Camera {
                 let bottom = center_y - half_height;
                 let top = center_y + half_height;
 
-                let proj = cgmath::ortho(left, right, bottom, top, -1.0, 1.0);
+                let proj = cgmath::ortho(left, right, bottom, top, -1000.0, 1000.0);
                 let view = cgmath::Matrix4::identity(); // no rotation or offset needed in view
 
                 proj * view

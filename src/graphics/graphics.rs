@@ -29,10 +29,27 @@ pub struct Graphics {
     camera_uniform: CameraUniform,
     texture_bind_group_layout: wgpu::BindGroupLayout,
     camera_bind_group_layout: wgpu::BindGroupLayout,
+    depth_texture: Texture,
     // maybe move to engine?
     pub camera_controller: Option<Box<dyn CameraController>>,
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum CompareFunction {
+    Undefined = 0,
+    Never = 1,
+    Less = 2,
+    Equal = 3,
+    LessEqual = 4,
+    Greater = 5,
+    NotEqual = 6,
+    GreaterEqual = 7,
+    Always = 8,
+}
+
+#[derive(Debug, Clone)]
 pub struct RenderElement {
     pub position: [f32; 3],
     pub size: [f32; 2],
@@ -182,7 +199,13 @@ impl Graphics {
                 // Requires Features::CONSERVATIVE_RASTERIZATION
                 conservative: false,
             },
-            depth_stencil: None, // 1.
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: Texture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less, // 1.
+                stencil: wgpu::StencilState::default(),     // 2.
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,                         // 2.
                 mask: !0,                         // 3.
@@ -216,6 +239,8 @@ impl Graphics {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
+        let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
+
         Ok(Self {
             surface,
             device,
@@ -223,9 +248,9 @@ impl Graphics {
             config,
             is_surface_configured: false,
             background_color: wgpu::Color {
-                r: 0.1,
-                g: 0.2,
-                b: 0.3,
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
                 a: 1.0,
             },
             window,
@@ -235,6 +260,7 @@ impl Graphics {
             index_buffer,
             camera_buffer,
             camera_uniform,
+            depth_texture,
             texture_bind_group_layout,
             camera_bind_group_layout,
             camera_controller: None,
@@ -258,6 +284,10 @@ impl Graphics {
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
+
+            self.depth_texture =
+                Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
+
             self.camera.update_aspect_ratio(width, height);
         }
     }
@@ -291,8 +321,8 @@ impl Graphics {
         }
     }
 
-    pub fn load_image(&mut self) {}
     fn build_vertices(element: &RenderElement) -> [Vertex; 4] {
+        println!("POSITIONS: {:?}", element.position);
         let [w, h] = element.size;
         let [x, y, z] = element.position;
         let hw = w / 2.0;
@@ -353,7 +383,14 @@ impl Graphics {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
@@ -384,7 +421,7 @@ impl Graphics {
                 let mut all_vertices = Vec::new();
                 let mut all_indices = Vec::new();
                 const QUAD_INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
-
+                for (i, e) in group_elements.iter().enumerate() {}
                 for element in group_elements.iter() {
                     let vertices = Self::build_vertices(element);
                     let base_index = all_vertices.len() as u16;
@@ -417,7 +454,24 @@ impl Graphics {
                     });
 
                 render_pass.set_bind_group(0, &*diffuse_bind_group, &[]);
+                let vertex_buffer =
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("Per-Group Vertex Buffer"),
+                            contents: bytemuck::cast_slice(&all_vertices),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        });
 
+                let index_buffer =
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("Per-Group Index Buffer"),
+                            contents: bytemuck::cast_slice(&all_indices),
+                            usage: wgpu::BufferUsages::INDEX,
+                        });
+                render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                /*
                 // Upload buffers for all vertices and indices in this group
                 self.queue.write_buffer(
                     &self.vertex_buffer,
@@ -430,6 +484,7 @@ impl Graphics {
                 render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
                 render_pass
                     .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                */
                 render_pass.draw_indexed(0..all_indices.len() as u32, 0, 0..1);
             }
         }

@@ -1,11 +1,15 @@
 use std::{collections::HashMap, u16};
 
-use crate::graphics::Vertex;
 use crate::texture::Texture;
 use crate::world::World;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Entity(pub u32);
+impl From<Entity> for u32 {
+    fn from(e: Entity) -> Self {
+        e.0
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct SpriteFrame {
@@ -19,6 +23,7 @@ pub struct Animation {
     pub looped: bool,
 }
 
+#[derive(Debug, Clone)]
 pub struct AnimationComponent {
     pub animations: HashMap<ActionState, Animation>,
     pub current_frame: SpriteFrame,
@@ -26,15 +31,32 @@ pub struct AnimationComponent {
     pub frame_timer: f32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SpriteSheetComponent {
     pub texture_id: String,
     pub texture: Texture,
 }
 
+#[derive(Debug, Clone)]
 pub struct TransformComponent {
     pub position: [f32; 3],
+    pub velocity: [f32; 3],
     pub size: [f32; 2],
+}
+
+pub fn transform_system_calculate_position(world: &mut World, delta_time: f32) {
+    for (_id, transform) in world.transforms.iter_mut() {
+        for i in 0..3 {
+            transform.position[i] += transform.velocity[i] * delta_time;
+            transform.velocity[i] = 0.0; // zero out velocity after applying
+        }
+    }
+}
+pub fn transform_system_add_velocity(world: &mut World, id: Entity, dx: f32, dy: f32) {
+    if let Some(transform) = world.transforms.get_mut(&id) {
+        transform.velocity[0] += dx;
+        transform.velocity[1] += dy;
+    }
 }
 
 impl Animation {
@@ -98,6 +120,7 @@ pub enum ActionState {
     Custom(String),
 }
 
+#[derive(Debug, Clone)]
 pub struct ActionStateComponent {
     pub state: ActionState,
 }

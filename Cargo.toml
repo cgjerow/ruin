@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
+serde = { version = "1", features = ["derive"], optional = true }
 mlua = { version = "0.10.5", features = ["lua54", "vendored"] }
 wgpu = "25.0"
 winit = "0.30.11"

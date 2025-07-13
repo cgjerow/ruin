@@ -1921,6 +1921,7 @@ dependencies = [
  "mlua",
  "pollster",
  "rand 0.9.1",
+ "serde",
  "wgpu",
  "winit",
 ]

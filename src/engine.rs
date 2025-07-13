@@ -3,7 +3,10 @@ use crate::camera::{
     Camera, CameraAction, CameraController, CameraInputMap, ThreeDimensionalCameraController,
     TwoDimensionalCameraController, UniversalCameraController,
 };
-use crate::game_element::{animation_system_update_frames, ActionState, Animation, Entity};
+use crate::game_element::{
+    animation_system_update_frames, transform_system_add_velocity,
+    transform_system_calculate_position, ActionState, Animation, Entity,
+};
 use crate::lua_scriptor::LuaExtendedExecutor;
 use crate::texture::Texture;
 use crate::world::World;
@@ -110,8 +113,10 @@ impl Engine {
         // debug_log!(self.debugger, "Updated it? {}", true);
         let update: mlua::Function = self.lua_context.get_function("update");
         let _ = update.call::<()>(dt.as_secs_f32());
+        let dt32 = dt.as_secs_f32();
 
-        animation_system_update_frames(&mut self.world, dt.as_secs_f32());
+        transform_system_calculate_position(&mut self.world, dt32);
+        animation_system_update_frames(&mut self.world, dt32);
 
         let graphics = match &mut self.graphics {
             Some(canvas) => canvas,
@@ -131,14 +136,20 @@ impl Engine {
         (self.width, self.height)
     }
 
-    fn create_character(&mut self, character_table: mlua::Table) {
-        let id: String = character_table.get("id").unwrap_or("unknown".to_string());
+    fn add_velocity(&mut self, id: u32, dx: f32, dy: f32) {
+        println!("{} {} {}", id, dx, dy);
+        transform_system_add_velocity(&mut self.world, Entity(id), dx, dy);
+    }
+
+    fn create_character(&mut self, character_table: mlua::Table) -> u32 {
+        let _id: String = character_table.get("id").unwrap_or("unknown".to_string());
         let state: ActionState = character_table
             .get("state")
             .unwrap_or("Idle".to_string())
             .into();
         let x: f32 = character_table.get("x").unwrap_or(0.0);
         let y: f32 = character_table.get("y").unwrap_or(0.0);
+        let z: f32 = character_table.get("z").unwrap_or(0.0);
         let width: f32 = character_table.get("width").unwrap_or(1.0);
         let height: f32 = character_table.get("height").unwrap_or(1.0);
         let animations: mlua::Table = character_table
@@ -170,7 +181,8 @@ impl Engine {
         self.world.transforms.insert(
             entity.clone(),
             crate::game_element::TransformComponent {
-                position: [x, y, 0.0],
+                position: [x, y, z],
+                velocity: [0.0, 0.0, 0.0],
                 size: [width, height],
             },
         );
@@ -187,6 +199,7 @@ impl Engine {
             entity.clone(),
             crate::game_element::ActionStateComponent { state },
         );
+        entity.into()
     }
 
     pub fn configure_camera(&mut self, config: mlua::Table) -> Result<()> {
@@ -289,10 +302,21 @@ impl Engine {
                 Ok(engine.configure_camera(config))
             })
             .expect("Could not create function");
+        let add_velocity = self
+            .lua_context
+            .lua
+            .create_function(move |_, (id, dx, dy): (u32, f32, f32)| {
+                let engine = unsafe { &mut *self_ptr };
+                Ok(engine.add_velocity(id, dx, dy))
+            })
+            .expect("Could not create function");
 
         let lua_engine = self.lua_context.create_table();
         lua_engine
             .set("get_window_size", get_window_size)
+            .expect("Could not set engine function");
+        lua_engine
+            .set("add_velocity", add_velocity)
             .expect("Could not set engine function");
         lua_engine
             .set("create_character", create_character)
@@ -323,6 +347,58 @@ impl Engine {
             };
         }
     }
+
+    fn call_lua_keyboard_input(&self, key: KeyCode, is_pressed: bool) {
+        let _ = self
+            .lua_context
+            .get_function("keyboard_event")
+            .call::<()>((Self::keycode_to_str(key), is_pressed));
+    }
+
+    fn keycode_to_str(key: KeyCode) -> Option<&'static str> {
+        use winit::keyboard::KeyCode::*;
+        Some(match key {
+            KeyW => "w",
+            KeyA => "a",
+            KeyS => "s",
+            KeyD => "d",
+            ArrowUp => "up",
+            ArrowDown => "down",
+            ArrowLeft => "left",
+            ArrowRight => "right",
+            Space => "space",
+            Enter => "enter",
+            Escape => "escape",
+            KeyZ => "z",
+            KeyX => "x",
+            KeyC => "c",
+            KeyV => "v",
+            Digit0 => "0",
+            Digit1 => "1",
+            Digit2 => "2",
+            Digit3 => "3",
+            Digit4 => "4",
+            Digit5 => "5",
+            Digit6 => "6",
+            Digit7 => "7",
+            Digit8 => "8",
+            Digit9 => "9",
+            KeyQ => "q",
+            KeyE => "e",
+            KeyR => "r",
+            KeyF => "f",
+            KeyT => "t",
+            KeyY => "y",
+            KeyU => "u",
+            KeyI => "i",
+            KeyO => "o",
+            KeyP => "p",
+            KeyB => "b",
+            KeyN => "n",
+            KeyM => "m",
+            _ => return None, // Unknown or unhandled key
+        })
+    }
 }
 
 impl ApplicationHandler<Graphics> for Engine {
@@ -340,7 +416,6 @@ impl ApplicationHandler<Graphics> for Engine {
 
         self.last_frame = Instant::now();
         let _ = self.update(dt);
-        // let to_render = { self.to_render() };
 
         let graphics = match &mut self.graphics {
             Some(canvas) => canvas,
@@ -424,20 +499,23 @@ impl ApplicationHandler<Graphics> for Engine {
                         ..
                     },
                 ..
-            } => match (code, state.is_pressed()) {
-                (KeyCode::Space, true) => {
-                    self.redraw();
-                }
-                (KeyCode::Escape, true) => event_loop.exit(),
-                _ => {}
-            },
+            } => {
+                match (code, state.is_pressed()) {
+                    (KeyCode::Space, true) => {
+                        self.redraw();
+                    }
+                    (KeyCode::Escape, true) => event_loop.exit(),
+                    _ => {}
+                };
+                self.call_lua_keyboard_input(code, state.is_pressed());
+            }
             _ => {}
         }
         let graphics = match &mut self.graphics {
             Some(canvas) => canvas,
             None => return,
         };
-        graphics.process_camera_events(&event);
+        // graphics.process_camera_events(&event);
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {

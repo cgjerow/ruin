@@ -7,6 +7,7 @@ use crate::{
     graphics::{RenderElement, RenderQueue},
 };
 
+#[derive(Debug, Clone)]
 pub struct World {
     next_id: u32,
     pub animations: HashMap<Entity, AnimationComponent>,
