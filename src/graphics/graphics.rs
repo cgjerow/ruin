@@ -322,8 +322,7 @@ impl Graphics {
         velocity: [f32; 3],
         offset: [f32; 3],
     ) {
-        println!("target: {:?}, v: {:?}, o: {:?}", target, velocity, offset);
-        let smooth_factor = 0.05;
+        let smooth_factor = 0.03;
         let velocity_scale = 0.4; // how far ahead camera looks based on speed
         let target = Point3::new(target[0], target[1], target[2]);
         let offset_vec = Vector3::new(offset[0], offset[1], offset[2]);

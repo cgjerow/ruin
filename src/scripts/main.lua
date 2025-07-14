@@ -1,9 +1,12 @@
 ---@diagnostic disable: unused-function, lowercase-global
 ---
 require("main_character")
+local pretty_print = require("pretty_print")
 require("ghost")
 require("dummy")
 require("game_asset_builders")
+
+pretty_print(DEATH)
 
 STATE = {
 	player = -1,
@@ -52,20 +55,8 @@ function load()
 
 	engine.configure_camera(camera_config)
 
-	for x = 0, 0 do
-		for y = 0, 0 do
-			local character = table.clone(MAIN_CHARACTER)
-			character.id = "char_" .. x .. "_" .. y
-			character.x = x
-			character.y = y
-			character.z = -1
-			STATE.characters[character.id] = engine.create_character(character)
-		end
-	end
-
-	--STATE.characters["dummy"] = engine.create_character(DUMMY)
-	STATE.player = engine.create_character(GHOST)
-	print(STATE.player)
+	STATE.player = engine.create_character(DEATH)
+	STATE.player = engine.create_character(DEATH)
 
 	return {
 		assets = {},
@@ -102,26 +93,4 @@ function draw() end
 
 function getState()
 	return STATE
-end
-
-function pretty_print(tbl, indent)
-	indent = indent or 0
-	local indent_str = string.rep("  ", indent)
-
-	if type(tbl) ~= "table" then
-		print(indent_str .. tostring(tbl))
-		return
-	end
-
-	print(indent_str .. "{")
-	for k, v in pairs(tbl) do
-		local key_str = tostring(k)
-		if type(v) == "table" then
-			io.write(indent_str .. "  " .. key_str .. " = ")
-			pretty_print(v, indent + 1)
-		else
-			print(indent_str .. "  " .. key_str .. " = " .. tostring(v))
-		end
-	end
-	print(indent_str .. "}")
 end

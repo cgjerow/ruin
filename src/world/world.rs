@@ -36,14 +36,20 @@ impl World {
     pub fn extract_render_queue(&self) -> RenderQueue {
         let mut elements = Vec::new();
 
-        for (entity, sprite) in &self.sprite_sheets {
+        for (entity, animation) in &self.animations {
             if let Some(transform_component) = self.transforms.get(entity) {
-                let uv_coords = self
-                    .animations
-                    .get(entity)
-                    .and_then(|anim| Some(anim.current_frame.uv_coords))
-                    .unwrap_or([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]); // default full-texture UV
-
+                let uv_coords = animation.current_frame.uv_coords;
+                let sprite = self
+                    .sprite_sheets
+                    .get(
+                        &animation.animations[&self
+                            .action_states
+                            .get(&entity)
+                            .expect("Animation not found")
+                            .state]
+                            .sprite_sheet_id,
+                    )
+                    .unwrap();
                 elements.push(RenderElement {
                     position: transform_component.position,
                     size: transform_component.size,

@@ -26,7 +26,7 @@ use winit::window::Window;
 
 static SAFETY_MAX_FOR_DEV: u64 = 10000;
 
-const MAIN_CHARACTER: Entity = Entity(1);
+const MAIN_CHARACTER: Entity = Entity(2);
 
 pub struct Engine {
     window: Option<Arc<Window>>,
@@ -162,7 +162,6 @@ impl Engine {
     }
 
     fn create_character(&mut self, character_table: mlua::Table) -> u32 {
-        let _id: String = character_table.get("id").unwrap_or("unknown".to_string());
         let state: ActionState = character_table
             .get("state")
             .unwrap_or("Idle".to_string())
@@ -172,9 +171,12 @@ impl Engine {
         let z: f32 = character_table.get("z").unwrap_or(0.0);
         let width: f32 = character_table.get("width").unwrap_or(1.0);
         let height: f32 = character_table.get("height").unwrap_or(1.0);
+
         let animations: mlua::Table = character_table
             .get("animations")
             .unwrap_or(self.lua_context.create_table());
+
+        /* this should come from animations now
         let sprite: String = character_table
             .get("sprite")
             .expect("Sprite Sheet required for Character");
@@ -184,18 +186,48 @@ impl Engine {
         let sheet_height = character_table
             .get("sprite_sheet_height")
             .expect("Sprite Sheet Height required");
-        let texture = self.get_texture(&sprite);
-        let animations = Self::table_to_map(animations, ActionState::from, |tbl| {
-            Animation::from_lua_table(tbl, sheet_width, sheet_height)
-        });
-        let current_frame = animations.get(&state).unwrap().frames[0].clone();
+        */
 
+        /* need to use the starting state to get the right animation sprite
+        let texture = self.get_texture(&sprite);
+         */
+
+        // need to iterate over all of the animations
+        //
         let entity: Entity = self.world.new_entity();
-        self.world.sprite_sheets.insert(
+        let mut animations_map = HashMap::new();
+
+        for pair in animations.clone().pairs::<mlua::Value, mlua::Table>() {
+            if let Ok((key, tbl)) = pair {
+                let (mut animation, sprite_path) = Animation::from_lua_table(tbl);
+                let action_state = ActionState::from(
+                    key.to_string()
+                        .expect("String key required for Action States"),
+                ); // Assuming it converts mlua::Value
+                   //
+                let sprite_id: Entity = self.world.new_entity();
+                let texture = self.get_texture(&sprite_path);
+                animation.sprite_sheet_id = sprite_id;
+
+                self.world.sprite_sheets.insert(
+                    sprite_id.clone(),
+                    crate::game_element::SpriteSheetComponent {
+                        texture_id: sprite_path,
+                        texture,
+                    },
+                );
+                animations_map.insert(action_state, animation);
+            }
+        }
+
+        let current_frame = animations_map.get(&state).unwrap().frames[0].clone();
+        self.world.animations.insert(
             entity.clone(),
-            crate::game_element::SpriteSheetComponent {
-                texture_id: sprite,
-                texture,
+            crate::game_element::AnimationComponent {
+                animations: animations_map,
+                current_frame_index: 0,
+                current_frame,
+                frame_timer: 0.0,
             },
         );
         self.world.transforms.insert(
@@ -204,15 +236,6 @@ impl Engine {
                 position: [x, y, z],
                 velocity: [0.0, 0.0, 0.0],
                 size: [width, height],
-            },
-        );
-        self.world.animations.insert(
-            entity.clone(),
-            crate::game_element::AnimationComponent {
-                animations,
-                current_frame_index: 0,
-                current_frame,
-                frame_timer: 0.0,
             },
         );
         self.world.action_states.insert(
@@ -538,11 +561,13 @@ impl ApplicationHandler<Graphics> for Engine {
             }
             _ => {}
         }
+        /*
         let graphics = match &mut self.graphics {
             Some(canvas) => canvas,
             None => return,
         };
         // graphics.process_camera_events(&event);
+        */
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {

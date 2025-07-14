@@ -1,92 +1,15 @@
-local running = {
-	frames = {
-		{
-			x = 0,
-			y = 0,
-			duration = 0.075,
-		},
-		{
-			x = 1,
-			y = 0,
-			duration = 0.075,
-		},
-		{
-			x = 2,
-			y = 0,
-			duration = 0.075,
-		},
-		{
-			x = 3,
-			y = 0,
-			duration = 0.075,
-		},
-		{
-			x = 4,
-			y = 0,
-			duration = 0.075,
-		},
-		{
-			x = 5,
-			y = 0,
-			duration = 0.075,
-		},
-		{
-			x = 6,
-			y = 0,
-			duration = 0.075,
-		},
-		{
-			x = 7,
-			y = 0,
-			duration = 0.075,
-		},
-		{
-			x = 1,
-			y = 1,
-			duration = 0.075,
-		},
-		{
-			x = 2,
-			y = 1,
-			duration = 0.075,
-		},
-		{
-			x = 3,
-			y = 1,
-			duration = 0.075,
-		},
-		{
-			x = 4,
-			y = 1,
-			duration = 0.075,
-		},
-		{
-			x = 5,
-			y = 1,
-			duration = 0.075,
-		},
-		{
-			x = 6,
-			y = 1,
-			duration = 0.075,
-		},
-	},
-	looped = true,
-}
+local load_aseprite_animation = require("aseprite_parser")
+local pretty_print = require("pretty_print")
 
-MAIN_CHARACTER = {
-	id = "braid",
+local idle = load_aseprite_animation("death_idle", "death/", "death_idle.json")
+
+DEATH = {
 	x = 0,
 	y = 0,
-	width = 1,
+	width = 1, -- 1 = 32px
 	height = 1,
-	state = "Running",
-	sprite = "lpc_entry/png/thrust/BODY_animation.png",
-	sprite_sheet_width = 8,
-	sprite_sheet_height = 4,
+	state = "Idle",
 	animations = {
-		Running = running,
+		Idle = idle,
 	},
 }
-
-return MAIN_CHARACTER

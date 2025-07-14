@@ -1,4 +1,4 @@
-use std::{collections::HashMap, u16};
+use std::collections::HashMap;
 
 use crate::texture::Texture;
 use crate::world::World;
@@ -19,6 +19,7 @@ pub struct SpriteFrame {
 
 #[derive(Debug, Clone)]
 pub struct Animation {
+    pub sprite_sheet_id: Entity,
     pub frames: Vec<SpriteFrame>,
     pub looped: bool,
 }
@@ -60,19 +61,18 @@ pub fn transform_system_add_velocity(world: &mut World, id: Entity, dx: f32, dy:
 }
 
 impl Animation {
-    pub fn from_lua_table(
-        table: mlua::Table,
-        sprite_sheet_width: u16,
-        sprite_sheet_height: u16,
-    ) -> Self {
+    pub fn from_lua_table(table: mlua::Table) -> (Self, String) {
         let looped: bool = table.get("looped").unwrap_or(true);
 
         let frames_table: mlua::Table = table
             .get("frames")
             .expect("Missing 'frames' table in animation");
 
-        let tex_w = sprite_sheet_width as f32;
-        let tex_h = sprite_sheet_height as f32;
+        let tex_w = table.get("sprite_sheet_width").unwrap_or(1.0);
+        let tex_h = table.get("sprite_sheet_width").unwrap_or(1.0);
+        let sprite_path: String = table
+            .get("sprite")
+            .expect("Sprite Sheet is required for animation.");
 
         let mut frames = Vec::new();
         for pair in frames_table.sequence_values::<mlua::Table>() {
@@ -103,8 +103,14 @@ impl Animation {
                 });
             }
         }
-
-        Animation { frames, looped }
+        (
+            Animation {
+                sprite_sheet_id: Entity(0),
+                frames,
+                looped,
+            },
+            sprite_path,
+        )
     }
 }
 
