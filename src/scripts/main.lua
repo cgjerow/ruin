@@ -86,6 +86,9 @@ function update(dt)
 		dx = dx / length
 		dy = dy / length
 		engine.add_velocity(STATE.player, dx * speed, dy * speed, dt)
+		if math.abs(dx) > 0.01 then
+			engine.flip(STATE.player, dx >= 0, false)
+		end
 	end
 end
 

@@ -57,6 +57,8 @@ pub struct RenderElement {
     pub texture: Texture,
     pub texture_id: String,
     pub uv_coords: [[f32; 2]; 4],
+    pub flip_x: bool,
+    pub flip_y: bool,
 }
 
 pub struct RenderQueue {
@@ -347,8 +349,12 @@ impl Graphics {
     fn build_vertices(element: &RenderElement) -> [Vertex; 4] {
         let [w, h] = element.size;
         let [x, y, z] = element.position;
-        let hw = w / 2.0;
-        let hh = h / 2.0;
+        // Apply flipping scale
+        let flip_x = if element.flip_x { -1.0 } else { 1.0 };
+        let flip_y = if element.flip_y { -1.0 } else { 1.0 };
+
+        let hw = w / 2.0 * flip_x;
+        let hh = h / 2.0 * flip_y;
 
         let positions = [
             [x - hw, y + hh, z], // top-left

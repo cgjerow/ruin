@@ -69,7 +69,7 @@ impl Animation {
             .expect("Missing 'frames' table in animation");
 
         let tex_w = table.get("sprite_sheet_width").unwrap_or(1.0);
-        let tex_h = table.get("sprite_sheet_width").unwrap_or(1.0);
+        let tex_h = table.get("sprite_sheet_height").unwrap_or(1.0);
         let sprite_path: String = table
             .get("sprite")
             .expect("Sprite Sheet is required for animation.");
@@ -179,4 +179,10 @@ pub fn animation_system_update_frames(world: &mut World, dt: f32) {
             }
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FlipComponent {
+    pub x: bool, // flip horizontally
+    pub y: bool, // flip vertically
 }

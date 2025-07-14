@@ -26,9 +26,8 @@ use winit::window::Window;
 
 static SAFETY_MAX_FOR_DEV: u64 = 10000;
 
-const MAIN_CHARACTER: Entity = Entity(2);
-
 pub struct Engine {
+    player: Entity,
     window: Option<Arc<Window>>,
     graphics: Option<Graphics>,
     count: u64,
@@ -62,6 +61,7 @@ impl Engine {
         let target_rate = fps_opt.map(|fps| Duration::from_millis(1000 / fps));
 
         Self {
+            player: Entity(0),
             lua_context: lua_executor,
             window: None,
             graphics: None,
@@ -89,8 +89,14 @@ impl Engine {
         texture.clone()
     }
 
+    fn flip(&mut self, entity: u32, x: bool, y: bool) {
+        self.world
+            .flips
+            .insert(Entity(entity), crate::game_element::FlipComponent { x, y });
+    }
+
     pub fn update_camera_follow(&mut self, prev_velocity: [f32; 3]) {
-        if let Some(transform) = self.world.transforms.get(&MAIN_CHARACTER) {
+        if let Some(transform) = self.world.transforms.get(&self.player) {
             let graphics = match &mut self.graphics {
                 Some(canvas) => canvas,
                 None => return,
@@ -130,7 +136,7 @@ impl Engine {
         let prev_velocity = self
             .world
             .transforms
-            .get(&MAIN_CHARACTER)
+            .get(&self.player)
             .unwrap()
             .velocity
             .clone();
@@ -166,6 +172,7 @@ impl Engine {
             .get("state")
             .unwrap_or("Idle".to_string())
             .into();
+        let is_pc: bool = character_table.get("is_pc").unwrap_or(false).into();
         let x: f32 = character_table.get("x").unwrap_or(0.0);
         let y: f32 = character_table.get("y").unwrap_or(0.0);
         let z: f32 = character_table.get("z").unwrap_or(0.0);
@@ -195,6 +202,9 @@ impl Engine {
         // need to iterate over all of the animations
         //
         let entity: Entity = self.world.new_entity();
+        if is_pc {
+            self.player = entity.clone();
+        }
         let mut animations_map = HashMap::new();
 
         for pair in animations.clone().pairs::<mlua::Value, mlua::Table>() {
@@ -360,10 +370,21 @@ impl Engine {
                 Ok(engine.add_velocity(id, dx, dy))
             })
             .expect("Could not create function");
+        let flip = self
+            .lua_context
+            .lua
+            .create_function(move |_, (id, x, y): (u32, bool, bool)| {
+                let engine = unsafe { &mut *self_ptr };
+                Ok(engine.flip(id, x, y))
+            })
+            .expect("Could not create function");
 
         let lua_engine = self.lua_context.create_table();
         lua_engine
             .set("get_window_size", get_window_size)
+            .expect("Could not set engine function");
+        lua_engine
+            .set("flip", flip)
             .expect("Could not set engine function");
         lua_engine
             .set("add_velocity", add_velocity)
