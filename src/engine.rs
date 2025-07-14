@@ -89,14 +89,13 @@ impl Engine {
         texture.clone()
     }
 
-    pub fn update_camera_follow(&mut self) {
+    pub fn update_camera_follow(&mut self, prev_velocity: [f32; 3]) {
         if let Some(transform) = self.world.transforms.get(&MAIN_CHARACTER) {
-            let [x, y, z] = transform.position;
             let graphics = match &mut self.graphics {
                 Some(canvas) => canvas,
                 None => return,
             };
-            graphics.move_camera_for_follow(x, y, z, [0.2, 0.2, 5.0]);
+            graphics.move_camera_for_follow(transform.position, prev_velocity, [0.0, 0.0, 0.0]);
         }
     }
 
@@ -123,13 +122,21 @@ impl Engine {
     }
 
     fn update(&mut self, dt: Duration) -> anyhow::Result<()> {
-        // debug_log!(self.debugger, "Updated it? {}", true);
         let update: mlua::Function = self.lua_context.get_function("update");
-        let _ = update.call::<()>(dt.as_secs_f32());
         let dt32 = dt.as_secs_f32();
 
+        let _ = update.call::<()>(dt32);
+
+        let prev_velocity = self
+            .world
+            .transforms
+            .get(&MAIN_CHARACTER)
+            .unwrap()
+            .velocity
+            .clone();
+
         transform_system_calculate_position(&mut self.world, dt32);
-        self.update_camera_follow();
+        self.update_camera_follow(prev_velocity);
         animation_system_update_frames(&mut self.world, dt32);
 
         let graphics = match &mut self.graphics {

@@ -26,7 +26,7 @@ impl Camera {
         Self {
             // position the camera 1 unit up and 2 units back
             // +z is out of the screen
-            eye: (0.0, 0.0, 5.0).into(),
+            eye: (0.0, 0.0, 2.0).into(),
             // have it look at the origin
             target: (0.0, 0.0, 0.0).into(),
             // which way is "up"
@@ -36,7 +36,7 @@ impl Camera {
             fovy: 30.0,
             znear: 0.1,
             zfar: 100.0,
-            zoom: 1.0,
+            zoom: 10.0,
             mode,
         }
     }

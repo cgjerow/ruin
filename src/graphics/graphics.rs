@@ -1,4 +1,4 @@
-use cgmath::Point3;
+use cgmath::{Point3, Vector3};
 use image::DynamicImage;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -308,10 +308,6 @@ impl Graphics {
         if let Some(controller) = &self.camera_controller {
             controller.update_camera(&mut self.camera);
         }
-        println!(
-            "CAMERA eye {:?}, target {:?}",
-            self.camera.eye, self.camera.target
-        );
         self.camera_uniform.update_view_proj(&self.camera);
         self.queue.write_buffer(
             &self.camera_buffer,
@@ -320,9 +316,26 @@ impl Graphics {
         );
     }
 
-    pub fn move_camera_for_follow(&mut self, x: f32, y: f32, z: f32, offset: [f32; 3]) {
-        self.camera.target = Point3::new(x, y, z);
-        self.camera.eye = Point3::new(x + offset[0], y + offset[1], z + offset[2]);
+    pub fn move_camera_for_follow(
+        &mut self,
+        target: [f32; 3],
+        velocity: [f32; 3],
+        offset: [f32; 3],
+    ) {
+        println!("target: {:?}, v: {:?}, o: {:?}", target, velocity, offset);
+        let smooth_factor = 0.05;
+        let velocity_scale = 0.4; // how far ahead camera looks based on speed
+        let target = Point3::new(target[0], target[1], target[2]);
+        let offset_vec = Vector3::new(offset[0], offset[1], offset[2]);
+        let velocity_vec = Vector3::new(velocity[0], velocity[1], velocity[2]);
+        let predictive_offset = velocity_vec * velocity_scale;
+
+        // Eye is offset from target in the direction of movement
+        let desired_eye = target + offset_vec + predictive_offset;
+
+        self.camera.eye += (desired_eye - self.camera.eye) * smooth_factor;
+        self.camera.target = target + predictive_offset * 0.5; // optional: look slightly ahead
+
         self.update_camera();
     }
 

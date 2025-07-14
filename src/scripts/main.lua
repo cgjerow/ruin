@@ -1,14 +1,20 @@
 ---@diagnostic disable: unused-function, lowercase-global
 ---
-STATE = {
-	counter = 0,
-	characters = {},
-}
-
 require("main_character")
 require("ghost")
 require("dummy")
 require("game_asset_builders")
+
+STATE = {
+	player = -1,
+	characters = {},
+	controller = ControllerBuilder()
+		:key("W", "Jump")
+		:key("S", "Duck")
+		:key("A", "MoveLeft")
+		:key("D", "MoveRight")
+		:build(),
+}
 
 function table.clone(tbl)
 	local copy = {}
@@ -23,25 +29,15 @@ function table.clone(tbl)
 end
 
 function keyboard_event(key, is_pressed)
-	print("key", key)
-	local speed = 30.0 -- or whatever speed you want
-	if is_pressed then
-		if key == "w" then
-			engine.add_velocity(STATE.characters["ghost"], 0, speed)
-		elseif key == "s" then
-			engine.add_velocity(STATE.characters["ghost"], 0, -speed)
-		elseif key == "a" then
-			engine.add_velocity(STATE.characters["ghost"], -speed, 0)
-		elseif key == "d" then
-			engine.add_velocity(STATE.characters["ghost"], speed, 0)
-		end
-	end
+	key = string.upper(key)
+	STATE.controller:update(key, is_pressed)
 end
 
 function load()
 	camera_config = CameraBuilder()
 		:mode(Enums.CameraMode.Orthographic2D)
 		:speed(20.0)
+		:locked(true)
 		:key("W", "MoveForward")
 		:key("S", "MoveBackward")
 		:key("A", "MoveLeft")
@@ -68,7 +64,8 @@ function load()
 	end
 
 	--STATE.characters["dummy"] = engine.create_character(DUMMY)
-	STATE.characters["ghost"] = engine.create_character(GHOST)
+	STATE.player = engine.create_character(GHOST)
+	print(STATE.player)
 
 	return {
 		assets = {},
@@ -76,7 +73,29 @@ function load()
 end
 
 function update(dt)
-	STATE.counter = STATE.counter + 1
+	local speed = 20.0
+	local dx, dy = 0, 0
+
+	if STATE.controller:get_state("Jump") then
+		dy = dy + 1
+	end
+	if STATE.controller:get_state("Duck") then
+		dy = dy - 1
+	end
+	if STATE.controller:get_state("MoveLeft") then
+		dx = dx - 1
+	end
+	if STATE.controller:get_state("MoveRight") then
+		dx = dx + 1
+	end
+
+	-- Normalize direction vector if needed
+	local length = math.sqrt(dx * dx + dy * dy)
+	if length > 0 then
+		dx = dx / length
+		dy = dy / length
+		engine.add_velocity(STATE.player, dx * speed, dy * speed, dt)
+	end
 end
 
 function draw() end
