@@ -148,7 +148,8 @@ impl Engine {
             .call::<()>(collisions_table)
             .expect("Error handling collisions");
 
-        transform_system_physics(&mut self.world, dt32);
+        let transform_notices = transform_system_physics(&mut self.world, dt32);
+        self.on_entity_idle(transform_notices.idled);
         self.update_camera_follow();
         animation_system_update_frames(&mut self.world, dt32);
 
@@ -160,6 +161,14 @@ impl Engine {
         graphics.update_camera();
 
         return Ok(());
+    }
+
+    fn on_entity_idle(&self, entities: Vec<Entity>) {
+        let on_idle: mlua::Function = self.lua_context.get_function("on_entity_idle");
+        let entity_ids: Vec<u32> = entities.iter().map(|entity| entity.0).collect();
+        on_idle
+            .call::<()>(entity_ids)
+            .expect("Error calling on_entity_idle")
     }
 
     fn cleanup(&mut self) {
@@ -635,6 +644,7 @@ impl ApplicationHandler<Graphics> for Engine {
             _ => {}
         }
         /*
+         * need this to create independent camera view
         let graphics = match &mut self.graphics {
             Some(canvas) => canvas,
             None => return,

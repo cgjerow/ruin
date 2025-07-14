@@ -65,6 +65,13 @@ function load()
 	}
 end
 
+function on_entity_idle(entities)
+	-- if we need to, update state
+	for _, entity in pairs(entities) do
+		engine.set_state(entity, "Idle")
+	end
+end
+
 function on_collision(collisions)
 	local bounce_speed = 100.0 -- adjust to your desired bounce magnitude
 	local push = 1.0 -- tweak this constant

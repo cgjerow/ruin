@@ -46,8 +46,19 @@ pub struct TransformComponent {
     pub size: [f32; 2],
 }
 
-pub fn transform_system_physics(world: &mut World, delta_time: f32) {
-    for transform in world.transforms.values_mut() {
+#[derive(Debug, Clone)]
+pub struct TransformInfo {
+    pub idled: Vec<Entity>,
+}
+
+pub fn transform_system_physics(world: &mut World, delta_time: f32) -> TransformInfo {
+    let mut idled = Vec::new();
+    let idle_threshold = 0.1; // velocity magnitude below which entity is considered idle
+
+    for (entity, transform) in world.transforms.iter_mut() {
+        // Compute velocity magnitude before update (optional if you want previous velocity)
+        let prev_speed = (transform.velocity[0].powi(2) + transform.velocity[1].powi(2)).sqrt();
+
         // Integrate acceleration into velocity
         transform.velocity[0] += transform.acceleration[0] * delta_time;
         transform.velocity[1] += transform.acceleration[1] * delta_time;
@@ -61,9 +72,18 @@ pub fn transform_system_physics(world: &mut World, delta_time: f32) {
         transform.velocity[0] *= drag;
         transform.velocity[1] *= drag;
 
+        // Compute new speed after update
+        let new_speed = (transform.velocity[0].powi(2) + transform.velocity[1].powi(2)).sqrt();
+
+        // Detect idle transition: was moving, now slow enough to be idle
+        if prev_speed > idle_threshold && new_speed <= idle_threshold {
+            idled.push(entity.clone());
+        }
+
         // Clear acceleration after use
         transform.acceleration = [0.0; 3];
     }
+    TransformInfo { idled }
 }
 
 pub fn transform_system_calculate_intended_position(
