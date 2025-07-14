@@ -10,10 +10,16 @@ function CameraBuilder()
 	local config = {
 		mode = "Orthographic2D",
 		speed = 10.0,
+		locked = true,
 		keys = {},
 	}
 
 	local builder = {}
+
+	function builder:locked(b)
+		config.locked = b
+		return builder
+	end
 
 	function builder:mode(m)
 		config.mode = m

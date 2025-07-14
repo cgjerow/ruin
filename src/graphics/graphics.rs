@@ -1,3 +1,4 @@
+use cgmath::Point3;
 use image::DynamicImage;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -307,12 +308,22 @@ impl Graphics {
         if let Some(controller) = &self.camera_controller {
             controller.update_camera(&mut self.camera);
         }
+        println!(
+            "CAMERA eye {:?}, target {:?}",
+            self.camera.eye, self.camera.target
+        );
         self.camera_uniform.update_view_proj(&self.camera);
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
             bytemuck::cast_slice(&[self.camera_uniform]),
         );
+    }
+
+    pub fn move_camera_for_follow(&mut self, x: f32, y: f32, z: f32, offset: [f32; 3]) {
+        self.camera.target = Point3::new(x, y, z);
+        self.camera.eye = Point3::new(x + offset[0], y + offset[1], z + offset[2]);
+        self.update_camera();
     }
 
     pub fn process_camera_events(&mut self, event: &winit::event::WindowEvent) {
@@ -322,7 +333,6 @@ impl Graphics {
     }
 
     fn build_vertices(element: &RenderElement) -> [Vertex; 4] {
-        println!("POSITIONS: {:?}", element.position);
         let [w, h] = element.size;
         let [x, y, z] = element.position;
         let hw = w / 2.0;

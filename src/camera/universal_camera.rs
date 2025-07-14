@@ -10,6 +10,7 @@ use std::collections::HashMap;
 pub struct UniversalCameraController {
     speed: f32,
     sensitivity: f32,
+    locked: bool,
     input_map: CameraInputMap,
     // Options
     enable_rotation: bool,
@@ -19,8 +20,9 @@ pub struct UniversalCameraController {
 }
 
 impl UniversalCameraController {
-    pub fn new(speed: f32, sensitivity: f32, input_map: CameraInputMap) -> Self {
+    pub fn new(locked: bool, speed: f32, sensitivity: f32, input_map: CameraInputMap) -> Self {
         Self {
+            locked,
             speed: speed / 1000.0,
             sensitivity: sensitivity / 1000.0,
             input_map,

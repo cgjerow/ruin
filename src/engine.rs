@@ -26,6 +26,8 @@ use winit::window::Window;
 
 static SAFETY_MAX_FOR_DEV: u64 = 10000;
 
+const MAIN_CHARACTER: Entity = Entity(1);
+
 pub struct Engine {
     window: Option<Arc<Window>>,
     graphics: Option<Graphics>,
@@ -87,6 +89,17 @@ impl Engine {
         texture.clone()
     }
 
+    pub fn update_camera_follow(&mut self) {
+        if let Some(transform) = self.world.transforms.get(&MAIN_CHARACTER) {
+            let [x, y, z] = transform.position;
+            let graphics = match &mut self.graphics {
+                Some(canvas) => canvas,
+                None => return,
+            };
+            graphics.move_camera_for_follow(x, y, z, [0.2, 0.2, 5.0]);
+        }
+    }
+
     fn random_color() -> wgpu::Color {
         return wgpu::Color {
             r: rand::random(),
@@ -116,6 +129,7 @@ impl Engine {
         let dt32 = dt.as_secs_f32();
 
         transform_system_calculate_position(&mut self.world, dt32);
+        self.update_camera_follow();
         animation_system_update_frames(&mut self.world, dt32);
 
         let graphics = match &mut self.graphics {
@@ -137,7 +151,6 @@ impl Engine {
     }
 
     fn add_velocity(&mut self, id: u32, dx: f32, dy: f32) {
-        println!("{} {} {}", id, dx, dy);
         transform_system_add_velocity(&mut self.world, Entity(id), dx, dy);
     }
 
@@ -233,15 +246,22 @@ impl Engine {
         let controller: Box<dyn CameraController> = match mode {
             CameraMode::Orthographic2D => {
                 // TODO fix inputs, take input controls
-                Box::new(TwoDimensionalCameraController::new(config.speed))
+                Box::new(TwoDimensionalCameraController::new(
+                    config.locked,
+                    config.speed,
+                ))
             }
             CameraMode::Perspective3D => {
                 // TODO fix inputs, take input controls
-                Box::new(ThreeDimensionalCameraController::new(config.speed))
+                Box::new(ThreeDimensionalCameraController::new(
+                    config.locked,
+                    config.speed,
+                ))
             }
             CameraMode::Universal3D => {
                 // TODO fix inputs, take speed
                 Box::new(UniversalCameraController::new(
+                    config.locked,
                     config.speed,
                     config.speed,
                     input_map,
@@ -533,6 +553,7 @@ struct LuaCameraKeyBinding {
 struct LuaCameraConfig {
     mode: String,
     speed: f32,
+    locked: bool,
     keys: Vec<LuaCameraKeyBinding>,
 }
 
@@ -540,6 +561,7 @@ impl LuaCameraConfig {
     fn from_lua_table(table: Table) -> Result<Self> {
         let mode: String = table.get("mode")?;
         let speed: f32 = table.get("speed")?;
+        let locked: bool = table.get("locked")?;
 
         let keys_table: Table = table.get("keys")?;
         let mut keys = Vec::new();
@@ -552,7 +574,12 @@ impl LuaCameraConfig {
             keys.push(LuaCameraKeyBinding { key, action });
         }
 
-        Ok(LuaCameraConfig { mode, speed, keys })
+        Ok(LuaCameraConfig {
+            mode,
+            speed,
+            locked,
+            keys,
+        })
     }
     fn parse_keycode(s: &str) -> Result<KeyCode> {
         use KeyCode::*;

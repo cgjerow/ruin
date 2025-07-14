@@ -6,6 +6,7 @@ use winit::{
 
 pub struct TwoDimensionalCameraController {
     speed: f32,
+    locked: bool,
     is_forward_pressed: bool,
     is_backward_pressed: bool,
     is_left_pressed: bool,
@@ -13,8 +14,9 @@ pub struct TwoDimensionalCameraController {
 }
 
 impl TwoDimensionalCameraController {
-    pub fn new(speed: f32) -> Self {
+    pub fn new(locked: bool, speed: f32) -> Self {
         Self {
+            locked,
             speed: speed / 1000.0,
             is_forward_pressed: false,
             is_backward_pressed: false,
@@ -86,6 +88,7 @@ impl TwoDimensionalCameraController {
 }
 
 pub struct ThreeDimensionalCameraController {
+    locked: bool,
     speed: f32,
     is_forward_pressed: bool,
     is_backward_pressed: bool,
@@ -94,8 +97,9 @@ pub struct ThreeDimensionalCameraController {
 }
 
 impl ThreeDimensionalCameraController {
-    pub fn new(speed: f32) -> Self {
+    pub fn new(locked: bool, speed: f32) -> Self {
         Self {
+            locked,
             speed: speed / 1000.0,
             is_forward_pressed: false,
             is_backward_pressed: false,
