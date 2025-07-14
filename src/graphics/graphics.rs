@@ -322,20 +322,30 @@ impl Graphics {
         &mut self,
         target: [f32; 3],
         velocity: [f32; 3],
+        acceleration: [f32; 3],
         offset: [f32; 3],
     ) {
         let smooth_factor = 0.03;
         let velocity_scale = 0.4; // how far ahead camera looks based on speed
+        let acceleration_scale = 0.15; // smaller scale for acceleration influence
+
         let target = Point3::new(target[0], target[1], target[2]);
         let offset_vec = Vector3::new(offset[0], offset[1], offset[2]);
         let velocity_vec = Vector3::new(velocity[0], velocity[1], velocity[2]);
-        let predictive_offset = velocity_vec * velocity_scale;
+        let acceleration_vec = Vector3::new(acceleration[0], acceleration[1], acceleration[2]);
 
-        // Eye is offset from target in the direction of movement
+        // Combine velocity and acceleration for predictive offset
+        let predictive_offset =
+            velocity_vec * velocity_scale + acceleration_vec * acceleration_scale;
+
+        // Eye is offset from target in the direction of movement & acceleration
         let desired_eye = target + offset_vec + predictive_offset;
 
+        // Smoothly interpolate camera position towards desired position
         self.camera.eye += (desired_eye - self.camera.eye) * smooth_factor;
-        self.camera.target = target + predictive_offset * 0.5; // optional: look slightly ahead
+
+        // Optionally look slightly ahead of the target
+        self.camera.target = target + predictive_offset * 0.5;
 
         self.update_camera();
     }

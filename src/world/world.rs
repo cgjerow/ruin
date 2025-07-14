@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     game_element::{
-        ActionStateComponent, AnimationComponent, Entity, FlipComponent, SpriteSheetComponent,
-        TransformComponent,
+        ActionStateComponent, AnimationComponent, ColliderComponent, Entity, FlipComponent,
+        SpriteSheetComponent, TransformComponent,
     },
     graphics::{RenderElement, RenderQueue},
 };
@@ -15,6 +15,7 @@ pub struct World {
     pub sprite_sheets: HashMap<Entity, SpriteSheetComponent>,
     pub transforms: HashMap<Entity, TransformComponent>,
     pub action_states: HashMap<Entity, ActionStateComponent>,
+    pub colliders: HashMap<Entity, ColliderComponent>,
     pub flips: HashMap<Entity, FlipComponent>,
 }
 
@@ -26,6 +27,7 @@ impl World {
             action_states: HashMap::new(),
             animations: HashMap::new(),
             sprite_sheets: HashMap::new(),
+            colliders: HashMap::new(),
             flips: HashMap::new(),
         }
     }
@@ -38,7 +40,6 @@ impl World {
 
     pub fn extract_render_queue(&self) -> RenderQueue {
         let mut elements = Vec::new();
-
         for (entity, animation) in &self.animations {
             if let Some(transform_component) = self.transforms.get(entity) {
                 let uv_coords = animation.current_frame.uv_coords;
@@ -57,7 +58,7 @@ impl World {
                             .state]
                             .sprite_sheet_id,
                     )
-                    .unwrap();
+                    .expect("Sprite Sheets not found");
                 elements.push(RenderElement {
                     position: transform_component.position,
                     size: transform_component.size,

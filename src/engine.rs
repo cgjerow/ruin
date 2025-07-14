@@ -4,8 +4,9 @@ use crate::camera::{
     TwoDimensionalCameraController, UniversalCameraController,
 };
 use crate::game_element::{
-    animation_system_update_frames, transform_system_add_velocity,
-    transform_system_calculate_position, ActionState, Animation, Entity,
+    animation_system_update_frames, collision_system, set_entity_state,
+    transform_system_add_acceleration, transform_system_calculate_intended_position,
+    transform_system_physics, transform_system_redirect, ActionState, Animation, Entity,
 };
 use crate::lua_scriptor::LuaExtendedExecutor;
 use crate::texture::Texture;
@@ -95,13 +96,18 @@ impl Engine {
             .insert(Entity(entity), crate::game_element::FlipComponent { x, y });
     }
 
-    pub fn update_camera_follow(&mut self, prev_velocity: [f32; 3]) {
+    pub fn update_camera_follow(&mut self) {
         if let Some(transform) = self.world.transforms.get(&self.player) {
             let graphics = match &mut self.graphics {
                 Some(canvas) => canvas,
                 None => return,
             };
-            graphics.move_camera_for_follow(transform.position, prev_velocity, [0.0, 0.0, 0.0]);
+            graphics.move_camera_for_follow(
+                transform.position,
+                transform.velocity,
+                transform.acceleration,
+                [0.0, 0.0, 0.0],
+            );
         }
     }
 
@@ -133,16 +139,17 @@ impl Engine {
 
         let _ = update.call::<()>(dt32);
 
-        let prev_velocity = self
-            .world
-            .transforms
-            .get(&self.player)
-            .unwrap()
-            .velocity
-            .clone();
+        let next_transforms = transform_system_calculate_intended_position(&self.world, dt32);
+        let collisions = collision_system(&self.world, &next_transforms);
+        let collisions_table = self.lua_context.rust_collisions_to_lua(collisions).unwrap();
 
-        transform_system_calculate_position(&mut self.world, dt32);
-        self.update_camera_follow(prev_velocity);
+        self.lua_context
+            .get_function("on_collision")
+            .call::<()>(collisions_table)
+            .expect("Error handling collisions");
+
+        transform_system_physics(&mut self.world, dt32);
+        self.update_camera_follow();
         animation_system_update_frames(&mut self.world, dt32);
 
         let graphics = match &mut self.graphics {
@@ -163,8 +170,20 @@ impl Engine {
         (self.width, self.height)
     }
 
-    fn add_velocity(&mut self, id: u32, dx: f32, dy: f32) {
-        transform_system_add_velocity(&mut self.world, Entity(id), dx, dy);
+    fn add_acceleration(&mut self, id: u32, dx: f32, dy: f32) {
+        transform_system_add_acceleration(&mut self.world, Entity(id), dx, dy);
+    }
+
+    fn redirect(&mut self, id: u32, dx: f32, dy: f32, sep_x: f32, sep_y: f32) {
+        transform_system_redirect(&mut self.world, Entity(id), dx, dy, sep_x, sep_y);
+    }
+
+    fn set_state(&mut self, id: u32, state: String) {
+        set_entity_state(
+            &mut self.world,
+            Entity(id),
+            ActionState::from(state.clone()),
+        );
     }
 
     fn create_character(&mut self, character_table: mlua::Table) -> u32 {
@@ -245,7 +264,16 @@ impl Engine {
             crate::game_element::TransformComponent {
                 position: [x, y, z],
                 velocity: [0.0, 0.0, 0.0],
+                acceleration: [0.0, 0.0, 0.0],
                 size: [width, height],
+            },
+        );
+        self.world.colliders.insert(
+            entity.clone(),
+            crate::game_element::ColliderComponent {
+                offset: [0.0, 0.0, 0.0],
+                size: [width * 0.9, height * 0.9, 0.0],
+                is_solid: true,
             },
         );
         self.world.action_states.insert(
@@ -362,12 +390,30 @@ impl Engine {
                 Ok(engine.configure_camera(config))
             })
             .expect("Could not create function");
-        let add_velocity = self
+        let add_acceleration = self
             .lua_context
             .lua
             .create_function(move |_, (id, dx, dy): (u32, f32, f32)| {
                 let engine = unsafe { &mut *self_ptr };
-                Ok(engine.add_velocity(id, dx, dy))
+                Ok(engine.add_acceleration(id, dx, dy))
+            })
+            .expect("Could not create function");
+        let redirect = self
+            .lua_context
+            .lua
+            .create_function(
+                move |_, (id, dx, dy, sep_x, sep_y): (u32, f32, f32, f32, f32)| {
+                    let engine = unsafe { &mut *self_ptr };
+                    Ok(engine.redirect(id, dx, dy, sep_x, sep_y))
+                },
+            )
+            .expect("Could not create function");
+        let set_state = self
+            .lua_context
+            .lua
+            .create_function(move |_, (id, state): (u32, String)| {
+                let engine = unsafe { &mut *self_ptr };
+                Ok(engine.set_state(id, state))
             })
             .expect("Could not create function");
         let flip = self
@@ -387,7 +433,13 @@ impl Engine {
             .set("flip", flip)
             .expect("Could not set engine function");
         lua_engine
-            .set("add_velocity", add_velocity)
+            .set("add_acceleration", add_acceleration)
+            .expect("Could not set engine function");
+        lua_engine
+            .set("redirect", redirect)
+            .expect("Could not set engine function");
+        lua_engine
+            .set("set_state", set_state)
             .expect("Could not set engine function");
         lua_engine
             .set("create_character", create_character)

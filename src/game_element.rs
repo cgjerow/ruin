@@ -42,21 +42,94 @@ pub struct SpriteSheetComponent {
 pub struct TransformComponent {
     pub position: [f32; 3],
     pub velocity: [f32; 3],
+    pub acceleration: [f32; 3],
     pub size: [f32; 2],
 }
 
-pub fn transform_system_calculate_position(world: &mut World, delta_time: f32) {
-    for (_id, transform) in world.transforms.iter_mut() {
-        for i in 0..3 {
-            transform.position[i] += transform.velocity[i] * delta_time;
-            transform.velocity[i] = 0.0; // zero out velocity after applying
-        }
+pub fn transform_system_physics(world: &mut World, delta_time: f32) {
+    for transform in world.transforms.values_mut() {
+        // Integrate acceleration into velocity
+        transform.velocity[0] += transform.acceleration[0] * delta_time;
+        transform.velocity[1] += transform.acceleration[1] * delta_time;
+
+        // Apply velocity to position
+        transform.position[0] += transform.velocity[0] * delta_time;
+        transform.position[1] += transform.velocity[1] * delta_time;
+
+        // Apply drag or friction (optional)
+        let drag = 0.8;
+        transform.velocity[0] *= drag;
+        transform.velocity[1] *= drag;
+
+        // Clear acceleration after use
+        transform.acceleration = [0.0; 3];
     }
 }
-pub fn transform_system_add_velocity(world: &mut World, id: Entity, dx: f32, dy: f32) {
+
+pub fn transform_system_calculate_intended_position(
+    world: &World,
+    delta_time: f32,
+) -> HashMap<Entity, TransformComponent> {
+    let mut to_return = HashMap::new();
+    for (id, before) in world.transforms.iter() {
+        let mut transform = before.clone();
+        // Integrate acceleration into velocity
+        transform.velocity[0] += transform.acceleration[0] * delta_time;
+        transform.velocity[1] += transform.acceleration[1] * delta_time;
+
+        // Clamp speed (optional, example max: 300.0)
+        let speed = (transform.velocity[0].powi(2) + transform.velocity[1].powi(2)).sqrt();
+        let max_speed = 30.0;
+        if speed > max_speed {
+            let scale = max_speed / speed;
+            transform.velocity[0] *= scale;
+            transform.velocity[1] *= scale;
+        }
+
+        // Apply velocity to position
+        transform.position[0] += transform.velocity[0] * delta_time;
+        transform.position[1] += transform.velocity[1] * delta_time;
+
+        // Apply drag or friction (optional)
+        let drag = 0.8;
+        transform.velocity[0] *= drag;
+        transform.velocity[1] *= drag;
+
+        // Clear acceleration after use
+        transform.acceleration = [0.0; 3];
+
+        to_return.insert(id.clone(), transform);
+    }
+    to_return
+}
+
+pub fn transform_system_add_acceleration(world: &mut World, id: Entity, dx: f32, dy: f32) {
     if let Some(transform) = world.transforms.get_mut(&id) {
-        transform.velocity[0] += dx;
-        transform.velocity[1] += dy;
+        transform.acceleration[0] += dx;
+        transform.acceleration[1] += dy;
+    }
+}
+
+pub fn transform_system_redirect(
+    world: &mut World,
+    id: Entity,
+    dx: f32,
+    dy: f32,
+    sep_x: f32,
+    sep_y: f32,
+) {
+    if let Some(transform) = world.transforms.get_mut(&id) {
+        // Apply bounce velocity
+        transform.velocity[0] = dx;
+        transform.velocity[1] = dy;
+
+        // Clear current acceleration
+        transform.acceleration[0] = 0.0;
+        transform.acceleration[1] = 0.0;
+
+        // Apply small separation offset
+        transform.position[0] += sep_x;
+        transform.position[1] += sep_y;
     }
 }
 
@@ -181,8 +254,143 @@ pub fn animation_system_update_frames(world: &mut World, dt: f32) {
     }
 }
 
+pub fn set_entity_state(world: &mut World, entity: Entity, state: ActionState) {
+    if let Some(current) = world.action_states.get(&entity) {
+        if current.state == state {
+            return;
+        }
+    }
+
+    world.action_states.insert(
+        entity,
+        ActionStateComponent {
+            state: state.clone(),
+        },
+    );
+
+    if let Some(animations) = world.animations.get_mut(&entity) {
+        if let Some(anim) = animations.animations.get_mut(&state) {
+            animations.current_frame_index = 0;
+            animations.current_frame = anim.frames[0].clone();
+            animations.frame_timer = 0.0;
+        };
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FlipComponent {
     pub x: bool, // flip horizontally
     pub y: bool, // flip vertically
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct HitboxComponent {
+    pub offset: [f32; 3], // relative to entity's position
+    pub size: [f32; 3],   // width and height
+    pub active: bool,     // toggle on/off
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ColliderComponent {
+    pub offset: [f32; 3],
+    pub size: [f32; 3],
+    pub is_solid: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CollisionInfo {
+    pub entity_a: Entity,
+    pub entity_b: Entity,
+    pub next_pos_a: [f32; 3],
+    pub next_pos_b: [f32; 3],
+    pub velocity_a: [f32; 3],
+    pub velocity_b: [f32; 3],
+    pub normal: [f32; 3],
+}
+
+pub fn collision_system(
+    world: &World,
+    next_transforms: &HashMap<Entity, TransformComponent>,
+) -> Vec<CollisionInfo> {
+    let mut collisions = Vec::new();
+
+    for (entity, next_transform) in next_transforms.iter() {
+        if let Some(collider) = world.colliders.get(entity) {
+            for (other_entity, other_collider) in world.colliders.iter() {
+                if entity == other_entity {
+                    continue;
+                }
+
+                if let Some(other_next_transform) = next_transforms.get(other_entity) {
+                    if is_colliding(
+                        next_transform,
+                        collider,
+                        other_next_transform,
+                        other_collider,
+                    ) {
+                        // Compute collision normal from A to B
+                        let dx = other_next_transform.position[0] - next_transform.position[0];
+                        let dy = other_next_transform.position[1] - next_transform.position[1];
+                        let dz = other_next_transform.position[2] - next_transform.position[2];
+                        let mag = (dx * dx + dy * dy + dz * dz).sqrt();
+
+                        let normal = if mag != 0.0 {
+                            [dx / mag, dy / mag, dz / mag]
+                        } else {
+                            [0.0, 0.0, 0.0] // exact overlap
+                        };
+
+                        collisions.push(CollisionInfo {
+                            entity_a: *entity,
+                            entity_b: *other_entity,
+                            next_pos_a: next_transform.position,
+                            next_pos_b: other_next_transform.position,
+                            velocity_a: next_transform.velocity,
+                            velocity_b: other_next_transform.velocity,
+                            normal,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    collisions
+}
+
+pub fn is_colliding(
+    a_transform: &TransformComponent,
+    a_collider: &ColliderComponent,
+    b_transform: &TransformComponent,
+    b_collider: &ColliderComponent,
+) -> bool {
+    // Assuming position is center of entity and size is width/height/depth
+    let a_min = [
+        a_transform.position[0] - a_collider.size[1] / 2.0,
+        a_transform.position[1] - a_collider.size[1] / 2.0,
+        a_transform.position[2] - a_collider.size[2] / 2.0,
+    ];
+    let a_max = [
+        a_transform.position[0] + a_collider.size[0] / 2.0,
+        a_transform.position[1] + a_collider.size[1] / 2.0,
+        a_transform.position[2] + a_collider.size[2] / 2.0,
+    ];
+
+    let b_min = [
+        b_transform.position[0] - b_collider.size[0] / 2.0,
+        b_transform.position[1] - b_collider.size[1] / 2.0,
+        b_transform.position[2] - b_collider.size[2] / 2.0,
+    ];
+    let b_max = [
+        b_transform.position[0] + b_collider.size[0] / 2.0,
+        b_transform.position[1] + b_collider.size[1] / 2.0,
+        b_transform.position[2] + b_collider.size[2] / 2.0,
+    ];
+
+    // Check for overlap on all 3 axes (X, Y, Z)
+    let overlap_x = a_min[0] <= b_max[0] && a_max[0] >= b_min[0];
+    let overlap_y = a_min[1] <= b_max[1] && a_max[1] >= b_min[1];
+    let overlap_z = a_min[2] <= b_max[2] && a_max[2] >= b_min[2];
+
+    overlap_x && overlap_y && overlap_z
 }

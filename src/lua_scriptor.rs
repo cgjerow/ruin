@@ -2,6 +2,8 @@ use std::fs;
 
 use mlua::prelude::*;
 
+use crate::game_element::CollisionInfo;
+
 pub struct LuaScriptor {
     lua: Lua,
 }
@@ -66,5 +68,43 @@ impl LuaExtendedExecutor {
             .get(method)
             .expect("function does not exist");
         return lua_func;
+    }
+
+    pub fn rust_collisions_to_lua(
+        &self,
+        collisions: Vec<CollisionInfo>,
+    ) -> Result<LuaTable, mlua::Error> {
+        let lua_table = self.lua.create_table()?;
+
+        for (i, col) in collisions.iter().enumerate() {
+            let entry = self.lua.create_table()?;
+
+            entry.set("entity_a", col.entity_a.0);
+            entry.set("entity_b", col.entity_b.0);
+            entry.set(
+                "next_pos_a",
+                self.lua.create_sequence_from(col.next_pos_a.to_vec())?,
+            )?;
+            entry.set(
+                "next_pos_b",
+                self.lua.create_sequence_from(col.next_pos_b.to_vec())?,
+            )?;
+            entry.set(
+                "velocity_a",
+                self.lua.create_sequence_from(col.velocity_a.to_vec())?,
+            )?;
+            entry.set(
+                "velocity_b",
+                self.lua.create_sequence_from(col.velocity_b.to_vec())?,
+            )?;
+            entry.set(
+                "normal",
+                self.lua.create_sequence_from(col.normal.to_vec())?,
+            )?;
+
+            lua_table.set(i + 1, entry)?;
+        }
+
+        Ok(lua_table)
     }
 }
