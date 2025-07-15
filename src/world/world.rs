@@ -99,7 +99,7 @@ impl World {
                 elements.push(RenderElement2D {
                     position: [transform.position[0], transform.position[1]],
                     size: transform.size,
-                    z_order: transform.position[1] * -10.0, // Sort top to bottom: lower y = drawn later
+                    z_order: -transform.position[1], // Sort top to bottom: lower y = drawn later
                     texture: sprite.texture.clone(),
                     texture_id: sprite.texture_id.clone(),
                     uv_coords,
