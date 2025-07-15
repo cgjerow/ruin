@@ -2,10 +2,9 @@
 ---
 require("main_character")
 local pretty_print = require("pretty_print")
-require("ghost")
-require("dummy")
 require("game_asset_builders")
 local new_skelly = require("skelly")
+local new_fence = require("fence")
 
 math.randomseed(os.time())
 
@@ -58,6 +57,24 @@ function load()
 
 	engine.configure_camera(camera_config)
 	STATE.player = engine.create_character(DEATH)
+	STATE.entities[STATE.player] = {
+		id = STATE.player,
+		class = "enemy",
+		on_player_collision = "bounce",
+		on_collision = "bounce",
+	}
+
+	for i = 0, 50 do
+		local fence = new_fence(i - 25, -25)
+		local new_id = engine.create_character(fence)
+		STATE.entities[new_id] = {
+			id = new_id,
+			class = "wall",
+			on_player_collision = "block",
+			on_collision = "",
+		}
+	end
+
 	for _i = 1, 10 do
 		local x = math.random(10, 20)
 		local y = math.random(10, 20)
@@ -70,6 +87,7 @@ function load()
 			x = x * -1
 		end
 		local s = new_skelly(x, y)
+		-- s.is_pc = true
 		local new_id = engine.create_character(s)
 		STATE.entities[new_id] = {
 			id = new_id,
@@ -77,6 +95,7 @@ function load()
 			on_player_collision = "bounce",
 			on_collision = "bounce",
 		}
+		-- STATE.player = new_id
 	end
 
 	return {
@@ -137,6 +156,12 @@ function on_collision(collisions)
 
 			if a_id == STATE.player or b_id == STATE.player then
 				if a_id == STATE.player then
+					if STATE.entities[b_id].on_player_collision == "block" then
+						engine.redirect(a_id, normal_x, normal_y, 0, 0, 1)
+						engine.set_state(STATE.player, "Idle")
+						STATE.input_enabled = false
+						start_input_reenable_timer(0.3)
+					end
 					if STATE.entities[b_id].on_player_collision == "bounce" then
 						engine.redirect(
 							a_id,

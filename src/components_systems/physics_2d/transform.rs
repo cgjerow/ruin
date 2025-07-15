@@ -21,6 +21,16 @@ pub fn transform_system_physics(world: &mut World, delta_time: f32) -> Transform
         // Compute velocity magnitude before update (optional if you want previous velocity)
         let prev_speed = (transform.velocity[0].powi(2) + transform.velocity[1].powi(2)).sqrt();
 
+        // Clamp speed (optional, example max: 300.0)
+        let speed = (transform.velocity[0].powi(2) + transform.velocity[1].powi(2)).sqrt();
+        let max_speed = 10.0;
+        if speed > max_speed {
+            println!("MAX: {:?}", speed);
+            let scale = max_speed / speed;
+            transform.velocity[0] *= scale;
+            transform.velocity[1] *= scale;
+        }
+
         // Integrate acceleration into velocity
         transform.velocity[0] += transform.acceleration[0] * delta_time;
         transform.velocity[1] += transform.acceleration[1] * delta_time;
@@ -61,8 +71,9 @@ pub fn transform_system_calculate_intended_position(
 
         // Clamp speed (optional, example max: 300.0)
         let speed = (transform.velocity[0].powi(2) + transform.velocity[1].powi(2)).sqrt();
-        let max_speed = 30.0;
+        let max_speed = 10.0;
         if speed > max_speed {
+            println!("MAX: {:?}", speed);
             let scale = max_speed / speed;
             transform.velocity[0] *= scale;
             transform.velocity[1] *= scale;

@@ -12,6 +12,7 @@ local function new_skelly(x, y)
 		state = "Idle",
 		animations = {
 			Idle = IDLE,
+			Running = IDLE,
 		},
 	}
 	return s

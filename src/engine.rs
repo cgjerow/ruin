@@ -245,9 +245,10 @@ impl Engine {
         let is_pc: bool = character_table.get("is_pc").unwrap_or(false).into();
         let x: f32 = character_table.get("x").unwrap_or(0.0);
         let y: f32 = character_table.get("y").unwrap_or(0.0);
-        let z: f32 = character_table.get("z").unwrap_or(0.0);
+        let _z: f32 = character_table.get("z").unwrap_or(0.0);
         let width: f32 = character_table.get("width").unwrap_or(1.0);
         let height: f32 = character_table.get("height").unwrap_or(1.0);
+        let _depth: f32 = character_table.get("depth").unwrap_or(1.0);
 
         let animations: mlua::Table = character_table
             .get("animations")
@@ -330,25 +331,6 @@ impl Engine {
         };
         */
         Ok(())
-    }
-
-    fn table_to_map<K, V>(
-        table: mlua::Table,
-        key_converter: impl Fn(String) -> K,
-        value_converter: impl Fn(mlua::Table) -> V,
-    ) -> HashMap<K, V>
-    where
-        K: std::cmp::Eq + std::hash::Hash,
-    {
-        let mut map = HashMap::new();
-
-        for pair in table.pairs::<String, mlua::Table>() {
-            if let Ok((key, value)) = pair {
-                map.insert(key_converter(key), value_converter(value));
-            }
-        }
-
-        map
     }
 
     fn setup(&mut self) {
