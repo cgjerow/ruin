@@ -14,7 +14,7 @@ STATE = {
 	input_disable_time = 0,
 	speed = 500.0,
 	player = -1,
-	characters = {},
+	entities = {},
 	controller = ControllerBuilder():key("W", "Up"):key("S", "Down"):key("A", "MoveLeft"):key("D", "MoveRight"):build(),
 }
 
@@ -73,7 +73,12 @@ function load()
 		local s = new_skelly(x, y)
 		pretty_print(s)
 		local new_id = engine.create_character(s)
-		STATE.characters[new_id] = s
+		STATE.entities[new_id] = {
+			id = new_id,
+			class = "enemy",
+			on_player_collision = "bounce",
+			on_collision = "bounce",
+		}
 	end
 
 	return {
@@ -87,6 +92,7 @@ function on_entity_idle(entities)
 		engine.set_state(entity, "Idle")
 	end
 end
+
 function on_collision(collisions)
 	local acceleration = 1.0
 	local bounce_speed = 1.0
@@ -131,17 +137,59 @@ function on_collision(collisions)
 			local sep_x = normal_x * penetration
 			local sep_y = normal_y * penetration
 
-			if a_id == STATE.player then
-				engine.redirect(a_id, normal_x * bounce_speed, normal_y * bounce_speed, sep_x, sep_y, acceleration)
-				engine.set_state(STATE.player, "Idle")
-				STATE.input_enabled = false
-				start_input_reenable_timer(0.3)
-			end
-			if b_id == STATE.player then
-				engine.redirect(b_id, -normal_x * bounce_speed, -normal_y * bounce_speed, -sep_x, -sep_y, acceleration)
-				engine.set_state(STATE.player, "Idle")
-				STATE.input_enabled = false
-				start_input_reenable_timer(0.3)
+			if a_id == STATE.player or b_id == STATE.player then
+				if a_id == STATE.player then
+					if STATE.entities[b_id].on_player_collision == "bounce" then
+						engine.redirect(
+							a_id,
+							normal_x * bounce_speed,
+							normal_y * bounce_speed,
+							sep_x,
+							sep_y,
+							acceleration
+						)
+						engine.set_state(STATE.player, "Idle")
+						STATE.input_enabled = false
+						start_input_reenable_timer(0.3)
+					end
+					if STATE.entities[b_id].on_collision == "bounce" then
+						engine.redirect(
+							b_id,
+							-normal_x * bounce_speed,
+							-normal_y * bounce_speed,
+							-sep_x,
+							-sep_y,
+							acceleration
+						)
+						engine.set_state(b_id, "Idle")
+					end
+				end
+				if b_id == STATE.player then
+					if STATE.entities[a_id].on_player_collision == "bounce" then
+						engine.redirect(
+							b_id,
+							-normal_x * bounce_speed,
+							-normal_y * bounce_speed,
+							-sep_x,
+							-sep_y,
+							acceleration
+						)
+						engine.set_state(STATE.player, "Idle")
+						STATE.input_enabled = false
+						start_input_reenable_timer(0.3)
+					end
+					if STATE.entities[a_id].on_collision == "bounce" then
+						engine.redirect(
+							a_id,
+							normal_x * bounce_speed,
+							normal_y * bounce_speed,
+							sep_x,
+							sep_y,
+							acceleration
+						)
+						engine.set_state(a_id, "Idle")
+					end
+				end
 			end
 		end
 	end

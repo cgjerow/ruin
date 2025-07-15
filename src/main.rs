@@ -1,6 +1,7 @@
 #[macro_use]
 mod debug;
 mod camera;
+mod camera_2d;
 mod engine;
 mod game_element;
 mod graphics;

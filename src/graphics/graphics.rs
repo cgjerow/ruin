@@ -367,7 +367,7 @@ impl Graphics {
         let hh = h / 2.0 * flip_y;
 
         // OVERRIDE Z FOR NOW
-        let z = y / -100000.0;
+        let z = 0.0; // y / -1.0;
 
         let positions = [
             [x - hw, y + hh, z], // top-left
