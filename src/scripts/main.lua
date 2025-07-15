@@ -65,6 +65,9 @@ function load()
 	}
 
 	for i = 0, 50 do
+		if i % 2 == 0 then
+			goto continue
+		end
 		local fence = new_fence(i - 25, -25)
 		local new_id = engine.create_character(fence)
 		STATE.entities[new_id] = {
@@ -73,6 +76,34 @@ function load()
 			on_player_collision = "block",
 			on_collision = "",
 		}
+
+		fence = new_fence(i - 25, 25)
+		new_id = engine.create_character(fence)
+		STATE.entities[new_id] = {
+			id = new_id,
+			class = "wall",
+			on_player_collision = "block",
+			on_collision = "",
+		}
+
+		fence = new_fence(-25, i - 25)
+		new_id = engine.create_character(fence)
+		STATE.entities[new_id] = {
+			id = new_id,
+			class = "wall",
+			on_player_collision = "block",
+			on_collision = "",
+		}
+
+		fence = new_fence(25, i - 25)
+		new_id = engine.create_character(fence)
+		STATE.entities[new_id] = {
+			id = new_id,
+			class = "wall",
+			on_player_collision = "block",
+			on_collision = "",
+		}
+		::continue::
 	end
 
 	for _i = 1, 10 do
@@ -157,10 +188,16 @@ function on_collision(collisions)
 			if a_id == STATE.player or b_id == STATE.player then
 				if a_id == STATE.player then
 					if STATE.entities[b_id].on_player_collision == "block" then
-						engine.redirect(a_id, normal_x, normal_y, 0, 0, 1)
-						engine.set_state(STATE.player, "Idle")
-						STATE.input_enabled = false
-						start_input_reenable_timer(0.3)
+						local penetration_block = proj_a - math.abs(delta_proj)
+						if penetration_block > 0 then
+							-- Separation vector for blocking, no bounce velocity
+							sep_x = normal_x * penetration_block * 1.2
+							sep_y = normal_y * penetration_block * 1.2
+
+							-- Stop player's velocity along collision normal
+							engine.set_state(STATE.player, "Idle")
+							engine.redirect(a_id, 0, 0, sep_x, sep_y, 0)
+						end
 					end
 					if STATE.entities[b_id].on_player_collision == "bounce" then
 						engine.redirect(
@@ -187,6 +224,7 @@ function on_collision(collisions)
 						engine.set_state(b_id, "Idle")
 					end
 				end
+
 				if b_id == STATE.player then
 					if STATE.entities[a_id].on_player_collision == "bounce" then
 						engine.redirect(
