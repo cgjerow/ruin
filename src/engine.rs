@@ -1,3 +1,4 @@
+use crate::camera_2d::Camera2D;
 use crate::camera_3d::{Camera3D, CameraAction};
 use crate::game_element::{
     animation_system_update_frames, collision_system, set_entity_state,
@@ -8,8 +9,9 @@ use crate::graphics::Graphics;
 use crate::lua_scriptor::LuaExtendedExecutor;
 use crate::texture::Texture;
 use crate::world::World;
-use crate::{debug, graphics_3d};
+use crate::{debug, graphics_2d, graphics_3d};
 use debug::Debug;
+use graphics_2d::Graphics2D;
 use graphics_3d::Graphics3D;
 use mlua::{Result, Table};
 use std::collections::HashMap;
@@ -482,18 +484,21 @@ impl ApplicationHandler<Graphics3D> for Engine {
         let window_attributes =
             Window::default_attributes().with_inner_size(LogicalSize::new(self.width, self.height));
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        let default_camera = Camera3D::new(
-            self.width,
-            self.height,
-            crate::camera_3d::camera_3d::CameraMode::Orthographic2D,
-        );
 
         if self.graphics_mode == GraphicsOption::G3d {
+            let camera_3d = Camera3D::new(
+                self.width,
+                self.height,
+                crate::camera_3d::camera_3d::CameraMode::Orthographic2D,
+            );
             self.graphics = Some(Box::new(
-                pollster::block_on(Graphics3D::new(window.clone(), default_camera)).unwrap(),
+                pollster::block_on(Graphics3D::new(window.clone(), camera_3d)).unwrap(),
             ));
         } else if self.graphics_mode == GraphicsOption::G2d {
-            // do this
+            let camera_2d = Camera2D::new(self.width, self.height);
+            self.graphics = Some(Box::new(
+                pollster::block_on(Graphics2D::new(window.clone(), camera_2d)).unwrap(),
+            ));
         }
 
         self.window = Some(window);

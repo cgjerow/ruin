@@ -32,7 +32,7 @@ fn load_engine_config() -> EngineConfig {
         debug_enabled,
         width,
         height,
-        graphics: GraphicsOption::G3d,
+        graphics: GraphicsOption::G2d,
         camera: CameraOption::Follow,
     };
 }

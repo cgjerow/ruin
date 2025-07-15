@@ -5,7 +5,7 @@ use crate::{
         ActionStateComponent, AnimationComponent, ColliderComponent, Entity, FlipComponent,
         SpriteSheetComponent, TransformComponent,
     },
-    // TODO - how do we fix this? move to graphics module?
+    graphics_2d::{RenderElement2D, RenderQueue2D},
     graphics_3d::{RenderElement, RenderQueue},
 };
 
@@ -73,5 +73,42 @@ impl World {
         }
 
         RenderQueue { elements }
+    }
+
+    pub fn extract_render_queue_2d(&self) -> RenderQueue2D {
+        let mut elements = Vec::new();
+
+        for (entity, animation) in self.animations.iter() {
+            if let Some(transform) = self.transforms.get(entity) {
+                let uv_coords = animation.current_frame.uv_coords;
+                let flip = self
+                    .flips
+                    .get(entity)
+                    .unwrap_or(&FlipComponent { x: false, y: false });
+                let sprite = self
+                    .sprite_sheets
+                    .get(
+                        &animation.animations[&self
+                            .action_states
+                            .get(&entity)
+                            .expect("Animation not found")
+                            .state]
+                            .sprite_sheet_id,
+                    )
+                    .expect("Sprite Sheets not found");
+                elements.push(RenderElement2D {
+                    position: [transform.position[0], transform.position[1]],
+                    size: transform.size,
+                    z_order: transform.position[1] * -10.0, // Sort top to bottom: lower y = drawn later
+                    texture: sprite.texture.clone(),
+                    texture_id: sprite.texture_id.clone(),
+                    uv_coords,
+                    flip_x: flip.x,
+                    flip_y: flip.y,
+                });
+            }
+        }
+
+        RenderQueue2D { elements }
     }
 }

@@ -69,9 +69,7 @@ function load()
 		if flip_y == 1 then
 			x = x * -1
 		end
-		print("HMM", x, y)
 		local s = new_skelly(x, y)
-		pretty_print(s)
 		local new_id = engine.create_character(s)
 		STATE.entities[new_id] = {
 			id = new_id,
