@@ -4,7 +4,7 @@ use winit::{
     keyboard::PhysicalKey,
 };
 
-use crate::camera::{Camera, CameraAction, CameraController, CameraInputMap};
+use crate::camera_3d::{Camera3D, CameraAction, CameraController, CameraInputMap};
 use std::collections::HashMap;
 
 pub struct UniversalCameraController {
@@ -88,7 +88,7 @@ impl CameraController for UniversalCameraController {
         }
     }
 
-    fn update_camera(&self, camera: &mut Camera) {
+    fn update_camera(&self, camera: &mut Camera3D) {
         use cgmath::{InnerSpace, Quaternion, Rad, Rotation3, Vector3};
 
         let forward = (camera.target - camera.eye).normalize();

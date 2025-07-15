@@ -14,7 +14,7 @@ impl CameraUniform {
         }
     }
 
-    pub fn update_view_proj(&mut self, camera: &crate::camera::Camera) {
+    pub fn update_view_proj(&mut self, camera: &crate::camera_3d::Camera3D) {
         self.view_proj = camera.build_view_projection_matrix().into();
     }
 }

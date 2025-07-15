@@ -1,19 +1,16 @@
-use crate::camera::camera::CameraMode;
-use crate::camera::{
-    Camera, CameraAction, CameraController, CameraInputMap, ThreeDimensionalCameraController,
-    TwoDimensionalCameraController, UniversalCameraController,
-};
+use crate::camera_3d::{Camera3D, CameraAction};
 use crate::game_element::{
     animation_system_update_frames, collision_system, set_entity_state,
     transform_system_add_acceleration, transform_system_calculate_intended_position,
     transform_system_physics, transform_system_redirect, ActionState, Animation, Entity,
 };
+use crate::graphics::Graphics;
 use crate::lua_scriptor::LuaExtendedExecutor;
 use crate::texture::Texture;
 use crate::world::World;
-use crate::{debug, graphics};
+use crate::{debug, graphics_3d};
 use debug::Debug;
-use graphics::Graphics;
+use graphics_3d::Graphics3D;
 use mlua::{Result, Table};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -30,7 +27,9 @@ static SAFETY_MAX_FOR_DEV: u64 = 10000;
 pub struct Engine {
     player: Entity,
     window: Option<Arc<Window>>,
-    graphics: Option<Graphics>,
+    graphics: Option<Box<dyn Graphics>>,
+    camera_mode: CameraOption,
+    graphics_mode: GraphicsOption,
     count: u64,
     #[allow(dead_code)]
     fps_specified: bool,
@@ -49,6 +48,20 @@ pub struct EngineConfig {
     pub debug_enabled: bool,
     pub width: u32,
     pub height: u32,
+    pub graphics: GraphicsOption,
+    pub camera: CameraOption,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum GraphicsOption {
+    G2d,
+    G3d,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum CameraOption {
+    Follow,
+    Independent,
 }
 
 impl Engine {
@@ -66,6 +79,8 @@ impl Engine {
             lua_context: lua_executor,
             window: None,
             graphics: None,
+            camera_mode: config.camera,
+            graphics_mode: config.graphics,
             debugger: Debug::new(config.debug_enabled),
             count: 0,
             fps_specified: fps_opt != None,
@@ -96,8 +111,8 @@ impl Engine {
             .insert(Entity(entity), crate::game_element::FlipComponent { x, y });
     }
 
-    pub fn update_camera_follow(&mut self) {
-        if let Some(transform) = self.world.transforms.get(&self.player) {
+    pub fn update_camera_follow(&mut self, entity: &Entity) {
+        if let Some(transform) = self.world.transforms.get(entity) {
             let graphics = match &mut self.graphics {
                 Some(canvas) => canvas,
                 None => return,
@@ -109,15 +124,6 @@ impl Engine {
                 [0.0, 0.0, 0.0],
             );
         }
-    }
-
-    fn random_color() -> wgpu::Color {
-        return wgpu::Color {
-            r: rand::random(),
-            b: rand::random(),
-            g: rand::random(),
-            a: rand::random(),
-        };
     }
 
     fn is_targetting_fps(&self) -> bool {
@@ -150,7 +156,11 @@ impl Engine {
 
         let transform_notices = transform_system_physics(&mut self.world, dt32);
         self.on_entity_idle(transform_notices.idled);
-        self.update_camera_follow();
+
+        if self.camera_mode == CameraOption::Follow {
+            self.update_camera_follow(&self.player.clone());
+        }
+
         animation_system_update_frames(&mut self.world, dt32);
 
         let graphics = match &mut self.graphics {
@@ -227,24 +237,6 @@ impl Engine {
             .get("animations")
             .unwrap_or(self.lua_context.create_table());
 
-        /* this should come from animations now
-        let sprite: String = character_table
-            .get("sprite")
-            .expect("Sprite Sheet required for Character");
-        let sheet_width = character_table
-            .get("sprite_sheet_width")
-            .expect("Sprite Sheet Width required");
-        let sheet_height = character_table
-            .get("sprite_sheet_height")
-            .expect("Sprite Sheet Height required");
-        */
-
-        /* need to use the starting state to get the right animation sprite
-        let texture = self.get_texture(&sprite);
-         */
-
-        // need to iterate over all of the animations
-        //
         let entity: Entity = self.world.new_entity();
         if is_pc {
             self.player = entity.clone();
@@ -257,8 +249,8 @@ impl Engine {
                 let action_state = ActionState::from(
                     key.to_string()
                         .expect("String key required for Action States"),
-                ); // Assuming it converts mlua::Value
-                   //
+                );
+
                 let sprite_id: Entity = self.world.new_entity();
                 let texture = self.get_texture(&sprite_path);
                 animation.sprite_sheet_id = sprite_id;
@@ -308,65 +300,17 @@ impl Engine {
         entity.into()
     }
 
-    pub fn configure_camera(&mut self, config: mlua::Table) -> Result<()> {
-        let config = LuaCameraConfig::from_lua_table(config)?;
-
-        // Convert mode string to enum
-        let mode = match config.mode.as_str() {
-            "Orthographic2D" => CameraMode::Orthographic2D,
-            "Perspective3D" => CameraMode::Perspective3D,
-            "Universal" => CameraMode::Universal3D,
-            other => {
-                return Err(mlua::Error::RuntimeError(format!(
-                    "Invalid camera mode: {}",
-                    other
-                )))
-            }
-        };
-
+    pub fn configure_camera(&mut self, _config: mlua::Table) -> Result<()> {
+        // let config = LuaCameraConfig::from_lua_table(config)?;
         // Create camera
-        let camera = Camera::new(self.width, self.height, mode.clone());
-
-        // Create input map from key bindings
-        let mut input_map = CameraInputMap::new();
-        for binding in config.keys {
-            let key = LuaCameraConfig::parse_keycode(&binding.key)?;
-            let action = LuaCameraConfig::parse_camera_action(&binding.action)?;
-            input_map = input_map.insert(key, action);
-        }
-
-        // Build controller
-        let controller: Box<dyn CameraController> = match mode {
-            CameraMode::Orthographic2D => {
-                // TODO fix inputs, take input controls
-                Box::new(TwoDimensionalCameraController::new(
-                    config.locked,
-                    config.speed,
-                ))
-            }
-            CameraMode::Perspective3D => {
-                // TODO fix inputs, take input controls
-                Box::new(ThreeDimensionalCameraController::new(
-                    config.locked,
-                    config.speed,
-                ))
-            }
-            CameraMode::Universal3D => {
-                // TODO fix inputs, take speed
-                Box::new(UniversalCameraController::new(
-                    config.locked,
-                    config.speed,
-                    config.speed,
-                    input_map,
-                ))
-            }
-        };
+        // let camera = Camera3D::new(self.width, self.height, mode.clone());
+        //
+        /*
         let graphics = match &mut self.graphics {
             Some(canvas) => canvas,
             None => return Ok(()),
         };
-
-        graphics.update_camera_config(camera, controller);
+        */
         Ok(())
     }
 
@@ -500,56 +444,11 @@ impl Engine {
         let _ = self
             .lua_context
             .get_function("keyboard_event")
-            .call::<()>((Self::keycode_to_str(key), is_pressed));
-    }
-
-    fn keycode_to_str(key: KeyCode) -> Option<&'static str> {
-        use winit::keyboard::KeyCode::*;
-        Some(match key {
-            KeyW => "w",
-            KeyA => "a",
-            KeyS => "s",
-            KeyD => "d",
-            ArrowUp => "up",
-            ArrowDown => "down",
-            ArrowLeft => "left",
-            ArrowRight => "right",
-            Space => "space",
-            Enter => "enter",
-            Escape => "escape",
-            KeyZ => "z",
-            KeyX => "x",
-            KeyC => "c",
-            KeyV => "v",
-            Digit0 => "0",
-            Digit1 => "1",
-            Digit2 => "2",
-            Digit3 => "3",
-            Digit4 => "4",
-            Digit5 => "5",
-            Digit6 => "6",
-            Digit7 => "7",
-            Digit8 => "8",
-            Digit9 => "9",
-            KeyQ => "q",
-            KeyE => "e",
-            KeyR => "r",
-            KeyF => "f",
-            KeyT => "t",
-            KeyY => "y",
-            KeyU => "u",
-            KeyI => "i",
-            KeyO => "o",
-            KeyP => "p",
-            KeyB => "b",
-            KeyN => "n",
-            KeyM => "m",
-            _ => return None, // Unknown or unhandled key
-        })
+            .call::<()>((keycode_to_str(key), is_pressed));
     }
 }
 
-impl ApplicationHandler<Graphics> for Engine {
+impl ApplicationHandler<Graphics3D> for Engine {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         let now = Instant::now();
         let dt = self.last_frame.elapsed();
@@ -569,7 +468,7 @@ impl ApplicationHandler<Graphics> for Engine {
             Some(canvas) => canvas,
             None => return,
         };
-        let _ = graphics.render(self.world.extract_render_queue());
+        let _ = graphics.render(&self.world);
 
         self.count += 1;
         if self.count > SAFETY_MAX_FOR_DEV {
@@ -583,22 +482,24 @@ impl ApplicationHandler<Graphics> for Engine {
         let window_attributes =
             Window::default_attributes().with_inner_size(LogicalSize::new(self.width, self.height));
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        let default_camera = Camera::new(
+        let default_camera = Camera3D::new(
             self.width,
             self.height,
-            crate::camera::camera::CameraMode::Orthographic2D,
+            crate::camera_3d::camera_3d::CameraMode::Orthographic2D,
         );
-        self.graphics =
-            Some(pollster::block_on(Graphics::new(window.clone(), default_camera)).unwrap());
+
+        if self.graphics_mode == GraphicsOption::G3d {
+            self.graphics = Some(Box::new(
+                pollster::block_on(Graphics3D::new(window.clone(), default_camera)).unwrap(),
+            ));
+        } else if self.graphics_mode == GraphicsOption::G2d {
+            // do this
+        }
+
         self.window = Some(window);
 
         self.setup();
         return;
-    }
-
-    #[allow(unused_mut)]
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: Graphics) {
-        self.graphics = Some(event);
     }
 
     fn window_event(
@@ -627,7 +528,7 @@ impl ApplicationHandler<Graphics> for Engine {
                     Some(canvas) => canvas,
                     None => return,
                 };
-                graphics.set_background(Engine::random_color());
+                graphics.set_background(random_color());
                 self.redraw();
             }
             WindowEvent::RedrawRequested => {
@@ -637,7 +538,7 @@ impl ApplicationHandler<Graphics> for Engine {
                 };
                 // this is the only place we want to call graphics.render()
                 // any other situation should use self.redraw();
-                let _ = graphics.render(self.world.extract_render_queue());
+                let _ = graphics.render(&self.world);
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -659,14 +560,14 @@ impl ApplicationHandler<Graphics> for Engine {
             }
             _ => {}
         }
-        /*
-         * need this to create independent camera view
-        let graphics = match &mut self.graphics {
-            Some(canvas) => canvas,
-            None => return,
-        };
-        // graphics.process_camera_events(&event);
-        */
+
+        if self.camera_mode == CameraOption::Independent {
+            let graphics = match &mut self.graphics {
+                Some(canvas) => canvas,
+                None => return,
+            };
+            graphics.process_camera_event(&event);
+        }
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
@@ -754,4 +655,58 @@ impl LuaCameraConfig {
         };
         Ok(action)
     }
+}
+
+fn keycode_to_str(key: KeyCode) -> Option<&'static str> {
+    use winit::keyboard::KeyCode::*;
+    Some(match key {
+        KeyW => "w",
+        KeyA => "a",
+        KeyS => "s",
+        KeyD => "d",
+        ArrowUp => "up",
+        ArrowDown => "down",
+        ArrowLeft => "left",
+        ArrowRight => "right",
+        Space => "space",
+        Enter => "enter",
+        Escape => "escape",
+        KeyZ => "z",
+        KeyX => "x",
+        KeyC => "c",
+        KeyV => "v",
+        Digit0 => "0",
+        Digit1 => "1",
+        Digit2 => "2",
+        Digit3 => "3",
+        Digit4 => "4",
+        Digit5 => "5",
+        Digit6 => "6",
+        Digit7 => "7",
+        Digit8 => "8",
+        Digit9 => "9",
+        KeyQ => "q",
+        KeyE => "e",
+        KeyR => "r",
+        KeyF => "f",
+        KeyT => "t",
+        KeyY => "y",
+        KeyU => "u",
+        KeyI => "i",
+        KeyO => "o",
+        KeyP => "p",
+        KeyB => "b",
+        KeyN => "n",
+        KeyM => "m",
+        _ => return None, // Unknown or unhandled key
+    })
+}
+
+fn random_color() -> wgpu::Color {
+    return wgpu::Color {
+        r: rand::random(),
+        b: rand::random(),
+        g: rand::random(),
+        a: rand::random(),
+    };
 }

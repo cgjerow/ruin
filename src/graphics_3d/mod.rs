@@ -1,7 +1,7 @@
 mod camera_uniform;
-mod graphics;
+mod graphics_3d;
 mod vertex;
 
 use camera_uniform::CameraUniform;
-pub use graphics::{Graphics, RenderElement, RenderQueue};
+pub use graphics_3d::{Graphics3D, RenderElement, RenderQueue};
 pub use vertex::Vertex;

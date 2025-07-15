@@ -1,91 +1,8 @@
-use crate::camera::{Camera, CameraAction, CameraController, CameraInputMap}; // or `super::` if you prefer
+use crate::camera_3d::{Camera3D, CameraController}; // or `super::` if you prefer
 use winit::{
     event::{ElementState, KeyEvent, WindowEvent},
     keyboard::{KeyCode, PhysicalKey},
 };
-
-pub struct TwoDimensionalCameraController {
-    speed: f32,
-    locked: bool,
-    is_forward_pressed: bool,
-    is_backward_pressed: bool,
-    is_left_pressed: bool,
-    is_right_pressed: bool,
-}
-
-impl TwoDimensionalCameraController {
-    pub fn new(locked: bool, speed: f32) -> Self {
-        Self {
-            locked,
-            speed: speed / 1000.0,
-            is_forward_pressed: false,
-            is_backward_pressed: false,
-            is_left_pressed: false,
-            is_right_pressed: false,
-        }
-    }
-
-    pub fn process_events(&mut self, event: &WindowEvent) -> bool {
-        match event {
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        state,
-                        physical_key: PhysicalKey::Code(keycode),
-                        ..
-                    },
-                ..
-            } => {
-                let is_pressed = *state == ElementState::Pressed;
-                match keycode {
-                    KeyCode::KeyW | KeyCode::ArrowUp => {
-                        self.is_forward_pressed = is_pressed;
-                        true
-                    }
-                    KeyCode::KeyA | KeyCode::ArrowLeft => {
-                        self.is_left_pressed = is_pressed;
-                        true
-                    }
-                    KeyCode::KeyS | KeyCode::ArrowDown => {
-                        self.is_backward_pressed = is_pressed;
-                        true
-                    }
-                    KeyCode::KeyD | KeyCode::ArrowRight => {
-                        self.is_right_pressed = is_pressed;
-                        true
-                    }
-                    _ => false,
-                }
-            }
-            _ => false,
-        }
-    }
-
-    pub fn update_camera(&self, camera: &mut Camera) {
-        use cgmath::{InnerSpace, Vector3};
-
-        let forward = (camera.target - camera.eye).normalize();
-        let right = forward.cross(camera.up).normalize();
-
-        let mut movement = Vector3::new(0.0, 0.0, 0.0);
-
-        if self.is_forward_pressed {
-            movement += camera.up * self.speed;
-        }
-        if self.is_backward_pressed {
-            movement -= camera.up * self.speed;
-        }
-        if self.is_right_pressed {
-            movement += right * self.speed;
-        }
-        if self.is_left_pressed {
-            movement -= right * self.speed;
-        }
-
-        camera.eye += movement;
-        camera.target += movement;
-    }
-}
 
 pub struct ThreeDimensionalCameraController {
     locked: bool,
@@ -144,7 +61,7 @@ impl ThreeDimensionalCameraController {
         }
     }
 
-    pub fn update_camera(&self, camera: &mut Camera) {
+    pub fn update_camera(&self, camera: &mut Camera3D) {
         /*
          * use cgmath::InnerSpace;
         let forward = camera.target - camera.eye;
@@ -202,22 +119,12 @@ impl ThreeDimensionalCameraController {
     }
 }
 
-impl CameraController for TwoDimensionalCameraController {
-    fn process_events(&mut self, event: &WindowEvent) -> bool {
-        self.process_events(event)
-    }
-
-    fn update_camera(&self, camera: &mut Camera) {
-        self.update_camera(camera)
-    }
-}
-
 impl CameraController for ThreeDimensionalCameraController {
     fn process_events(&mut self, event: &WindowEvent) -> bool {
         self.process_events(event)
     }
 
-    fn update_camera(&self, camera: &mut Camera) {
+    fn update_camera(&self, camera: &mut Camera3D) {
         self.update_camera(camera)
     }
 }

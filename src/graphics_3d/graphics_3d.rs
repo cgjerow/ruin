@@ -3,16 +3,19 @@ use image::DynamicImage;
 use std::collections::HashMap;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
+use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window; // bring Rng trait into scope
 
-use crate::camera::{Camera, CameraController};
-use crate::graphics::CameraUniform;
-use crate::graphics::Vertex;
+use crate::camera_3d::{Camera3D, CameraController};
+use crate::graphics::Graphics;
+use crate::graphics_3d::CameraUniform;
+use crate::graphics_3d::Vertex;
 use crate::texture::Texture;
+use crate::world::World;
 
-pub struct Graphics {
+pub struct Graphics3D {
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -22,7 +25,7 @@ pub struct Graphics {
     #[allow(dead_code)]
     window: Arc<Window>,
     #[allow(dead_code)]
-    camera: Camera,
+    camera: Camera3D,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
@@ -65,12 +68,12 @@ pub struct RenderQueue {
     pub elements: Vec<RenderElement>,
 }
 
-impl Graphics {
+impl Graphics3D {
     pub fn set_background(&mut self, color: wgpu::Color) {
         self.background_color = color;
     }
 
-    pub async fn new(window: Arc<Window>, camera: Camera) -> anyhow::Result<Graphics> {
+    pub async fn new(window: Arc<Window>, camera: Camera3D) -> anyhow::Result<Graphics3D> {
         let size = window.inner_size();
         // The instance is a handle to our GPU
         // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
@@ -163,7 +166,7 @@ impl Graphics {
                 label: Some("camera_bind_group_layout"),
             });
 
-        let shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/shader-1.wgsl"));
+        let shader = device.create_shader_module(wgpu::include_wgsl!("./shaders/shader-1.wgsl"));
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Primary Render Pipeline Layout"),
@@ -297,7 +300,7 @@ impl Graphics {
 
     pub fn update_camera_config(
         &mut self,
-        camera: Camera,
+        camera: Camera3D,
         camera_controller: Box<dyn CameraController>,
     ) {
         self.camera = camera;
@@ -542,5 +545,41 @@ impl Graphics {
             (KeyCode::Escape, true) => event_loop.exit(),
             _ => {}
         }
+    }
+}
+
+impl Graphics for Graphics3D {
+    fn resize(&mut self, width: u32, height: u32) {
+        self.resize(width, height);
+    }
+
+    fn update_camera(&mut self) {
+        self.update_camera();
+    }
+
+    fn set_background(&mut self, color: wgpu::Color) {
+        self.set_background(color);
+    }
+
+    fn render(&mut self, world: &World) {
+        self.render(world.extract_render_queue());
+    }
+
+    fn load_texture_from_path(&self, path: &str) -> Texture {
+        self.load_texture_from_path(path)
+    }
+
+    fn process_camera_event(&mut self, event: &WindowEvent) {
+        self.process_camera_events(event);
+    }
+
+    fn move_camera_for_follow(
+        &mut self,
+        position: [f32; 3],
+        velocity: [f32; 3],
+        acceleration: [f32; 3],
+        offset: [f32; 3],
+    ) {
+        self.move_camera_for_follow(position, velocity, acceleration, offset);
     }
 }

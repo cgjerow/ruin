@@ -1,10 +1,12 @@
 #[macro_use]
 mod debug;
-mod camera;
 mod camera_2d;
+mod camera_3d;
 mod engine;
 mod game_element;
 mod graphics;
+mod graphics_2d;
+mod graphics_3d;
 mod lua_scriptor;
 mod texture;
 mod world;
@@ -13,7 +15,10 @@ use engine::{Engine, EngineConfig};
 use mlua::prelude::*;
 use winit::event_loop::EventLoop;
 
-use crate::lua_scriptor::LuaScriptor;
+use crate::{
+    engine::{CameraOption, GraphicsOption},
+    lua_scriptor::LuaScriptor,
+};
 
 fn load_engine_config() -> EngineConfig {
     let mut scriptor = LuaScriptor::new(Lua::new());
@@ -27,6 +32,8 @@ fn load_engine_config() -> EngineConfig {
         debug_enabled,
         width,
         height,
+        graphics: GraphicsOption::G3d,
+        camera: CameraOption::Follow,
     };
 }
 

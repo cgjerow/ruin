@@ -5,7 +5,8 @@ use crate::{
         ActionStateComponent, AnimationComponent, ColliderComponent, Entity, FlipComponent,
         SpriteSheetComponent, TransformComponent,
     },
-    graphics::{RenderElement, RenderQueue},
+    // TODO - how do we fix this? move to graphics module?
+    graphics_3d::{RenderElement, RenderQueue},
 };
 
 #[derive(Debug, Clone)]

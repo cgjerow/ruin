@@ -9,7 +9,7 @@ pub enum CameraMode {
     Universal3D,
 }
 
-pub struct Camera {
+pub struct Camera3D {
     pub eye: cgmath::Point3<f32>,
     pub target: cgmath::Point3<f32>,
     pub up: cgmath::Vector3<f32>,
@@ -21,7 +21,7 @@ pub struct Camera {
     mode: CameraMode,
 }
 
-impl Camera {
+impl Camera3D {
     pub fn new(width: u32, height: u32, mode: CameraMode) -> Self {
         Self {
             // position the camera 1 unit up and 2 units back
@@ -128,5 +128,5 @@ impl CameraInputMap {
 
 pub trait CameraController {
     fn process_events(&mut self, event: &WindowEvent) -> bool;
-    fn update_camera(&self, camera: &mut Camera);
+    fn update_camera(&self, camera: &mut Camera3D);
 }
