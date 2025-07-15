@@ -2,8 +2,8 @@
 mod debug;
 mod camera_2d;
 mod camera_3d;
+mod components_systems;
 mod engine;
-mod game_element;
 mod graphics;
 mod graphics_2d;
 mod graphics_3d;
@@ -16,7 +16,7 @@ use mlua::prelude::*;
 use winit::event_loop::EventLoop;
 
 use crate::{
-    engine::{CameraOption, GraphicsOption},
+    engine::{CameraOption, Dimensions},
     lua_scriptor::LuaScriptor,
 };
 
@@ -32,7 +32,7 @@ fn load_engine_config() -> EngineConfig {
         debug_enabled,
         width,
         height,
-        graphics: GraphicsOption::G2d,
+        dimensions: Dimensions::Two,
         camera: CameraOption::Follow,
     };
 }

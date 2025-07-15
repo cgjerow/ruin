@@ -1,9 +1,11 @@
 use crate::camera_2d::Camera2D;
 use crate::camera_3d::{Camera3D, CameraAction};
-use crate::game_element::{
-    animation_system_update_frames, collision_system, set_entity_state,
-    transform_system_add_acceleration, transform_system_calculate_intended_position,
-    transform_system_physics, transform_system_redirect, ActionState, Animation, Entity,
+use crate::components_systems::physics_2d::{
+    self, ColliderComponent, FlipComponent, TransformComponent,
+};
+use crate::components_systems::{
+    animation_system_update_frames, set_entity_state, ActionState, ActionStateComponent, Animation,
+    AnimationComponent, Entity, SpriteSheetComponent,
 };
 use crate::graphics::Graphics;
 use crate::lua_scriptor::LuaExtendedExecutor;
@@ -31,7 +33,7 @@ pub struct Engine {
     window: Option<Arc<Window>>,
     graphics: Option<Box<dyn Graphics>>,
     camera_mode: CameraOption,
-    graphics_mode: GraphicsOption,
+    dimensions: Dimensions,
     count: u64,
     #[allow(dead_code)]
     fps_specified: bool,
@@ -50,14 +52,14 @@ pub struct EngineConfig {
     pub debug_enabled: bool,
     pub width: u32,
     pub height: u32,
-    pub graphics: GraphicsOption,
+    pub dimensions: Dimensions,
     pub camera: CameraOption,
 }
 
 #[derive(Debug, PartialEq)]
-pub enum GraphicsOption {
-    G2d,
-    G3d,
+pub enum Dimensions {
+    Two,
+    Three,
 }
 
 #[derive(Debug, PartialEq)]
@@ -82,7 +84,7 @@ impl Engine {
             window: None,
             graphics: None,
             camera_mode: config.camera,
-            graphics_mode: config.graphics,
+            dimensions: config.dimensions,
             debugger: Debug::new(config.debug_enabled),
             count: 0,
             fps_specified: fps_opt != None,
@@ -110,21 +112,23 @@ impl Engine {
     fn flip(&mut self, entity: u32, x: bool, y: bool) {
         self.world
             .flips
-            .insert(Entity(entity), crate::game_element::FlipComponent { x, y });
+            .insert(Entity(entity), FlipComponent { x, y });
     }
 
     pub fn update_camera_follow(&mut self, entity: &Entity) {
-        if let Some(transform) = self.world.transforms.get(entity) {
-            let graphics = match &mut self.graphics {
-                Some(canvas) => canvas,
-                None => return,
-            };
-            graphics.move_camera_for_follow(
-                transform.position,
-                transform.velocity,
-                transform.acceleration,
-                [0.0, 0.0, 0.0],
-            );
+        if self.dimensions == Dimensions::Two {
+            if let Some(transform) = self.world.transforms_2d.get(entity) {
+                let graphics = match &mut self.graphics {
+                    Some(canvas) => canvas,
+                    None => return,
+                };
+                graphics.move_camera_for_follow(
+                    [transform.position[0], transform.position[1], 0.0],
+                    [transform.velocity[0], transform.velocity[1], 0.0],
+                    [transform.acceleration[0], transform.acceleration[1], 0.0],
+                    [0.0, 0.0, 0.0],
+                );
+            }
         }
     }
 
@@ -147,20 +151,26 @@ impl Engine {
 
         let _ = update.call::<()>(dt32);
 
-        let next_transforms = transform_system_calculate_intended_position(&self.world, dt32);
-        let collisions = collision_system(&self.world, &next_transforms);
-        let collisions_table = self.lua_context.rust_collisions_to_lua(collisions).unwrap();
+        if self.dimensions == Dimensions::Two {
+            let next_transforms =
+                physics_2d::transform_system_calculate_intended_position(&self.world, dt32);
+            let collisions = physics_2d::collision_system(&self.world, &next_transforms);
+            let collisions_table = self
+                .lua_context
+                .rust_collisions_to_lua_2d(collisions)
+                .unwrap();
 
-        self.lua_context
-            .get_function("on_collision")
-            .call::<()>(collisions_table)
-            .expect("Error handling collisions");
+            self.lua_context
+                .get_function("on_collision")
+                .call::<()>(collisions_table)
+                .expect("Error handling collisions");
 
-        let transform_notices = transform_system_physics(&mut self.world, dt32);
-        self.on_entity_idle(transform_notices.idled);
+            let transform_notices = physics_2d::transform_system_physics(&mut self.world, dt32);
+            self.on_entity_idle(transform_notices.idled);
 
-        if self.camera_mode == CameraOption::Follow {
-            self.update_camera_follow(&self.player.clone());
+            if self.camera_mode == CameraOption::Follow {
+                self.update_camera_follow(&self.player.clone());
+            }
         }
 
         animation_system_update_frames(&mut self.world, dt32);
@@ -192,7 +202,9 @@ impl Engine {
     }
 
     fn add_acceleration(&mut self, id: u32, dx: f32, dy: f32) {
-        transform_system_add_acceleration(&mut self.world, Entity(id), dx, dy);
+        if self.dimensions == Dimensions::Two {
+            physics_2d::transform_system_add_acceleration(&mut self.world, Entity(id), dx, dy);
+        }
     }
 
     fn redirect(
@@ -204,15 +216,17 @@ impl Engine {
         sep_y: f32,
         acceleration_mod: f32,
     ) {
-        transform_system_redirect(
-            &mut self.world,
-            Entity(id),
-            dx,
-            dy,
-            sep_x,
-            sep_y,
-            acceleration_mod,
-        );
+        if self.dimensions == Dimensions::Two {
+            physics_2d::transform_system_redirect(
+                &mut self.world,
+                Entity(id),
+                dx,
+                dy,
+                sep_x,
+                sep_y,
+                acceleration_mod,
+            );
+        }
     }
 
     fn set_state(&mut self, id: u32, state: String) {
@@ -259,7 +273,7 @@ impl Engine {
 
                 self.world.sprite_sheets.insert(
                     sprite_id.clone(),
-                    crate::game_element::SpriteSheetComponent {
+                    SpriteSheetComponent {
                         texture_id: sprite_path,
                         texture,
                     },
@@ -269,36 +283,38 @@ impl Engine {
         }
 
         let current_frame = animations_map.get(&state).unwrap().frames[0].clone();
-        self.world.animations.insert(
-            entity.clone(),
-            crate::game_element::AnimationComponent {
-                animations: animations_map,
-                current_frame_index: 0,
-                current_frame,
-                frame_timer: 0.0,
-            },
-        );
-        self.world.transforms.insert(
-            entity.clone(),
-            crate::game_element::TransformComponent {
-                position: [x, y, z],
-                velocity: [0.0, 0.0, 0.0],
-                acceleration: [0.0, 0.0, 0.0],
-                size: [width, height],
-            },
-        );
-        self.world.colliders.insert(
-            entity.clone(),
-            crate::game_element::ColliderComponent {
-                offset: [0.0, 0.0, 0.0],
-                size: [width * 0.6, height * 0.6, 0.0],
-                is_solid: true,
-            },
-        );
-        self.world.action_states.insert(
-            entity.clone(),
-            crate::game_element::ActionStateComponent { state },
-        );
+
+        if self.dimensions == Dimensions::Two {
+            self.world.animations.insert(
+                entity.clone(),
+                AnimationComponent {
+                    animations: animations_map,
+                    current_frame_index: 0,
+                    current_frame,
+                    frame_timer: 0.0,
+                },
+            );
+            self.world.transforms_2d.insert(
+                entity.clone(),
+                TransformComponent {
+                    position: [x, y],
+                    velocity: [0.0, 0.0],
+                    acceleration: [0.0, 0.0],
+                    size: [width, height],
+                },
+            );
+            self.world.colliders_2d.insert(
+                entity.clone(),
+                ColliderComponent {
+                    offset: [0.0, 0.0],
+                    size: [width * 0.6, height * 0.6],
+                    is_solid: true,
+                },
+            );
+            self.world
+                .action_states
+                .insert(entity.clone(), ActionStateComponent { state });
+        }
         entity.into()
     }
 
@@ -485,7 +501,7 @@ impl ApplicationHandler<Graphics3D> for Engine {
             Window::default_attributes().with_inner_size(LogicalSize::new(self.width, self.height));
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
-        if self.graphics_mode == GraphicsOption::G3d {
+        if self.dimensions == Dimensions::Three {
             let camera_3d = Camera3D::new(
                 self.width,
                 self.height,
@@ -494,7 +510,7 @@ impl ApplicationHandler<Graphics3D> for Engine {
             self.graphics = Some(Box::new(
                 pollster::block_on(Graphics3D::new(window.clone(), camera_3d)).unwrap(),
             ));
-        } else if self.graphics_mode == GraphicsOption::G2d {
+        } else if self.dimensions == Dimensions::Two {
             let camera_2d = Camera2D::new(self.width, self.height);
             self.graphics = Some(Box::new(
                 pollster::block_on(Graphics2D::new(window.clone(), camera_2d)).unwrap(),

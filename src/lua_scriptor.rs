@@ -2,7 +2,7 @@ use std::fs;
 
 use mlua::prelude::*;
 
-use crate::game_element::CollisionInfo;
+use crate::components_systems::physics_2d::CollisionInfo;
 
 pub struct LuaScriptor {
     lua: Lua,
@@ -70,7 +70,7 @@ impl LuaExtendedExecutor {
         return lua_func;
     }
 
-    pub fn rust_collisions_to_lua(
+    pub fn rust_collisions_to_lua_2d(
         &self,
         collisions: Vec<CollisionInfo>,
     ) -> Result<LuaTable, mlua::Error> {

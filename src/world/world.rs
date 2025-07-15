@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    game_element::{
-        ActionStateComponent, AnimationComponent, ColliderComponent, Entity, FlipComponent,
-        SpriteSheetComponent, TransformComponent,
+    components_systems::{
+        physics_2d::{ColliderComponent, FlipComponent, TransformComponent},
+        physics_3d, ActionStateComponent, AnimationComponent, Entity, SpriteSheetComponent,
     },
     graphics_2d::{RenderElement2D, RenderQueue2D},
     graphics_3d::{RenderElement, RenderQueue},
@@ -14,9 +14,11 @@ pub struct World {
     next_id: u32,
     pub animations: HashMap<Entity, AnimationComponent>,
     pub sprite_sheets: HashMap<Entity, SpriteSheetComponent>,
-    pub transforms: HashMap<Entity, TransformComponent>,
+    pub transforms_2d: HashMap<Entity, TransformComponent>,
+    pub transforms_3d: HashMap<Entity, physics_3d::TransformComponent>,
     pub action_states: HashMap<Entity, ActionStateComponent>,
-    pub colliders: HashMap<Entity, ColliderComponent>,
+    pub colliders_2d: HashMap<Entity, ColliderComponent>,
+    pub colliders_3d: HashMap<Entity, physics_3d::ColliderComponent>,
     pub flips: HashMap<Entity, FlipComponent>,
 }
 
@@ -24,11 +26,13 @@ impl World {
     pub fn new() -> Self {
         Self {
             next_id: 0,
-            transforms: HashMap::new(),
+            transforms_2d: HashMap::new(),
+            transforms_3d: HashMap::new(),
             action_states: HashMap::new(),
             animations: HashMap::new(),
             sprite_sheets: HashMap::new(),
-            colliders: HashMap::new(),
+            colliders_2d: HashMap::new(),
+            colliders_3d: HashMap::new(),
             flips: HashMap::new(),
         }
     }
@@ -42,7 +46,7 @@ impl World {
     pub fn extract_render_queue(&self) -> RenderQueue {
         let mut elements = Vec::new();
         for (entity, animation) in &self.animations {
-            if let Some(transform_component) = self.transforms.get(entity) {
+            if let Some(transform_component) = self.transforms_3d.get(entity) {
                 let uv_coords = animation.current_frame.uv_coords;
                 let flip = self
                     .flips
@@ -61,7 +65,11 @@ impl World {
                     )
                     .expect("Sprite Sheets not found");
                 elements.push(RenderElement {
-                    position: transform_component.position,
+                    position: [
+                        transform_component.position[0],
+                        transform_component.position[1],
+                        0.0,
+                    ],
                     size: transform_component.size,
                     texture: sprite.texture.clone(),
                     texture_id: sprite.texture_id.clone(),
@@ -79,7 +87,7 @@ impl World {
         let mut elements = Vec::new();
 
         for (entity, animation) in self.animations.iter() {
-            if let Some(transform) = self.transforms.get(entity) {
+            if let Some(transform) = self.transforms_2d.get(entity) {
                 let uv_coords = animation.current_frame.uv_coords;
                 let flip = self
                     .flips

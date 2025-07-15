@@ -56,7 +56,7 @@ pub enum CompareFunction {
 #[derive(Debug, Clone)]
 pub struct RenderElement {
     pub position: [f32; 3],
-    pub size: [f32; 2],
+    pub size: [f32; 3],
     pub texture: Texture,
     pub texture_id: String,
     pub uv_coords: [[f32; 2]; 4],
@@ -360,7 +360,7 @@ impl Graphics3D {
     }
 
     fn build_vertices(element: &RenderElement) -> [Vertex; 4] {
-        let [w, h] = element.size;
+        let [w, h, _z] = element.size;
         let [x, y, _z] = element.position;
         // Apply flipping scale
         let flip_x = if element.flip_x { -1.0 } else { 1.0 };
