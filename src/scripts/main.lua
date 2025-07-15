@@ -5,13 +5,14 @@ local pretty_print = require("pretty_print")
 require("ghost")
 require("dummy")
 require("game_asset_builders")
+local new_skelly = require("skelly")
 
-pretty_print(DEATH)
+math.randomseed(os.time())
 
 STATE = {
 	input_enabled = true,
 	input_disable_time = 0,
-	speed = 1000.0,
+	speed = 500.0,
 	player = -1,
 	characters = {},
 	controller = ControllerBuilder():key("W", "Up"):key("S", "Down"):key("A", "MoveLeft"):key("D", "MoveRight"):build(),
@@ -56,9 +57,24 @@ function load()
 		:build()
 
 	engine.configure_camera(camera_config)
-
 	STATE.player = engine.create_character(DEATH)
-	STATE.player = engine.create_character(DEATH)
+	for _i = 1, 10 do
+		local x = math.random(10, 20)
+		local y = math.random(10, 20)
+		local flip_x = math.random(0, 1)
+		local flip_y = math.random(0, 1)
+		if flip_x == 1 then
+			y = y * -1
+		end
+		if flip_y == 1 then
+			x = x * -1
+		end
+		print("HMM", x, y)
+		local s = new_skelly(x, y)
+		pretty_print(s)
+		local new_id = engine.create_character(s)
+		STATE.characters[new_id] = s
+	end
 
 	return {
 		assets = {},
@@ -71,25 +87,19 @@ function on_entity_idle(entities)
 		engine.set_state(entity, "Idle")
 	end
 end
-
 function on_collision(collisions)
-	local bounce_speed = 100.0 -- adjust to your desired bounce magnitude
-	local push = 1.0 -- tweak this constant
+	local acceleration = 1.0
+	local bounce_speed = 1.0
 
 	for _i, collision in ipairs(collisions) do
 		local a_id = collision.entity_a
 		local b_id = collision.entity_b
 
-		-- Compute collision normal (from B to A)
 		local normal_x = collision.normal[1]
 		local normal_y = collision.normal[2]
 		local length = math.sqrt(normal_x ^ 2 + normal_y ^ 2)
 
-		local sep_x = normal_x * push
-		local sep_y = normal_y * push
-
 		if length == 0 then
-			-- Entities perfectly overlapping, pick arbitrary normal
 			normal_x = 1
 			normal_y = 0
 		else
@@ -97,22 +107,43 @@ function on_collision(collisions)
 			normal_y = normal_y / length
 		end
 
-		print(a_id, b_id, STATE.player)
-		if a_id == STATE.player then
-			-- Redirect entity A with velocity bouncing away along normal
-			print("one")
-			engine.redirect(a_id, normal_x * bounce_speed, normal_y * bounce_speed, sep_x, sep_y)
+		local pos_a = collision.next_pos_a
+		local pos_b = collision.next_pos_b
+		local size_a = collision.a_size
+		local size_b = collision.b_size
+
+		local delta_x = pos_a[1] - pos_b[1]
+		local delta_y = pos_a[2] - pos_b[2]
+
+		local half_a_x = size_a[1] * 0.5
+		local half_a_y = size_a[2] * 0.5
+		local half_b_x = size_b[1] * 0.5
+		local half_b_y = size_b[2] * 0.5
+
+		local proj_a = math.abs(half_a_x * normal_x) + math.abs(half_a_y * normal_y)
+		local proj_b = math.abs(half_b_x * normal_x) + math.abs(half_b_y * normal_y)
+
+		local delta_proj = delta_x * normal_x + delta_y * normal_y
+
+		local penetration = proj_a + proj_b - math.abs(delta_proj)
+
+		if penetration > 0 then
+			local sep_x = normal_x * penetration
+			local sep_y = normal_y * penetration
+
+			if a_id == STATE.player then
+				engine.redirect(a_id, normal_x * bounce_speed, normal_y * bounce_speed, sep_x, sep_y, acceleration)
+				engine.set_state(STATE.player, "Idle")
+				STATE.input_enabled = false
+				start_input_reenable_timer(0.3)
+			end
+			if b_id == STATE.player then
+				engine.redirect(b_id, -normal_x * bounce_speed, -normal_y * bounce_speed, -sep_x, -sep_y, acceleration)
+				engine.set_state(STATE.player, "Idle")
+				STATE.input_enabled = false
+				start_input_reenable_timer(0.3)
+			end
 		end
-		if b_id == STATE.player then
-			print("two")
-			-- Optionally redirect entity B if dynamic, bounce opposite normal
-			engine.redirect(b_id, -normal_x * bounce_speed, -normal_y * bounce_speed, -sep_x, -sep_y)
-		end
-		engine.set_state(STATE.player, "Idle")
-		STATE.input_enabled = false
-		STATE.input_enabled = false
-		-- Optionally start a timer to re-enable input after delay
-		start_input_reenable_timer(0.3) -- re-enable after 1 second
 	end
 end
 

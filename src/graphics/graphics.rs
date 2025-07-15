@@ -358,13 +358,16 @@ impl Graphics {
 
     fn build_vertices(element: &RenderElement) -> [Vertex; 4] {
         let [w, h] = element.size;
-        let [x, y, z] = element.position;
+        let [x, y, _z] = element.position;
         // Apply flipping scale
         let flip_x = if element.flip_x { -1.0 } else { 1.0 };
         let flip_y = if element.flip_y { -1.0 } else { 1.0 };
 
         let hw = w / 2.0 * flip_x;
         let hh = h / 2.0 * flip_y;
+
+        // OVERRIDE Z FOR NOW
+        let z = y / -100000.0;
 
         let positions = [
             [x - hw, y + hh, z], // top-left

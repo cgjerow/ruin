@@ -183,8 +183,24 @@ impl Engine {
         transform_system_add_acceleration(&mut self.world, Entity(id), dx, dy);
     }
 
-    fn redirect(&mut self, id: u32, dx: f32, dy: f32, sep_x: f32, sep_y: f32) {
-        transform_system_redirect(&mut self.world, Entity(id), dx, dy, sep_x, sep_y);
+    fn redirect(
+        &mut self,
+        id: u32,
+        dx: f32,
+        dy: f32,
+        sep_x: f32,
+        sep_y: f32,
+        acceleration_mod: f32,
+    ) {
+        transform_system_redirect(
+            &mut self.world,
+            Entity(id),
+            dx,
+            dy,
+            sep_x,
+            sep_y,
+            acceleration_mod,
+        );
     }
 
     fn set_state(&mut self, id: u32, state: String) {
@@ -281,7 +297,7 @@ impl Engine {
             entity.clone(),
             crate::game_element::ColliderComponent {
                 offset: [0.0, 0.0, 0.0],
-                size: [width * 0.9, height * 0.9, 0.0],
+                size: [width * 0.6, height * 0.6, 0.0],
                 is_solid: true,
             },
         );
@@ -411,9 +427,9 @@ impl Engine {
             .lua_context
             .lua
             .create_function(
-                move |_, (id, dx, dy, sep_x, sep_y): (u32, f32, f32, f32, f32)| {
+                move |_, (id, dx, dy, sep_x, sep_y, a): (u32, f32, f32, f32, f32, f32)| {
                     let engine = unsafe { &mut *self_ptr };
-                    Ok(engine.redirect(id, dx, dy, sep_x, sep_y))
+                    Ok(engine.redirect(id, dx, dy, sep_x, sep_y, a))
                 },
             )
             .expect("Could not create function");

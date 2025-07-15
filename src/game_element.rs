@@ -137,15 +137,20 @@ pub fn transform_system_redirect(
     dy: f32,
     sep_x: f32,
     sep_y: f32,
+    acceleration_mod: f32,
 ) {
     if let Some(transform) = world.transforms.get_mut(&id) {
+        println!(
+            "COLLISION: {:?} {:?} {:?} {:?} {:?}",
+            dx, dy, sep_x, sep_y, acceleration_mod
+        );
         // Apply bounce velocity
         transform.velocity[0] = dx;
         transform.velocity[1] = dy;
 
         // Clear current acceleration
-        transform.acceleration[0] = 0.0;
-        transform.acceleration[1] = 0.0;
+        transform.acceleration[0] = dx * acceleration_mod;
+        transform.acceleration[1] = dy * acceleration_mod;
 
         // Apply small separation offset
         transform.position[0] += sep_x;
@@ -321,6 +326,8 @@ pub struct ColliderComponent {
 pub struct CollisionInfo {
     pub entity_a: Entity,
     pub entity_b: Entity,
+    pub a_size: [f32; 2],
+    pub b_size: [f32; 2],
     pub next_pos_a: [f32; 3],
     pub next_pos_b: [f32; 3],
     pub velocity_a: [f32; 3],
@@ -348,10 +355,9 @@ pub fn collision_system(
                         other_next_transform,
                         other_collider,
                     ) {
-                        // Compute collision normal from A to B
-                        let dx = other_next_transform.position[0] - next_transform.position[0];
-                        let dy = other_next_transform.position[1] - next_transform.position[1];
-                        let dz = other_next_transform.position[2] - next_transform.position[2];
+                        let dx = next_transform.position[0] - other_next_transform.position[0];
+                        let dy = next_transform.position[1] - other_next_transform.position[1];
+                        let dz = next_transform.position[2] - other_next_transform.position[2];
                         let mag = (dx * dx + dy * dy + dz * dz).sqrt();
 
                         let normal = if mag != 0.0 {
@@ -363,6 +369,8 @@ pub fn collision_system(
                         collisions.push(CollisionInfo {
                             entity_a: *entity,
                             entity_b: *other_entity,
+                            a_size: next_transform.size,
+                            b_size: other_next_transform.size,
                             next_pos_a: next_transform.position,
                             next_pos_b: other_next_transform.position,
                             velocity_a: next_transform.velocity,
