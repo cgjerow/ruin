@@ -1,5 +1,6 @@
 #[macro_use]
 mod debug;
+mod bitmaps;
 mod camera_2d;
 mod camera_3d;
 mod components_systems;

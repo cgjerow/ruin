@@ -1,3 +1,4 @@
+use crate::bitmaps::vecbool_to_u8;
 use crate::camera_2d::Camera2D;
 use crate::camera_3d::{Camera3D, CameraAction};
 use crate::components_systems::physics_2d::{
@@ -288,6 +289,20 @@ impl Engine {
         let _depth: f32 = lua_element.get("depth").unwrap_or(1.0);
         let health: u16 = lua_element.get("total_health").unwrap_or(10);
 
+        let masks = LuaExtendedExecutor::table_to_vec::<bool>(
+            lua_element
+                .get("masks")
+                .unwrap_or(self.lua_context.create_table()),
+        )
+        .unwrap();
+
+        let layers = LuaExtendedExecutor::table_to_vec::<bool>(
+            lua_element
+                .get("layers")
+                .unwrap_or(self.lua_context.create_table()),
+        )
+        .unwrap();
+
         let animations: mlua::Table = lua_element
             .get("animations")
             .unwrap_or(self.lua_context.create_table());
@@ -348,6 +363,8 @@ impl Engine {
                     offset: [0.0, 0.0],
                     size: [width * 0.6, height * 0.6],
                     is_solid: true,
+                    masks: vecbool_to_u8(masks),
+                    layers: vecbool_to_u8(layers),
                 },
             );
             self.world.health_bars.insert(
@@ -622,11 +639,6 @@ impl ApplicationHandler<Graphics3D> for Engine {
                 state: _,
                 button: _,
             } => {
-                let graphics = match &mut self.graphics {
-                    Some(canvas) => canvas,
-                    None => return,
-                };
-                // graphics.set_background(random_color());
                 self.redraw();
             }
             WindowEvent::CursorMoved { position, .. } => {

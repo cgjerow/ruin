@@ -115,4 +115,8 @@ impl LuaExtendedExecutor {
 
         Ok(lua_table)
     }
+
+    pub fn table_to_vec<T: mlua::FromLua>(table: LuaTable) -> Result<Vec<T>, mlua::Error> {
+        table.sequence_values::<T>().collect()
+    }
 }

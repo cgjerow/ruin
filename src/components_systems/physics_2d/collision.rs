@@ -10,6 +10,8 @@ pub struct ColliderComponent {
     pub offset: [f32; 2],
     pub size: [f32; 2],
     pub is_solid: bool,
+    pub masks: u8,
+    pub layers: u8,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -75,13 +77,14 @@ pub fn collision_system(
     collisions
 }
 
+// Simple AABB Collision detection
 pub fn is_colliding(
     a_transform: &TransformComponent,
     a_collider: &ColliderComponent,
     b_transform: &TransformComponent,
     b_collider: &ColliderComponent,
 ) -> bool {
-    // Assuming position is center of entity and size is width/height/depth
+    // Assuming position is center of entity and size is width/height
     let a_min = [
         a_transform.position[0] - a_collider.size[1] / 2.0,
         a_transform.position[1] - a_collider.size[1] / 2.0,
@@ -100,7 +103,6 @@ pub fn is_colliding(
         b_transform.position[1] + b_collider.size[1] / 2.0,
     ];
 
-    // Check for overlap on all 3 axes (X, Y, Z)
     let overlap_x = a_min[0] <= b_max[0] && a_max[0] >= b_min[0];
     let overlap_y = a_min[1] <= b_max[1] && a_max[1] >= b_min[1];
 
