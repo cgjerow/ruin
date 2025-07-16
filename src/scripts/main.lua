@@ -40,6 +40,7 @@ end
 
 function start_input_reenable_timer(seconds)
 	if not STATE.input_disable_time or STATE.input_disable_time < seconds then
+		STATE.input_enabled = false
 		STATE.input_disable_time = seconds
 	end
 end
@@ -201,7 +202,6 @@ function on_collision(collisions)
 							acceleration
 						)
 						set_state(STATE.player_id, GLOBALS.ACTIONS.Idle)
-						STATE.input_enabled = false
 						start_input_reenable_timer(0.3)
 					end
 					if STATE.entities[b_id].on_collision == "bounce" then
@@ -228,7 +228,6 @@ function on_collision(collisions)
 							acceleration
 						)
 						set_state(STATE.player_id, GLOBALS.ACTIONS.Idle)
-						STATE.input_enabled = false
 						start_input_reenable_timer(0.3)
 					end
 					if STATE.entities[a_id].on_collision == "bounce" then
@@ -260,7 +259,6 @@ function on_collision(collisions)
 						if dead == true then
 							set_state(STATE.player_id, GLOBALS.ACTIONS.Dying)
 							STATE.dead = true
-							STATE.input_enabled = false
 							start_input_reenable_timer(100)
 						end
 					end
@@ -285,9 +283,10 @@ function update(dt)
 	end
 
 	if STATE.controller:is_pressed("Dash") then
+		start_input_reenable_timer(0.3)
 		local dash = STATE.controller:get_state("Dash")
 		pretty_print(dash.mouse_loc)
-		engine.redirect_to(STATE.player_id, dash.mouse_loc.x, dash.mouse_loc.y, 1000, 0)
+		engine.redirect_to(STATE.player_id, dash.mouse_loc.x, dash.mouse_loc.y, 3000, 0)
 	end
 	if STATE.controller:is_pressed("Up") then
 		dy = dy + 1
