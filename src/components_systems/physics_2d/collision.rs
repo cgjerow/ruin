@@ -36,23 +36,12 @@ pub fn collision_system(
     for (a, next_transform) in next_transforms.iter() {
         if let Some(a_collider) = world.colliders_2d.get(a) {
             for (b, b_collider) in world.colliders_2d.iter() {
-                /*
-                println!("{:?} {:?}", a, b);
-                println!("{:#010b} {:#010b}", a_collider.masks, b_collider.layers); // prints: 0b00000101 (5)
-                println!("{:#010b}", a_collider.masks & b_collider.layers);
-                println!("{:#010b} ({})", a_collider.masks, a_collider.layers); // prints: 0b00000101 (5)
-                */
                 if a == b || a_collider.masks & b_collider.layers == 0 {
                     continue;
                 }
                 if let Some(other_next_transform) = next_transforms.get(b) {
-                    if is_colliding(next_transform, a_collider, other_next_transform, b_collider) {
-                        println!("{:?} {:?}", a, b);
-                        /*
-                                        println!("{:#010b} {:#010b}", a_collider.masks, b_collider.layers); // prints: 0b00000101 (5)
-                                        println!("{:#010b}", a_collider.masks & b_collider.layers);
-                                        println!("{:#010b} ({})", a_collider.masks, a_collider.layers); // prints: 0b00000101 (5)
-                        */
+                    if aabb_intersects(next_transform, a_collider, other_next_transform, b_collider)
+                    {
                         let dx = next_transform.position[0] - other_next_transform.position[0];
                         let dy = next_transform.position[1] - other_next_transform.position[1];
                         let mag = (dx * dx + dy * dy).sqrt();
@@ -79,12 +68,10 @@ pub fn collision_system(
             }
         }
     }
-
     collisions
 }
 
-// Simple AABB Collision detection
-pub fn is_colliding(
+pub fn aabb_intersects(
     a_transform: &TransformComponent,
     a_collider: &ColliderComponent,
     b_transform: &TransformComponent,

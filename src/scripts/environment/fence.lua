@@ -6,6 +6,7 @@ local function new_fence(x, y)
 		:add_animation(GLOBALS.ACTIONS.Idle, load_aseprite_animation("fence", "arena/", "fence.json"))
 		:size(2, 2)
 		:position(x, y)
+		:collider_size_modifier(3, 3)
 		:build()
 end
 

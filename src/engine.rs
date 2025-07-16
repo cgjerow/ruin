@@ -31,7 +31,8 @@ static SAFETY_MAX_FOR_DEV: u64 = 10000;
 
 pub struct Engine {
     player: Entity,
-    mouse_pos: [f32; 2],
+    mouse_pos: [f32; 2], // TODO!!!
+    //
     window: Option<Arc<Window>>,
     graphics: Option<Box<dyn Graphics>>,
     camera_mode: CameraOption,
@@ -39,6 +40,7 @@ pub struct Engine {
     count: u64,
     #[allow(dead_code)]
     fps_specified: bool,
+    physics_iterations_per_frame: u8,
     target_rate: Option<Duration>,
     last_frame: Instant,
     debugger: Debug,
@@ -92,6 +94,7 @@ impl Engine {
             count: 0,
             fps_specified: fps_opt != None,
             target_rate: target_rate,
+            physics_iterations_per_frame: 4,
             last_frame: Instant::now() - target_rate.unwrap_or_default(),
             asset_cache: HashMap::new(),
             width: config.width,
@@ -155,21 +158,27 @@ impl Engine {
         let _ = update.call::<()>(dt32);
 
         if self.dimensions == Dimensions::Two {
-            let next_transforms =
-                physics_2d::transform_system_calculate_intended_position(&self.world, dt32);
-            let collisions = physics_2d::collision_system(&self.world, &next_transforms);
-            let collisions_table = self
-                .lua_context
-                .rust_collisions_to_lua_2d(collisions)
-                .unwrap();
+            let incremented_dt = dt32 / self.physics_iterations_per_frame as f32;
+            for _i in 0..self.physics_iterations_per_frame {
+                let next_transforms = physics_2d::transform_system_calculate_intended_position(
+                    &self.world,
+                    incremented_dt,
+                );
+                let collisions = physics_2d::collision_system(&self.world, &next_transforms);
+                let collisions_table = self
+                    .lua_context
+                    .rust_collisions_to_lua_2d(collisions)
+                    .unwrap();
 
-            self.lua_context
-                .get_function("on_collision")
-                .call::<()>(collisions_table)
-                .expect("Error handling collisions");
+                self.lua_context
+                    .get_function("on_collision")
+                    .call::<()>(collisions_table)
+                    .expect("Error handling collisions");
 
-            let transform_notices = physics_2d::transform_system_physics(&mut self.world, dt32);
-            self.on_entity_idle(transform_notices.idled);
+                let transform_notices =
+                    physics_2d::transform_system_physics(&mut self.world, incremented_dt);
+                self.on_entity_idle(transform_notices.idled);
+            }
 
             if self.camera_mode == CameraOption::Follow {
                 self.update_camera_follow(&self.player.clone());
@@ -565,7 +574,7 @@ impl Engine {
         let _ = self.lua_context.get_function("keyboard_event").call::<()>((
             keycode_to_str(key),
             is_pressed,
-            self.mouse_pos,
+            self.screen_to_world(self.mouse_pos),
         ));
     }
 }
@@ -653,7 +662,7 @@ impl ApplicationHandler<Graphics3D> for Engine {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 // Update mouse position
-                self.mouse_pos = self.screen_to_world([position.x as f32, position.y as f32]);
+                self.mouse_pos = [position.x as f32, position.y as f32];
             }
             WindowEvent::RedrawRequested => {
                 let graphics = match &mut self.graphics {

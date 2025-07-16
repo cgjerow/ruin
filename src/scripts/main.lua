@@ -17,7 +17,13 @@ STATE = {
 	player_id = -1,
 	entities = {},
 	untargetable = {},
-	controller = ControllerBuilder():key("SPACE", "Dash"):key("W", "Up"):key("S", "Down"):key("A", "MoveLeft"):key("D", "MoveRight"):build(),
+	controller = ControllerBuilder()
+			:key("SPACE", "Dash")
+			:key("W", "Up")
+			:key("S", "Down")
+			:key("A", "MoveLeft")
+			:key("D", "MoveRight")
+			:build(),
 }
 
 function table.clone(tbl)
@@ -59,54 +65,60 @@ function load()
 	death.id = STATE.player_id
 	STATE.entities[STATE.player_id] = death
 
-	for i = 0, 50 do
-		if i % 2 == 0 then
-			goto continue
+	local build_skellys = true
+	if build_skellys then
+		for i = 0, 50 do
+			if i % 2 == 0 then
+				goto continue
+			end
+			local fence = new_fence(i - 25, -25)
+			fence.on_player_collision = "block"
+			fence.on_collision = ""
+			fence.id = engine.create_element(fence)
+			STATE.entities[fence.id] = fence
+
+			fence = new_fence(i - 25, 25)
+			fence.on_player_collision = "block"
+			fence.on_collision = ""
+			fence.id = engine.create_element(fence)
+			STATE.entities[fence.id] = fence
+
+			fence = new_fence(-25, i - 25)
+			fence.on_player_collision = "block"
+			fence.on_collision = ""
+			fence.id = engine.create_element(fence)
+			STATE.entities[fence.id] = fence
+
+			fence = new_fence(25, i - 25)
+			fence.on_player_collision = "block"
+			fence.on_collision = ""
+			fence.id = engine.create_element(fence)
+			STATE.entities[fence.id] = fence
+			::continue::
 		end
-		local fence = new_fence(i - 25, -25)
-		fence.on_player_collision = "block"
-		fence.on_collision = ""
-		fence.id = engine.create_element(fence)
-		STATE.entities[fence.id] = fence
-
-		fence = new_fence(i - 25, 25)
-		fence.on_player_collision = "block"
-		fence.on_collision = ""
-		fence.id = engine.create_element(fence)
-		STATE.entities[fence.id] = fence
-
-		fence = new_fence(-25, i - 25)
-		fence.on_player_collision = "block"
-		fence.on_collision = ""
-		fence.id =  engine.create_element(fence)
-		STATE.entities[fence.id] = fence
-
-		fence = new_fence(25, i - 25)
-		fence.on_player_collision = "block"
-		fence.on_collision = ""
-		fence.id = engine.create_element(fence)
-		STATE.entities[fence.id] = fence
-		::continue::
 	end
 
-	for _i = 1, 10 do
-		local x = math.random(10, 20)
-		local y = math.random(10, 20)
-		local flip_x = math.random(0, 1)
-		local flip_y = math.random(0, 1)
-		if flip_x == 1 then
-			y = y * -1
+	local build_walls = true
+	if build_walls then
+		for _i = 1, 10 do
+			local x = math.random(10, 20)
+			local y = math.random(10, 20)
+			local flip_x = math.random(0, 1)
+			local flip_y = math.random(0, 1)
+			if flip_x == 1 then
+				y = y * -1
+			end
+			if flip_y == 1 then
+				x = x * -1
+			end
+			local s = new_skelly(x, y)
+			-- s.is_pc = true
+			s.id = engine.create_element(s)
+			s.on_player_collision = "bounce"
+			s.on_collision = "bounce"
+			STATE.entities[s.id] = s
+			-- STATE.player = new_id
 		end
-		if flip_y == 1 then
-			x = x * -1
-		end
-		local s = new_skelly(x, y)
-		-- s.is_pc = true
-		s.id = engine.create_element(s)
-		s.on_player_collision = "bounce"
-		s.on_collision = "bounce"
-		STATE.entities[s.id] = s
-		-- STATE.player = new_id
 	end
 
 	return {
@@ -176,7 +188,7 @@ function on_collision(collisions)
 
 							-- Stop player's velocity along collision normal
 							set_state(STATE.player_id, GLOBALS.ACTIONS.Idle)
-							engine.redirect(a_id, 0, 0, sep_x, sep_y, 0)
+							engine.redirect(a_id, 0, 0, 0, 0, 0)
 						end
 					end
 					if STATE.entities[b_id].on_player_collision == "bounce" then
@@ -231,10 +243,16 @@ function on_collision(collisions)
 						set_state(a_id, GLOBALS.ACTIONS.Idle)
 					end
 				end
-				if (STATE.entities[a_id] and STATE.entities[a_id].layers[GLOBALS.MASKS_AND_LAYERS.Enemy]) or
-						(STATE.entities[b_id] and STATE.entities[b_id].layers[GLOBALS.MASKS_AND_LAYERS.Enemy]) then
-					if not ((STATE.untargetable[a_id] and STATE.untargetable[a_id] > 0) or
-								(STATE.untargetable[b_id] and STATE.untargetable[b_id] > 0)) then
+				if
+						(STATE.entities[a_id] and STATE.entities[a_id].layers[GLOBALS.MASKS_AND_LAYERS.Enemy])
+						or (STATE.entities[b_id] and STATE.entities[b_id].layers[GLOBALS.MASKS_AND_LAYERS.Enemy])
+				then
+					if
+							not (
+								(STATE.untargetable[a_id] and STATE.untargetable[a_id] > 0)
+								or (STATE.untargetable[b_id] and STATE.untargetable[b_id] > 0)
+							)
+					then
 						STATE.untargetable[STATE.player_id] = 1
 						print("DAMAGE")
 						local dead = engine.damage(STATE.player_id, 2)
@@ -269,13 +287,7 @@ function update(dt)
 	if STATE.controller:is_pressed("Dash") then
 		local dash = STATE.controller:get_state("Dash")
 		pretty_print(dash.mouse_loc)
-		engine.redirect_to(
-			STATE.player_id,
-			dash.mouse_loc.x,
-			dash.mouse_loc.y,
-			1000,
-			0
-		)
+		engine.redirect_to(STATE.player_id, dash.mouse_loc.x, dash.mouse_loc.y, 1000, 0)
 	end
 	if STATE.controller:is_pressed("Up") then
 		dy = dy + 1
