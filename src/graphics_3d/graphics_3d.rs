@@ -1,4 +1,4 @@
-use cgmath::{Point3, Vector3};
+use cgmath::{EuclideanSpace, Point3, Vector3};
 use image::DynamicImage;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -555,6 +555,13 @@ impl Graphics for Graphics3D {
 
     fn update_camera(&mut self) {
         self.update_camera();
+    }
+
+    fn get_camera_info(&self) -> crate::graphics::CameraInfo {
+        return crate::graphics::CameraInfo {
+            zoom: 1.0,
+            position: [0.0, 0.0, 0.0],
+        };
     }
 
     fn set_background(&mut self, color: wgpu::Color) {

@@ -2,14 +2,7 @@ use crate::{components_systems::Entity, world::World};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ActionState {
-    Idle,
-    Walking,
-    Running,
-    Jumping,
-    Landing,
-    Dying,
-    Colliding,
-    Custom(String),
+    Custom(u8),
 }
 
 #[derive(Debug, Clone)]
@@ -17,7 +10,13 @@ pub struct ActionStateComponent {
     pub state: ActionState,
 }
 
-impl From<String> for ActionState {
+impl From<u8> for ActionState {
+    fn from(i: u8) -> Self {
+        match i {
+            other => ActionState::Custom(other),
+        }
+    }
+    /*
     fn from(s: String) -> Self {
         match s.as_str() {
             "Idle" => ActionState::Idle,
@@ -30,6 +29,7 @@ impl From<String> for ActionState {
             other => ActionState::Custom(other.to_string()),
         }
     }
+    */
 }
 
 pub fn set_entity_state(world: &mut World, entity: Entity, state: ActionState) {

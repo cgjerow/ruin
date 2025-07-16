@@ -1,10 +1,11 @@
 ---@diagnostic disable: unused-function, lowercase-global
----
-require("main_character")
-local pretty_print = require("pretty_print")
 require("game_asset_builders")
-local new_skelly = require("skelly")
-local new_fence = require("fence")
+local pretty_print = require("pretty_print")
+
+-- Game Elements
+local summon_death = require("characters.death")
+local new_skelly = require("characters.skelly")
+local new_fence = require("environment.fence")
 
 math.randomseed(os.time())
 
@@ -13,10 +14,10 @@ STATE = {
 	input_enabled = true,
 	input_disable_time = 0,
 	speed = 500.0,
-	player = -1,
+	player_id = -1,
 	entities = {},
 	untargetable = {},
-	controller = ControllerBuilder():key("W", "Up"):key("S", "Down"):key("A", "MoveLeft"):key("D", "MoveRight"):build(),
+	controller = ControllerBuilder():key("SPACE", "Dash"):key("W", "Up"):key("S", "Down"):key("A", "MoveLeft"):key("D", "MoveRight"):build(),
 }
 
 function table.clone(tbl)
@@ -37,82 +38,53 @@ function start_input_reenable_timer(seconds)
 	end
 end
 
-function keyboard_event(key, is_pressed)
+function keyboard_event(key, is_pressed, mouse_position)
 	key = string.upper(key)
-	STATE.controller:update(key, is_pressed)
+	STATE.controller:update(key, is_pressed, mouse_position)
 end
 
 function set_state(id, state)
-	if not id == STATE.player or not STATE.dead then
+	if not id == STATE.player_id or not STATE.dead then
 		engine.set_state(id, state)
 	end
 end
 
 function load()
-	camera_config = CameraBuilder()
-			:mode(Enums.CameraMode.Orthographic2D)
-			:speed(20.0)
-			:locked(true)
-			:key("W", "MoveForward")
-			:key("S", "MoveBackward")
-			:key("A", "MoveLeft")
-			:key("D", "MoveRight")
-			:key("Q", "RollLeft")
-			:key("E", "RollRight")
-			:key("Up", "PitchUp")
-			:key("Down", "PitchDown")
-			:key("Left", "YawLeft")
-			:key("Right", "YawRight")
-			:build()
-
-	engine.configure_camera(camera_config)
-	STATE.player = engine.create_character(DEATH)
-	STATE.entities[STATE.player] = {
-		id = STATE.player,
-		class = "player",
-		on_player_collision = "bounce",
-		on_collision = "bounce",
-	}
+	local death = summon_death(0, 0)
+	death.on_player_collision = "bounce"
+	death.on_collision = "bounce"
+	STATE.player = death
+	STATE.player_id = engine.create_element(death)
+	death.id = STATE.player_id
+	STATE.entities[STATE.player_id] = death
 
 	for i = 0, 50 do
 		if i % 2 == 0 then
 			goto continue
 		end
 		local fence = new_fence(i - 25, -25)
-		local new_id = engine.create_character(fence)
-		STATE.entities[new_id] = {
-			id = new_id,
-			class = "wall",
-			on_player_collision = "block",
-			on_collision = "",
-		}
+		fence.on_player_collision = "block"
+		fence.on_collision = ""
+		fence.id = engine.create_element(fence)
+		STATE.entities[fence.id] = fence
 
 		fence = new_fence(i - 25, 25)
-		new_id = engine.create_character(fence)
-		STATE.entities[new_id] = {
-			id = new_id,
-			class = "wall",
-			on_player_collision = "block",
-			on_collision = "",
-		}
+		fence.on_player_collision = "block"
+		fence.on_collision = ""
+		fence.id = engine.create_element(fence)
+		STATE.entities[fence.id] = fence
 
 		fence = new_fence(-25, i - 25)
-		new_id = engine.create_character(fence)
-		STATE.entities[new_id] = {
-			id = new_id,
-			class = "wall",
-			on_player_collision = "block",
-			on_collision = "",
-		}
+		fence.on_player_collision = "block"
+		fence.on_collision = ""
+		fence.id =  engine.create_element(fence)
+		STATE.entities[fence.id] = fence
 
 		fence = new_fence(25, i - 25)
-		new_id = engine.create_character(fence)
-		STATE.entities[new_id] = {
-			id = new_id,
-			class = "wall",
-			on_player_collision = "block",
-			on_collision = "",
-		}
+		fence.on_player_collision = "block"
+		fence.on_collision = ""
+		fence.id = engine.create_element(fence)
+		STATE.entities[fence.id] = fence
 		::continue::
 	end
 
@@ -129,13 +101,10 @@ function load()
 		end
 		local s = new_skelly(x, y)
 		-- s.is_pc = true
-		local new_id = engine.create_character(s)
-		STATE.entities[new_id] = {
-			id = new_id,
-			class = "enemy",
-			on_player_collision = "bounce",
-			on_collision = "bounce",
-		}
+		s.id = engine.create_element(s)
+		s.on_player_collision = "bounce"
+		s.on_collision = "bounce"
+		STATE.entities[s.id] = s
 		-- STATE.player = new_id
 	end
 
@@ -147,7 +116,7 @@ end
 function on_entity_idle(entities)
 	-- if we need to, update state
 	for _, entity in pairs(entities) do
-		set_state(entity, "Idle")
+		set_state(entity, GLOBALS.ACTIONS.Idle)
 	end
 end
 
@@ -195,8 +164,8 @@ function on_collision(collisions)
 			local sep_x = normal_x * penetration
 			local sep_y = normal_y * penetration
 
-			if a_id == STATE.player or b_id == STATE.player then
-				if a_id == STATE.player then
+			if a_id == STATE.player_id or b_id == STATE.player_id then
+				if a_id == STATE.player_id then
 					if STATE.entities[b_id].on_player_collision == "block" then
 						local penetration_block = proj_a - math.abs(delta_proj)
 						if penetration_block > 0 then
@@ -205,7 +174,7 @@ function on_collision(collisions)
 							sep_y = normal_y * penetration_block * 1.2
 
 							-- Stop player's velocity along collision normal
-							set_state(STATE.player, "Idle")
+							set_state(STATE.player_id, GLOBALS.ACTIONS.Idle)
 							engine.redirect(a_id, 0, 0, sep_x, sep_y, 0)
 						end
 					end
@@ -218,7 +187,7 @@ function on_collision(collisions)
 							sep_y,
 							acceleration
 						)
-						set_state(STATE.player, "Idle")
+						set_state(STATE.player_id, GLOBALS.ACTIONS.Idle)
 						STATE.input_enabled = false
 						start_input_reenable_timer(0.3)
 					end
@@ -231,11 +200,11 @@ function on_collision(collisions)
 							-sep_y,
 							acceleration
 						)
-						set_state(b_id, "Idle")
+						set_state(b_id, GLOBALS.ACTIONS.Idle)
 					end
 				end
 
-				if b_id == STATE.player then
+				if b_id == STATE.player_id then
 					if STATE.entities[a_id].on_player_collision == "bounce" then
 						engine.redirect(
 							b_id,
@@ -245,7 +214,7 @@ function on_collision(collisions)
 							-sep_y,
 							acceleration
 						)
-						set_state(STATE.player, "Idle")
+						set_state(STATE.player_id, GLOBALS.ACTIONS.Idle)
 						STATE.input_enabled = false
 						start_input_reenable_timer(0.3)
 					end
@@ -258,19 +227,19 @@ function on_collision(collisions)
 							sep_y,
 							acceleration
 						)
-						set_state(a_id, "Idle")
+						set_state(a_id, GLOBALS.ACTIONS.Idle)
 					end
 				end
-				if (STATE.entities[a_id] and STATE.entities[a_id].class == "enemy") or
-						(STATE.entities[b_id] and STATE.entities[b_id].class == "enemy") then
+				if (STATE.entities[a_id] and STATE.entities[a_id].layers[GLOBALS.MASKS_AND_LAYERS.Enemy]) or
+						(STATE.entities[b_id] and STATE.entities[b_id].layers[GLOBALS.MASKS_AND_LAYERS.Enemy]) then
 					if not ((STATE.untargetable[a_id] and STATE.untargetable[a_id] > 0) or
 								(STATE.untargetable[b_id] and STATE.untargetable[b_id] > 0)) then
-						STATE.untargetable[STATE.player] = 1
+						STATE.untargetable[STATE.player_id] = 1
 						print("DAMAGE")
-						local dead = engine.damage(STATE.player, 2)
+						local dead = engine.damage(STATE.player_id, 2)
 						print("surely hes dead", dead)
 						if dead == true then
-							set_state(STATE.player, "Dying")
+							set_state(STATE.player_id, GLOBALS.ACTIONS.Dying)
 							STATE.dead = true
 							STATE.input_enabled = false
 							start_input_reenable_timer(100)
@@ -284,8 +253,8 @@ end
 
 function update(dt)
 	local dx, dy = 0, 0
-	if STATE.untargetable[STATE.player] and STATE.untargetable[STATE.player] > 0 then
-		STATE.untargetable[STATE.player] = STATE.untargetable[STATE.player] - dt
+	if STATE.untargetable[STATE.player_id] and STATE.untargetable[STATE.player_id] > 0 then
+		STATE.untargetable[STATE.player_id] = STATE.untargetable[STATE.player_id] - dt
 	end
 
 	if not STATE.input_enabled then
@@ -296,16 +265,27 @@ function update(dt)
 		return
 	end
 
-	if STATE.controller:get_state("Up") then
+	if STATE.controller:is_pressed("Dash") then
+		local dash = STATE.controller:get_state("Dash")
+		pretty_print(dash.mouse_loc)
+		engine.redirect_to(
+			STATE.player_id,
+			dash.mouse_loc.x,
+			dash.mouse_loc.y,
+			1000,
+			0
+		)
+	end
+	if STATE.controller:is_pressed("Up") then
 		dy = dy + 1
 	end
-	if STATE.controller:get_state("Down") then
+	if STATE.controller:is_pressed("Down") then
 		dy = dy - 1
 	end
-	if STATE.controller:get_state("MoveLeft") then
+	if STATE.controller:is_pressed("MoveLeft") then
 		dx = dx - 1
 	end
-	if STATE.controller:get_state("MoveRight") then
+	if STATE.controller:is_pressed("MoveRight") then
 		dx = dx + 1
 	end
 
@@ -314,10 +294,10 @@ function update(dt)
 	if length > 0 then
 		dx = dx / length
 		dy = dy / length
-		engine.add_acceleration(STATE.player, dx * STATE.speed, dy * STATE.speed)
-		set_state(STATE.player, "Running")
+		engine.add_acceleration(STATE.player_id, dx * STATE.speed, dy * STATE.speed)
+		set_state(STATE.player_id, GLOBALS.ACTIONS.Running)
 		if math.abs(dx) > 0.01 then
-			engine.flip(STATE.player, dx >= 0, false)
+			engine.flip(STATE.player_id, dx >= 0, false)
 		end
 	end
 end

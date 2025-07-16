@@ -379,6 +379,13 @@ impl Graphics for Graphics2D {
         // Handled externally for 2D for now
     }
 
+    fn get_camera_info(&self) -> crate::graphics::CameraInfo {
+        return crate::graphics::CameraInfo {
+            zoom: self.camera.zoom.clone(),
+            position: [self.camera.position[0], self.camera.position[1], 0.0],
+        };
+    }
+
     fn set_background(&mut self, color: Color) {
         self.background_color = color;
     }

@@ -30,6 +30,7 @@ static SAFETY_MAX_FOR_DEV: u64 = 10000;
 
 pub struct Engine {
     player: Entity,
+    mouse_pos: [f32; 2],
     window: Option<Arc<Window>>,
     graphics: Option<Box<dyn Graphics>>,
     camera_mode: CameraOption,
@@ -79,6 +80,7 @@ impl Engine {
         let target_rate = fps_opt.map(|fps| Duration::from_millis(1000 / fps));
 
         Self {
+            mouse_pos: [0.0, 0.0],
             player: Entity(0),
             lua_context: lua_executor,
             window: None,
@@ -197,8 +199,8 @@ impl Engine {
         debug_log!(self.debugger, "Cleaned it? {}", true)
     }
 
-    fn get_window_size(&self) -> (u32, u32) {
-        (self.width, self.height)
+    fn get_window_size(&self) -> [u32; 2] {
+        [self.width, self.height]
     }
 
     fn add_acceleration(&mut self, id: u32, dx: f32, dy: f32) {
@@ -229,11 +231,45 @@ impl Engine {
         }
     }
 
+    fn redirect_to(
+        &mut self,
+        id: u32,
+        target_x: f32,
+        target_y: f32,
+        speed: f32,
+        acceleration: f32,
+    ) {
+        if let Some(pos) = self.get_position_2d(id) {
+            let dir_x = target_x - pos[0];
+            let dir_y = target_y - pos[1];
+            let len = (dir_x * dir_x + dir_y * dir_y).sqrt();
+
+            if len == 0.0 {
+                return; // avoid division by zero
+            }
+
+            let norm_x = dir_x / len;
+            let norm_y = dir_y / len;
+
+            let vel_x = norm_x * speed;
+            let vel_y = norm_y * speed;
+
+            self.redirect(id, vel_x, vel_y, 0.0, 0.0, acceleration);
+        }
+    }
+
+    fn get_position_2d(&self, id: u32) -> Option<[f32; 2]> {
+        if let Some(transform) = self.world.transforms_2d.get(&Entity(id)) {
+            return Some(transform.position);
+        }
+        return None;
+    }
+
     fn damage(&mut self, id: u32, amount: u16) -> bool {
         damage(&mut self.world, &Entity(id), amount)
     }
 
-    fn set_state(&mut self, id: u32, state: String) {
+    fn set_state(&mut self, id: u32, state: u8) {
         set_entity_state(
             &mut self.world,
             Entity(id),
@@ -241,21 +277,18 @@ impl Engine {
         );
     }
 
-    fn create_character(&mut self, character_table: mlua::Table) -> u32 {
-        let state: ActionState = character_table
-            .get("state")
-            .unwrap_or("Idle".to_string())
-            .into();
-        let is_pc: bool = character_table.get("is_pc").unwrap_or(false).into();
-        let x: f32 = character_table.get("x").unwrap_or(0.0);
-        let y: f32 = character_table.get("y").unwrap_or(0.0);
-        let _z: f32 = character_table.get("z").unwrap_or(0.0);
-        let width: f32 = character_table.get("width").unwrap_or(1.0);
-        let height: f32 = character_table.get("height").unwrap_or(1.0);
-        let _depth: f32 = character_table.get("depth").unwrap_or(1.0);
-        let health: u16 = character_table.get("total_health").unwrap_or(10);
+    fn create_element(&mut self, lua_element: mlua::Table) -> u32 {
+        let state: ActionState = lua_element.get("state").unwrap_or(0).into();
+        let is_pc: bool = lua_element.get("is_pc").unwrap_or(false).into();
+        let x: f32 = lua_element.get("x").unwrap_or(0.0);
+        let y: f32 = lua_element.get("y").unwrap_or(0.0);
+        let _z: f32 = lua_element.get("z").unwrap_or(0.0);
+        let width: f32 = lua_element.get("width").unwrap_or(1.0);
+        let height: f32 = lua_element.get("height").unwrap_or(1.0);
+        let _depth: f32 = lua_element.get("depth").unwrap_or(1.0);
+        let health: u16 = lua_element.get("total_health").unwrap_or(10);
 
-        let animations: mlua::Table = character_table
+        let animations: mlua::Table = lua_element
             .get("animations")
             .unwrap_or(self.lua_context.create_table());
 
@@ -267,11 +300,11 @@ impl Engine {
 
         for pair in animations.clone().pairs::<mlua::Value, mlua::Table>() {
             if let Ok((key, tbl)) = pair {
+                let numeric_key =
+                    key.as_u32()
+                        .expect("Numeric key required for Action States") as u8;
                 let (mut animation, sprite_path) = Animation::from_lua_table(tbl);
-                let action_state = ActionState::from(
-                    key.to_string()
-                        .expect("String key required for Action States"),
-                );
+                let action_state = ActionState::from(numeric_key);
 
                 let sprite_id: Entity = self.world.new_entity();
                 let texture = self.get_texture(&sprite_path);
@@ -331,6 +364,31 @@ impl Engine {
         entity.into()
     }
 
+    pub fn screen_to_world(&self, loc: [f32; 2]) -> [f32; 2] {
+        let size = self.get_window_size();
+        let half_screen = [size[0] as f32 * 0.5, size[1] as f32 * 0.5];
+        // Pixel offset from screen center
+        let offset = [loc[0] - half_screen[0], loc[1] - half_screen[1]];
+
+        let graphics = match &self.graphics {
+            Some(canvas) => canvas,
+            None => return [0.0, 0.0],
+        };
+
+        let camera = graphics.get_camera_info();
+        // World units per pixel
+        let units_per_pixel = (camera.zoom * 2.0) / size[1] as f32;
+
+        // Scaled world offset
+        let world_offset = [offset[0] * units_per_pixel, offset[1] * units_per_pixel];
+
+        // Final world position is camera center + offset
+        [
+            camera.position[0] + world_offset[0],
+            camera.position[1] - world_offset[1], // Y is flipped (screen Y-down vs world Y-up)
+        ]
+    }
+
     pub fn configure_camera(&mut self, _config: mlua::Table) -> Result<()> {
         // let config = LuaCameraConfig::from_lua_table(config)?;
         // Create camera
@@ -355,12 +413,12 @@ impl Engine {
                 Ok(engine.get_window_size())
             })
             .expect("Could not create function");
-        let create_character = self
+        let create_element = self
             .lua_context
             .lua
-            .create_function(move |_, character_table: mlua::Table| {
+            .create_function(move |_, element: mlua::Table| {
                 let engine = unsafe { &mut *self_ptr };
-                Ok(engine.create_character(character_table))
+                Ok(engine.create_element(element))
             })
             .expect("Could not create function");
         let configure_camera = self
@@ -397,10 +455,20 @@ impl Engine {
                 },
             )
             .expect("Could not create function");
+        let redirect_to = self
+            .lua_context
+            .lua
+            .create_function(
+                move |_, (id, target_x, target_y, speed, a): (u32, f32, f32, f32, f32)| {
+                    let engine = unsafe { &mut *self_ptr };
+                    Ok(engine.redirect_to(id, target_x, target_y, speed, a))
+                },
+            )
+            .expect("Could not create function");
         let set_state = self
             .lua_context
             .lua
-            .create_function(move |_, (id, state): (u32, String)| {
+            .create_function(move |_, (id, state): (u32, u8)| {
                 let engine = unsafe { &mut *self_ptr };
                 Ok(engine.set_state(id, state))
             })
@@ -428,10 +496,13 @@ impl Engine {
             .set("redirect", redirect)
             .expect("Could not set engine function");
         lua_engine
+            .set("redirect_to", redirect_to)
+            .expect("Could not set engine function");
+        lua_engine
             .set("set_state", set_state)
             .expect("Could not set engine function");
         lua_engine
-            .set("create_character", create_character)
+            .set("create_element", create_element)
             .expect("Could not set engine function");
         lua_engine
             .set("configure_camera", configure_camera)
@@ -464,10 +535,11 @@ impl Engine {
     }
 
     fn call_lua_keyboard_input(&self, key: KeyCode, is_pressed: bool) {
-        let _ = self
-            .lua_context
-            .get_function("keyboard_event")
-            .call::<()>((keycode_to_str(key), is_pressed));
+        let _ = self.lua_context.get_function("keyboard_event").call::<()>((
+            keycode_to_str(key),
+            is_pressed,
+            self.mouse_pos,
+        ));
     }
 }
 
@@ -557,6 +629,10 @@ impl ApplicationHandler<Graphics3D> for Engine {
                 // graphics.set_background(random_color());
                 self.redraw();
             }
+            WindowEvent::CursorMoved { position, .. } => {
+                // Update mouse position
+                self.mouse_pos = self.screen_to_world([position.x as f32, position.y as f32]);
+            }
             WindowEvent::RedrawRequested => {
                 let graphics = match &mut self.graphics {
                     Some(canvas) => canvas,
@@ -576,9 +652,6 @@ impl ApplicationHandler<Graphics3D> for Engine {
                 ..
             } => {
                 match (code, state.is_pressed()) {
-                    (KeyCode::Space, true) => {
-                        self.redraw();
-                    }
                     (KeyCode::Escape, true) => event_loop.exit(),
                     _ => {}
                 };
