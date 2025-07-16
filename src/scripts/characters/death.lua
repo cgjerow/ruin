@@ -8,9 +8,9 @@ local dying = load_aseprite_animation("death_dying", "death/", "death_dying.json
 
 local function summon_death(x, y)
 	return ElementBuilder()
-		:add_mask(GLOBALS.MASKS_AND_LAYERS.Player)
+		:add_layer(GLOBALS.MASKS_AND_LAYERS.Player)
 		:add_mask(GLOBALS.MASKS_AND_LAYERS.Env)
-		:add_layer(GLOBALS.MASKS_AND_LAYERS.Enemy)
+		:add_mask(GLOBALS.MASKS_AND_LAYERS.Enemy)
 		:add_animation(GLOBALS.ACTIONS.Idle, idle)
 		:add_animation(GLOBALS.ACTIONS.Running, running)
 		:add_animation(GLOBALS.ACTIONS.Dying, dying)

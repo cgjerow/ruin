@@ -33,20 +33,26 @@ pub fn collision_system(
 ) -> Vec<CollisionInfo> {
     let mut collisions = Vec::new();
 
-    for (entity, next_transform) in next_transforms.iter() {
-        if let Some(collider) = world.colliders_2d.get(entity) {
-            for (other_entity, other_collider) in world.colliders_2d.iter() {
-                if entity == other_entity {
+    for (a, next_transform) in next_transforms.iter() {
+        if let Some(a_collider) = world.colliders_2d.get(a) {
+            for (b, b_collider) in world.colliders_2d.iter() {
+                /*
+                println!("{:?} {:?}", a, b);
+                println!("{:#010b} {:#010b}", a_collider.masks, b_collider.layers); // prints: 0b00000101 (5)
+                println!("{:#010b}", a_collider.masks & b_collider.layers);
+                println!("{:#010b} ({})", a_collider.masks, a_collider.layers); // prints: 0b00000101 (5)
+                */
+                if a == b || a_collider.masks & b_collider.layers == 0 {
                     continue;
                 }
-
-                if let Some(other_next_transform) = next_transforms.get(other_entity) {
-                    if is_colliding(
-                        next_transform,
-                        collider,
-                        other_next_transform,
-                        other_collider,
-                    ) {
+                if let Some(other_next_transform) = next_transforms.get(b) {
+                    if is_colliding(next_transform, a_collider, other_next_transform, b_collider) {
+                        println!("{:?} {:?}", a, b);
+                        /*
+                                        println!("{:#010b} {:#010b}", a_collider.masks, b_collider.layers); // prints: 0b00000101 (5)
+                                        println!("{:#010b}", a_collider.masks & b_collider.layers);
+                                        println!("{:#010b} ({})", a_collider.masks, a_collider.layers); // prints: 0b00000101 (5)
+                        */
                         let dx = next_transform.position[0] - other_next_transform.position[0];
                         let dy = next_transform.position[1] - other_next_transform.position[1];
                         let mag = (dx * dx + dy * dy).sqrt();
@@ -58,8 +64,8 @@ pub fn collision_system(
                         };
 
                         collisions.push(CollisionInfo {
-                            entity_a: *entity,
-                            entity_b: *other_entity,
+                            entity_a: *a,
+                            entity_b: *b,
                             a_size: next_transform.size,
                             b_size: other_next_transform.size,
                             next_pos_a: next_transform.position,

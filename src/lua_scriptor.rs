@@ -116,7 +116,16 @@ impl LuaExtendedExecutor {
         Ok(lua_table)
     }
 
-    pub fn table_to_vec<T: mlua::FromLua>(table: LuaTable) -> Result<Vec<T>, mlua::Error> {
-        table.sequence_values::<T>().collect()
+    pub fn table_to_vec_8(table: LuaTable) -> [bool; 8] {
+        [
+            table.get::<bool>(0).unwrap_or(false),
+            table.get::<bool>(1).unwrap_or(false),
+            table.get::<bool>(2).unwrap_or(false),
+            table.get::<bool>(3).unwrap_or(false),
+            table.get::<bool>(4).unwrap_or(false),
+            table.get::<bool>(5).unwrap_or(false),
+            table.get::<bool>(6).unwrap_or(false),
+            table.get::<bool>(7).unwrap_or(false),
+        ]
     }
 }

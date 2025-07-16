@@ -289,19 +289,17 @@ impl Engine {
         let _depth: f32 = lua_element.get("depth").unwrap_or(1.0);
         let health: u16 = lua_element.get("total_health").unwrap_or(10);
 
-        let masks = LuaExtendedExecutor::table_to_vec::<bool>(
+        let masks = LuaExtendedExecutor::table_to_vec_8(
             lua_element
                 .get("masks")
                 .unwrap_or(self.lua_context.create_table()),
-        )
-        .unwrap();
+        );
 
-        let layers = LuaExtendedExecutor::table_to_vec::<bool>(
+        let layers = LuaExtendedExecutor::table_to_vec_8(
             lua_element
                 .get("layers")
                 .unwrap_or(self.lua_context.create_table()),
-        )
-        .unwrap();
+        );
 
         let animations: mlua::Table = lua_element
             .get("animations")
