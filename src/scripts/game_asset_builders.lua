@@ -83,6 +83,13 @@ function ElementBuilder()
 	local element = {
 		x = -1000,
 		y = -1000,
+		collision_box = {
+			enabled = true,
+			offset_x = 0,
+			offset_y = 0,
+			size_modifier_x = 1,
+			size_modifier_y = 1,
+		},
 		height = 1,
 		width = 1,
 		health = 0,
@@ -119,6 +126,18 @@ function ElementBuilder()
 	function builder:position(x, y)
 		element.x = x
 		element.y = y
+		return builder
+	end
+
+	function builder:collider_offset(x, y)
+		element.collision_box.offset_x = x
+		element.collision_box.offset_y = y
+		return builder
+	end
+
+	function builder:collider_size_modifier(x, y)
+		element.collision_box.size_modifier_x = x
+		element.collision_box.size_modifier_y = y
 		return builder
 	end
 

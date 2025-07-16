@@ -288,6 +288,9 @@ impl Engine {
         let height: f32 = lua_element.get("height").unwrap_or(1.0);
         let _depth: f32 = lua_element.get("depth").unwrap_or(1.0);
         let health: u16 = lua_element.get("total_health").unwrap_or(10);
+        let collision_box: mlua::Table = lua_element
+            .get("collision_box")
+            .unwrap_or(self.lua_context.create_table());
 
         let masks = LuaExtendedExecutor::table_to_vec_8(
             lua_element
@@ -355,16 +358,25 @@ impl Engine {
                     size: [width, height],
                 },
             );
-            self.world.colliders_2d.insert(
-                entity.clone(),
-                ColliderComponent {
-                    offset: [0.0, 0.0],
-                    size: [width * 0.6, height * 0.6],
-                    is_solid: true,
-                    masks: vecbool_to_u8(masks),
-                    layers: vecbool_to_u8(layers),
-                },
-            );
+
+            if collision_box.get("enabled").unwrap_or(false) {
+                self.world.colliders_2d.insert(
+                    entity.clone(),
+                    ColliderComponent {
+                        offset: [
+                            collision_box.get("offset_x").unwrap_or(0.0),
+                            collision_box.get("offset_y").unwrap_or(0.0),
+                        ],
+                        size: [
+                            width * collision_box.get("size_modifier_x").unwrap_or(1.0),
+                            height * collision_box.get("size_modifier_y").unwrap_or(1.0),
+                        ],
+                        is_solid: true,
+                        masks: vecbool_to_u8(masks),
+                        layers: vecbool_to_u8(layers),
+                    },
+                );
+            }
             self.world.health_bars.insert(
                 entity.clone(),
                 HealthComponent {

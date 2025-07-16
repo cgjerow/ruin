@@ -51,6 +51,7 @@ end
 
 function load()
 	local death = summon_death(0, 0)
+	--pretty_print(death)
 	death.on_player_collision = "bounce"
 	death.on_collision = "bounce"
 	STATE.player = death

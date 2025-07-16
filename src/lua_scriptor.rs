@@ -128,4 +128,35 @@ impl LuaExtendedExecutor {
             table.get::<bool>(7).unwrap_or(false),
         ]
     }
+
+    pub fn pretty_print_table(table: LuaTable, indent: usize) -> Result<String, mlua::Error> {
+        let mut output = String::new();
+        let pad = "  ".repeat(indent);
+
+        for pair in table.pairs::<LuaValue, LuaValue>() {
+            let (key, value) = pair?;
+
+            let key_str = match &key {
+                LuaValue::String(s) => s.to_str()?.to_string(),
+                LuaValue::Integer(i) => i.to_string(),
+                LuaValue::Number(n) => n.to_string(),
+                LuaValue::Boolean(b) => b.to_string(),
+                other => format!("{:?}", other),
+            };
+
+            let value_str = match &value {
+                LuaValue::Table(t) => Self::pretty_print_table(t.clone(), indent + 1)?,
+                LuaValue::String(s) => format!("{:?}", s.to_str()?),
+                LuaValue::Boolean(b) => b.to_string(),
+                LuaValue::Integer(i) => i.to_string(),
+                LuaValue::Number(n) => n.to_string(),
+                LuaValue::Nil => "nil".to_string(),
+                other => format!("{:?}", other),
+            };
+
+            output.push_str(&format!("{}{} = {}\n", pad, key_str, value_str));
+        }
+
+        Ok(output)
+    }
 }

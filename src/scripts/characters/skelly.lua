@@ -10,6 +10,7 @@ local function new_skelly(x, y)
 		:add_animation(GLOBALS.ACTIONS.Idle, load_aseprite_animation("skelly_idle", "skelly/", "skelly_idle.json"))
 		:size(2, 2)
 		:position(x, y)
+		:collider_size_modifier(0.3, 0.3)
 		:build()
 end
 

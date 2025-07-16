@@ -16,6 +16,7 @@ local function summon_death(x, y)
 		:add_animation(GLOBALS.ACTIONS.Dying, dying)
 		:size(2, 2)
 		:position(x, y)
+		:collider_size_modifier(0.8, 0.8)
 		:build()
 end
 
