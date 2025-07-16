@@ -71,7 +71,6 @@ pub fn transform_system_calculate_intended_position(
         let speed = (transform.velocity[0].powi(2) + transform.velocity[1].powi(2)).sqrt();
         let max_speed = 10.0;
         if speed > max_speed {
-            println!("MAX: {:?}", speed);
             let scale = max_speed / speed;
             transform.velocity[0] *= scale;
             transform.velocity[1] *= scale;
@@ -111,10 +110,6 @@ pub fn transform_system_redirect(
     acceleration_mod: f32,
 ) {
     if let Some(transform) = world.transforms_2d.get_mut(&id) {
-        println!(
-            "COLLISION: {:?} {:?} {:?} {:?} {:?}",
-            dx, dy, sep_x, sep_y, acceleration_mod
-        );
         // Apply bounce velocity
         transform.velocity[0] = dx;
         transform.velocity[1] = dy;

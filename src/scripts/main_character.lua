@@ -3,6 +3,7 @@ local pretty_print = require("pretty_print")
 
 local idle = load_aseprite_animation("death_idle", "death/", "death_idle.json")
 local running = load_aseprite_animation("death_running", "death/", "death_running.json")
+local dying = load_aseprite_animation("death_dying", "death/", "death_dying.json")
 
 pretty_print(running)
 
@@ -16,5 +17,6 @@ DEATH = {
 	animations = {
 		Idle = idle,
 		Running = running,
+		Dying = dying,
 	},
 }

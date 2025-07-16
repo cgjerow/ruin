@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use crate::{
     components_systems::{
         physics_2d::{ColliderComponent, FlipComponent, TransformComponent},
-        physics_3d, ActionStateComponent, AnimationComponent, Entity, SpriteSheetComponent,
+        physics_3d, ActionStateComponent, AnimationComponent, Entity, HealthComponent,
+        SpriteSheetComponent,
     },
     graphics_2d::{RenderElement2D, RenderQueue2D},
     graphics_3d::{RenderElement, RenderQueue},
@@ -12,6 +13,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct World {
     next_id: u32,
+    pub health_bars: HashMap<Entity, HealthComponent>,
     pub animations: HashMap<Entity, AnimationComponent>,
     pub sprite_sheets: HashMap<Entity, SpriteSheetComponent>,
     pub transforms_2d: HashMap<Entity, TransformComponent>,
@@ -26,6 +28,7 @@ impl World {
     pub fn new() -> Self {
         Self {
             next_id: 0,
+            health_bars: HashMap::new(),
             transforms_2d: HashMap::new(),
             transforms_3d: HashMap::new(),
             action_states: HashMap::new(),

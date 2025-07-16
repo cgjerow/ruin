@@ -9,11 +9,13 @@ local new_fence = require("fence")
 math.randomseed(os.time())
 
 STATE = {
+	dead = false,
 	input_enabled = true,
 	input_disable_time = 0,
 	speed = 500.0,
 	player = -1,
 	entities = {},
+	untargetable = {},
 	controller = ControllerBuilder():key("W", "Up"):key("S", "Down"):key("A", "MoveLeft"):key("D", "MoveRight"):build(),
 }
 
@@ -30,7 +32,9 @@ function table.clone(tbl)
 end
 
 function start_input_reenable_timer(seconds)
-	STATE.input_disable_time = seconds
+	if not STATE.input_disable_time or STATE.input_disable_time < seconds then
+		STATE.input_disable_time = seconds
+	end
 end
 
 function keyboard_event(key, is_pressed)
@@ -38,22 +42,28 @@ function keyboard_event(key, is_pressed)
 	STATE.controller:update(key, is_pressed)
 end
 
+function set_state(id, state)
+	if not id == STATE.player or not STATE.dead then
+		engine.set_state(id, state)
+	end
+end
+
 function load()
 	camera_config = CameraBuilder()
-		:mode(Enums.CameraMode.Orthographic2D)
-		:speed(20.0)
-		:locked(true)
-		:key("W", "MoveForward")
-		:key("S", "MoveBackward")
-		:key("A", "MoveLeft")
-		:key("D", "MoveRight")
-		:key("Q", "RollLeft")
-		:key("E", "RollRight")
-		:key("Up", "PitchUp")
-		:key("Down", "PitchDown")
-		:key("Left", "YawLeft")
-		:key("Right", "YawRight")
-		:build()
+			:mode(Enums.CameraMode.Orthographic2D)
+			:speed(20.0)
+			:locked(true)
+			:key("W", "MoveForward")
+			:key("S", "MoveBackward")
+			:key("A", "MoveLeft")
+			:key("D", "MoveRight")
+			:key("Q", "RollLeft")
+			:key("E", "RollRight")
+			:key("Up", "PitchUp")
+			:key("Down", "PitchDown")
+			:key("Left", "YawLeft")
+			:key("Right", "YawRight")
+			:build()
 
 	engine.configure_camera(camera_config)
 	STATE.player = engine.create_character(DEATH)
@@ -137,7 +147,7 @@ end
 function on_entity_idle(entities)
 	-- if we need to, update state
 	for _, entity in pairs(entities) do
-		engine.set_state(entity, "Idle")
+			set_state(entity, "Idle")
 	end
 end
 
@@ -195,7 +205,7 @@ function on_collision(collisions)
 							sep_y = normal_y * penetration_block * 1.2
 
 							-- Stop player's velocity along collision normal
-							engine.set_state(STATE.player, "Idle")
+							set_state(STATE.player, "Idle")
 							engine.redirect(a_id, 0, 0, sep_x, sep_y, 0)
 						end
 					end
@@ -208,7 +218,7 @@ function on_collision(collisions)
 							sep_y,
 							acceleration
 						)
-						engine.set_state(STATE.player, "Idle")
+						set_state(STATE.player, "Idle")
 						STATE.input_enabled = false
 						start_input_reenable_timer(0.3)
 					end
@@ -221,7 +231,7 @@ function on_collision(collisions)
 							-sep_y,
 							acceleration
 						)
-						engine.set_state(b_id, "Idle")
+						set_state(b_id, "Idle")
 					end
 				end
 
@@ -235,7 +245,7 @@ function on_collision(collisions)
 							-sep_y,
 							acceleration
 						)
-						engine.set_state(STATE.player, "Idle")
+						set_state(STATE.player, "Idle")
 						STATE.input_enabled = false
 						start_input_reenable_timer(0.3)
 					end
@@ -248,7 +258,23 @@ function on_collision(collisions)
 							sep_y,
 							acceleration
 						)
-						engine.set_state(a_id, "Idle")
+						set_state(a_id, "Idle")
+					end
+				end
+				if (STATE.entities[a_id] and STATE.entities[a_id].class == "enemy") or
+						(STATE.entities[b_id] and STATE.entities[b_id].class == "enemy") then
+
+					if not ((STATE.untargetable[a_id] and STATE.untargetable[a_id] > 0) or
+								(STATE.untargetable[b_id] and STATE.untargetable[b_id] > 0)) then
+						STATE.untargetable[STATE.player] = 1 
+						local dead = engine.damage(STATE.player, 2)
+						print("surely hes dead", dead)
+						if dead == true then
+							set_state(STATE.player, "Dying")
+							STATE.dead = true
+							STATE.input_enabled = false
+							start_input_reenable_timer(100)
+						end
 					end
 				end
 			end
@@ -258,6 +284,10 @@ end
 
 function update(dt)
 	local dx, dy = 0, 0
+	if STATE.untargetable[STATE.player] and STATE.untargetable[STATE.player] > 0 then
+		STATE.untargetable[STATE.player] = STATE.untargetable[STATE.player] - dt
+	end
+
 	if not STATE.input_enabled then
 		STATE.input_disable_time = STATE.input_disable_time - dt
 		if STATE.input_disable_time <= 0 then
@@ -285,7 +315,7 @@ function update(dt)
 		dx = dx / length
 		dy = dy / length
 		engine.add_acceleration(STATE.player, dx * STATE.speed, dy * STATE.speed)
-		engine.set_state(STATE.player, "Running")
+		set_state(STATE.player, "Running")
 		if math.abs(dx) > 0.01 then
 			engine.flip(STATE.player, dx >= 0, false)
 		end

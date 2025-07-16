@@ -4,8 +4,8 @@ use crate::components_systems::physics_2d::{
     self, ColliderComponent, FlipComponent, TransformComponent,
 };
 use crate::components_systems::{
-    animation_system_update_frames, set_entity_state, ActionState, ActionStateComponent, Animation,
-    AnimationComponent, Entity, SpriteSheetComponent,
+    animation_system_update_frames, damage, set_entity_state, ActionState, ActionStateComponent,
+    Animation, AnimationComponent, Entity, HealthComponent, SpriteSheetComponent,
 };
 use crate::graphics::Graphics;
 use crate::lua_scriptor::LuaExtendedExecutor;
@@ -229,6 +229,10 @@ impl Engine {
         }
     }
 
+    fn damage(&mut self, id: u32, amount: u16) -> bool {
+        damage(&mut self.world, &Entity(id), amount)
+    }
+
     fn set_state(&mut self, id: u32, state: String) {
         set_entity_state(
             &mut self.world,
@@ -249,6 +253,7 @@ impl Engine {
         let width: f32 = character_table.get("width").unwrap_or(1.0);
         let height: f32 = character_table.get("height").unwrap_or(1.0);
         let _depth: f32 = character_table.get("depth").unwrap_or(1.0);
+        let health: u16 = character_table.get("total_health").unwrap_or(10);
 
         let animations: mlua::Table = character_table
             .get("animations")
@@ -312,6 +317,13 @@ impl Engine {
                     is_solid: true,
                 },
             );
+            self.world.health_bars.insert(
+                entity.clone(),
+                HealthComponent {
+                    total: health.clone(),
+                    current: health.clone(),
+                },
+            );
             self.world
                 .action_states
                 .insert(entity.clone(), ActionStateComponent { state });
@@ -367,6 +379,14 @@ impl Engine {
                 Ok(engine.add_acceleration(id, dx, dy))
             })
             .expect("Could not create function");
+        let damage = self
+            .lua_context
+            .lua
+            .create_function(move |_, (id, amount): (u32, u16)| {
+                let engine = unsafe { &mut *self_ptr };
+                Ok(engine.damage(id, amount))
+            })
+            .expect("Could not create function");
         let redirect = self
             .lua_context
             .lua
@@ -415,6 +435,9 @@ impl Engine {
             .expect("Could not set engine function");
         lua_engine
             .set("configure_camera", configure_camera)
+            .expect("Could not set engine function");
+        lua_engine
+            .set("damage", damage)
             .expect("Could not set engine function");
 
         self.lua_context
@@ -531,7 +554,7 @@ impl ApplicationHandler<Graphics3D> for Engine {
                     Some(canvas) => canvas,
                     None => return,
                 };
-                graphics.set_background(random_color());
+                // graphics.set_background(random_color());
                 self.redraw();
             }
             WindowEvent::RedrawRequested => {

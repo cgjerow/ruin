@@ -173,7 +173,12 @@ impl Graphics2D {
             queue,
             config,
             is_surface_configured: false,
-            background_color: Color::WHITE,
+            background_color: wgpu::Color {
+                r: 116.0 / 255.0,
+                b: 63.0 / 255.0,
+                g: 57.0 / 255.0,
+                a: 255.0 / 255.0,
+            },
             window,
             camera,
             camera_buffer,
