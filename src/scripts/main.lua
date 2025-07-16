@@ -69,7 +69,7 @@ function load()
 	STATE.player = engine.create_character(DEATH)
 	STATE.entities[STATE.player] = {
 		id = STATE.player,
-		class = "enemy",
+		class = "player",
 		on_player_collision = "bounce",
 		on_collision = "bounce",
 	}
@@ -147,7 +147,7 @@ end
 function on_entity_idle(entities)
 	-- if we need to, update state
 	for _, entity in pairs(entities) do
-			set_state(entity, "Idle")
+		set_state(entity, "Idle")
 	end
 end
 
@@ -263,10 +263,10 @@ function on_collision(collisions)
 				end
 				if (STATE.entities[a_id] and STATE.entities[a_id].class == "enemy") or
 						(STATE.entities[b_id] and STATE.entities[b_id].class == "enemy") then
-
 					if not ((STATE.untargetable[a_id] and STATE.untargetable[a_id] > 0) or
 								(STATE.untargetable[b_id] and STATE.untargetable[b_id] > 0)) then
-						STATE.untargetable[STATE.player] = 1 
+						STATE.untargetable[STATE.player] = 1
+						print("DAMAGE")
 						local dead = engine.damage(STATE.player, 2)
 						print("surely hes dead", dead)
 						if dead == true then
