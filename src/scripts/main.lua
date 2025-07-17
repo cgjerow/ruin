@@ -35,6 +35,7 @@ CONFIG = {
 }
 
 WORLD = {
+	game_over = false,
 	player = { id = -1 },
 	skellies = {},
 	-- this state is more nuanced then the action state which is used for animations by the engine
@@ -46,6 +47,8 @@ WORLD = {
 	time = 0,
 }
 WORLD.player_id = function() return WORLD.player.id end
+WORLD.is_game_over = function() return WORLD.game_over end
+WORLD.set_game_over = function() WORLD.game_over = true end
 
 
 CONTROLLER = {
@@ -59,7 +62,7 @@ CONTROLLER = {
 
 ENGINE_HANDLES = {
 	set_state = function(id, state)
-		if not id == WORLD.player_id() or not CONFIG.dead then
+		if not id == WORLD.player_id() or not WORLD.is_game_over() then
 			engine.set_state(id, state)
 		end
 	end,
@@ -131,7 +134,7 @@ function ENGINE_on_collision(cols)
 end
 
 function ENGINE_update(dt)
-	if (CONFIG.dead) then return end
+	if (WORLD.is_game_over()) then return end
 
 	local dx, dy = 0, 0
 	ENGINE_HANDLES.tick_targetability(dt)

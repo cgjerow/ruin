@@ -50,7 +50,7 @@ local function on_each_collision(col)
 				local dead = engine.damage(WORLD.player_id(), 2)
 				if dead == true then
 					ENGINE_HANDLES.set_state(WORLD.player_id(), GLOBALS.ACTIONS.Dying)
-					CONFIG.dead = true
+					WORLD.set_game_over()
 					CONTROLLER.start_input_reenable_timer(100)
 				end
 			end
