@@ -4,13 +4,18 @@ local pretty_print = require("pretty_print")
 
 -- Game Elements
 local summon_death = require("characters.death")
-local new_skelly = require("characters.skelly")
+local skelly = require("characters.skelly")
+pretty_print(skelly)
 local new_fence = require("environment.fence")
+local new_skelly = skelly.new
+local move_skellies = skelly.move
 
 math.randomseed(os.time())
 
 STATE = {
 	max_speed = 10,
+	skelly_max_speed = 5,
+	skelly_speed = 8,
 	dead = false,
 	friction = 10,
 	min_friction = .1,
@@ -126,6 +131,7 @@ function load()
 			s.id = engine.create_body(s)
 			s.on_player_collision = "bounce"
 			s.on_collision = "bounce"
+			s.is_skelly = true
 			STATE.entities[s.id] = s
 			-- STATE.player = new_id
 		end
@@ -204,7 +210,6 @@ function on_collision(collisions)
 end
 
 function update(dt)
-		local v = engine.get_velocity_2d(STATE.player_id)
 	local dx, dy = 0, 0
 	if STATE.untargetable[STATE.player_id] and STATE.untargetable[STATE.player_id] > 0 then
 		STATE.untargetable[STATE.player_id] = STATE.untargetable[STATE.player_id] - dt
@@ -253,7 +258,10 @@ function update(dt)
 			engine.flip(STATE.player_id, dx >= 0, false)
 		end
 	end
+
+	-- move_skellies()
 end
+
 
 function getState()
 	return STATE
@@ -285,8 +293,10 @@ function apply_drag_to_rigids(dt)
 
 			-- 2) Enforce a max speed if not in a special state (e.g. dashing)
 			local speed = math.sqrt(vel[1] ^ 2 + vel[2] ^ 2)
-			if speed > STATE.max_speed then
-				local scale = STATE.max_speed / speed
+			local max
+			if id == STATE.player_id then max = STATE.max_speed else max = STATE.skelly_speed end
+			if speed > max then
+				local scale = max / speed
 				vel[1] = vel[1] * scale
 				vel[2] = vel[2] * scale
 			end
