@@ -34,14 +34,14 @@ pub struct CollisionInfo {
 pub fn collision_system(world: &World, next: &HashMap<Entity, PhysicsBody>) -> Vec<CollisionInfo> {
     let mut collisions = Vec::new();
 
-    for (a, a_next) in next.iter() {
-        if let Some(a_collider) = world.colliders_2d.get(a) {
-            for (b, b_collider) in world.colliders_2d.iter() {
-                if a == b || a_collider.masks & b_collider.layers == 0 {
-                    // a doesn't care about b
-                    continue;
-                }
+    for (a, a_collider) in world.colliders_2d.iter() {
+        for (b, b_collider) in world.colliders_2d.iter() {
+            if a == b || a_collider.masks & b_collider.layers == 0 {
+                // a doesn't care about b
+                continue;
+            }
 
+            if let Some(a_next) = next.get(a) {
                 if let Some(b_next) = next.get(b) {
                     if check_aabb_intersects(a_next, a_collider, b_next, b_collider) {
                         let a_half_size = [a_collider.size[0] / 2.0, a_collider.size[1] / 2.0];
@@ -137,7 +137,7 @@ pub fn resolve_collisions(world: &mut World, collisions: Vec<CollisionInfo>) {
         let b_collider = world.colliders_2d.get(&col.entity_b).unwrap();
 
         if a_body.body_type == BodyType::Rigid
-            && b_body.body_type == BodyType::Static
+            && (b_body.body_type == BodyType::Static || b_body.body_type == BodyType::Rigid)
             && a_collider.masks & b_collider.layers != 0
         {
             // We should handle the collision

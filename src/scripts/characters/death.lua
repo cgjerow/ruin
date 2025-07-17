@@ -8,15 +8,15 @@ local dying = load_aseprite_animation("death_dying", "death/", "death_dying.json
 
 local function summon_death(x, y)
 	return PhysicsBodyBuilder()
+		:position(x, y)
+		:size(2, 2)
+		:collider_size_modifier(0.8, 0.8)
 		:add_layer(GLOBALS.MASKS_AND_LAYERS.Player)
 		:add_mask(GLOBALS.MASKS_AND_LAYERS.Env)
 		:add_mask(GLOBALS.MASKS_AND_LAYERS.Enemy)
 		:add_animation(GLOBALS.ACTIONS.Idle, idle)
 		:add_animation(GLOBALS.ACTIONS.Running, running)
 		:add_animation(GLOBALS.ACTIONS.Dying, dying)
-		:size(2, 2)
-		:position(x, y)
-		:collider_size_modifier(0.8, 0.8)
 		:build()
 end
 

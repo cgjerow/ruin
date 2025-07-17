@@ -20,10 +20,10 @@ use graphics_3d::Graphics3D;
 use mlua::{Result, Table};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::{KeyEvent, WindowEvent};
+use winit::event::{KeyEvent, MouseButton, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::Window;
@@ -153,7 +153,7 @@ impl Engine {
     }
 
     fn update(&mut self, dt: Duration) -> anyhow::Result<()> {
-        let update: mlua::Function = self.lua_context.get_function("update");
+        let update: mlua::Function = self.lua_context.get_function("ENGINE_update");
 
         let dt32 = dt.as_secs_f32();
 
@@ -173,7 +173,7 @@ impl Engine {
                     .rust_collisions_to_lua_2d(collisions)
                     .unwrap();
                 self.lua_context
-                    .get_function("on_collision")
+                    .get_function("ENGINE_on_collision")
                     .call::<()>(collisions_table)
                     .expect("Error handling collisions");
 
@@ -181,7 +181,8 @@ impl Engine {
             }
             self.world.clear_forces();
 
-            let after_physics: mlua::Function = self.lua_context.get_function("after_physics");
+            let after_physics: mlua::Function =
+                self.lua_context.get_function("ENGINE_after_physics");
             let _ = after_physics.call::<()>(dt32);
 
             if self.camera_mode == CameraOption::Follow {
@@ -229,6 +230,14 @@ impl Engine {
         }
     }
 
+    fn apply_masks_and_layers(&mut self, id: u32, masks: Table, layers: Table) {
+        let masks = vecbool_to_u8(LuaExtendedExecutor::table_to_vec_8(masks));
+        let layers = vecbool_to_u8(LuaExtendedExecutor::table_to_vec_8(layers));
+        let collider = self.world.colliders_2d.get_mut(&Entity(id)).unwrap();
+        collider.masks = masks;
+        collider.layers = layers;
+    }
+
     fn get_velocity_2d(&mut self, id: u32) -> [f32; 2] {
         if self.dimensions == Dimensions::Two {
             let velocity = self
@@ -267,6 +276,22 @@ impl Engine {
 
     fn damage(&mut self, id: u32, amount: u16) -> bool {
         damage(&mut self.world, &Entity(id), amount)
+    }
+
+    fn get_health_table(&self, id: u32) -> Table {
+        let h = self
+            .world
+            .health_bars
+            .get(&Entity(id))
+            .unwrap_or(&HealthComponent {
+                total: 0,
+                current: 0,
+            })
+            .clone();
+        let health = self.lua_context.create_table();
+        let _ = health.set("total", h.total);
+        let _ = health.set("current", h.current);
+        health
     }
 
     fn set_state(&mut self, id: u32, state: u8) {
@@ -487,6 +512,14 @@ impl Engine {
                 Ok(engine.apply_impulse_2d(id, x, y))
             })
             .expect("Could not create function");
+        let apply_masks_and_layers = self
+            .lua_context
+            .lua
+            .create_function(move |_, (id, masks, layers): (u32, Table, Table)| {
+                let engine = unsafe { &mut *self_ptr };
+                Ok(engine.apply_masks_and_layers(id, masks, layers))
+            })
+            .expect("Could not create function");
         let set_velocity_2d = self
             .lua_context
             .lua
@@ -520,6 +553,15 @@ impl Engine {
                 Ok(engine.damage(id, amount))
             })
             .expect("Could not create function");
+        let get_health = self
+            .lua_context
+            .lua
+            .create_function(move |_, id: u32| {
+                let engine = unsafe { &mut *self_ptr };
+                Ok(engine.get_health_table(id))
+            })
+            .expect("Could not create function");
+
         let set_state = self
             .lua_context
             .lua
@@ -552,6 +594,9 @@ impl Engine {
             .set("apply_impulse_2d", apply_impulse_2d)
             .expect("Could not set engine function");
         lua_engine
+            .set("apply_masks_and_layers", apply_masks_and_layers)
+            .expect("Could not set engine function");
+        lua_engine
             .set("set_velocity_2d", set_velocity_2d)
             .expect("Could not set engine function");
         lua_engine
@@ -567,11 +612,31 @@ impl Engine {
         lua_engine
             .set("create_body", create_body)
             .expect("Could not set engine function");
+
+        lua_engine
+            .set("damage", damage)
+            .expect("Could not set engine function");
+        lua_engine
+            .set("get_health", get_health)
+            .expect("Could not set engine function");
+
         lua_engine
             .set("configure_camera", configure_camera)
             .expect("Could not set engine function");
+
+        let now_ns = self
+            .lua_context
+            .lua
+            .create_function(|_, ()| {
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos();
+                Ok(now as u64) // or u128 if needed
+            })
+            .expect("Could not create function");
         lua_engine
-            .set("damage", damage)
+            .set("now_ns", now_ns)
             .expect("Could not set engine function");
 
         self.lua_context
@@ -582,7 +647,7 @@ impl Engine {
 
         let config: mlua::Table = self
             .lua_context
-            .get_function("load")
+            .get_function("ENGINE_load")
             .call::<mlua::Table>({})
             .expect("Unable to load initial assets.");
 
@@ -598,11 +663,25 @@ impl Engine {
     }
 
     fn call_lua_keyboard_input(&self, key: KeyCode, is_pressed: bool) {
-        let _ = self.lua_context.get_function("keyboard_event").call::<()>((
-            keycode_to_str(key),
-            is_pressed,
-            self.screen_to_world(self.mouse_pos),
-        ));
+        let _ = self
+            .lua_context
+            .get_function("ENGINE_input_event")
+            .call::<()>((
+                keycode_to_str(key),
+                is_pressed,
+                self.screen_to_world(self.mouse_pos),
+            ));
+    }
+
+    fn call_lua_mouse_button_input(&self, button: MouseButton, is_pressed: bool) {
+        let _ = self
+            .lua_context
+            .get_function("ENGINE_input_event")
+            .call::<()>((
+                mousebutton_to_str(button),
+                is_pressed,
+                self.screen_to_world(self.mouse_pos),
+            ));
     }
 }
 
@@ -682,10 +761,10 @@ impl ApplicationHandler<Graphics3D> for Engine {
             }
             WindowEvent::MouseInput {
                 device_id: _,
-                state: _,
-                button: _,
+                state,
+                button,
             } => {
-                self.redraw();
+                self.call_lua_mouse_button_input(button, state.is_pressed());
             }
             WindowEvent::CursorMoved { position, .. } => {
                 // Update mouse position
@@ -812,6 +891,16 @@ impl LuaCameraConfig {
         };
         Ok(action)
     }
+}
+
+fn mousebutton_to_str(button: MouseButton) -> Option<&'static str> {
+    use MouseButton::*;
+    Some(match button {
+        Left => "mouseleft",
+        Right => "mouseright",
+        Middle => "mousemiddle",
+        _ => return None,
+    })
 }
 
 fn keycode_to_str(key: KeyCode) -> Option<&'static str> {

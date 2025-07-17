@@ -158,3 +158,28 @@ function PhysicsBodyBuilder()
 
 	return builder
 end
+
+function MaskAndLayerBuilder()
+	local result = {
+		masks = {},
+		layers = {},
+	}
+
+	local builder = {}
+
+	function builder:add_mask(mask)
+		result.masks[mask] = true
+		return builder
+	end
+
+	function builder:add_layer(layer)
+		result.layers[layer] = true
+		return builder
+	end
+
+	function builder:build()
+		return result
+	end
+
+	return builder
+end
