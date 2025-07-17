@@ -100,6 +100,7 @@ ENGINE_HANDLES = {
 					ml
 							:add_mask(GLOBALS.MASKS_AND_LAYERS.Env)
 							:add_mask(GLOBALS.MASKS_AND_LAYERS.Player)
+							:add_mask(GLOBALS.MASKS_AND_LAYERS.Enemy)
 							:add_layer(GLOBALS.MASKS_AND_LAYERS.Enemy)
 				end
 				ml = ml:build()

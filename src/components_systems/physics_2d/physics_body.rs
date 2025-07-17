@@ -1,7 +1,7 @@
-use cgmath::{vec2, Vector2};
-use std::{collections::HashMap, u8};
+use cgmath::Vector2;
+use std::u8;
 
-use crate::components_systems::physics_2d::physics_body; // assume cgmath for math types
+use crate::components_systems::physics_2d::Shape;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BodyType {
@@ -21,15 +21,6 @@ impl From<u8> for BodyType {
             _ => BodyType::Rigid,
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum Shape {
-    Circle { radius: f32 },
-    // half extents (width/2, height/2) common in physics
-    Rectangle { half_extents: Vector2<f32> },
-    // Polygon { vertices: Vec<Vector2<f32>> }, // convex polygon, relative to center
-    // could add Capsule, etc.
 }
 
 #[derive(Debug, Clone)]
