@@ -1,5 +1,5 @@
 ---@diagnostic disable: unused-function, lowercase-global
-require("game_asset_builders")
+---@diagnostic disable-next-line: unused-local
 local pretty_print = require("pretty_print")
 
 -- Game Elements
@@ -10,10 +10,13 @@ local new_fence = require("environment.fence")
 math.randomseed(os.time())
 
 STATE = {
+	max_speed = 10,
 	dead = false,
+	friction = 10,
+	min_friction = .1,
 	input_enabled = true,
 	input_disable_time = 0,
-	speed = 500.0,
+	run_force = 200.0,
 	player_id = -1,
 	entities = {},
 	untargetable = {},
@@ -25,6 +28,14 @@ STATE = {
 			:key("D", "MoveRight")
 			:build(),
 }
+
+function normalize(x, y)
+	local mag = math.sqrt(x ^ 2 + y ^ 2)
+	if mag == 0 then
+		return 0, 0
+	end
+	return x / mag, y / mag
+end
 
 function table.clone(tbl)
 	local copy = {}
@@ -58,16 +69,14 @@ end
 
 function load()
 	local death = summon_death(0, 0)
-	--pretty_print(death)
-	death.on_player_collision = "bounce"
 	death.on_collision = "bounce"
 	STATE.player = death
-	STATE.player_id = engine.create_element(death)
+	STATE.player_id = engine.create_body(death)
 	death.id = STATE.player_id
 	STATE.entities[STATE.player_id] = death
 
-	local build_skellys = true
-	if build_skellys then
+	local build_walls = true
+	if build_walls then
 		for i = 0, 50 do
 			if i % 2 == 0 then
 				goto continue
@@ -75,33 +84,33 @@ function load()
 			local fence = new_fence(i - 25, -25)
 			fence.on_player_collision = "block"
 			fence.on_collision = ""
-			fence.id = engine.create_element(fence)
+			fence.id = engine.create_body(fence)
 			STATE.entities[fence.id] = fence
 
 			fence = new_fence(i - 25, 25)
 			fence.on_player_collision = "block"
 			fence.on_collision = ""
-			fence.id = engine.create_element(fence)
+			fence.id = engine.create_body(fence)
 			STATE.entities[fence.id] = fence
 
 			fence = new_fence(-25, i - 25)
 			fence.on_player_collision = "block"
 			fence.on_collision = ""
-			fence.id = engine.create_element(fence)
+			fence.id = engine.create_body(fence)
 			STATE.entities[fence.id] = fence
 
 			fence = new_fence(25, i - 25)
 			fence.on_player_collision = "block"
 			fence.on_collision = ""
-			fence.id = engine.create_element(fence)
+			fence.id = engine.create_body(fence)
 			STATE.entities[fence.id] = fence
 			::continue::
 		end
 	end
 
-	local build_walls = true
-	if build_walls then
-		for _i = 1, 10 do
+	local build_skellys = true
+	if build_skellys then
+		for _ = 1, 10 do
 			local x = math.random(10, 20)
 			local y = math.random(10, 20)
 			local flip_x = math.random(0, 1)
@@ -114,7 +123,7 @@ function load()
 			end
 			local s = new_skelly(x, y)
 			-- s.is_pc = true
-			s.id = engine.create_element(s)
+			s.id = engine.create_body(s)
 			s.on_player_collision = "bounce"
 			s.on_collision = "bounce"
 			STATE.entities[s.id] = s
@@ -127,148 +136,75 @@ function load()
 	}
 end
 
-function on_entity_idle(entities)
-	-- if we need to, update state
-	for _, entity in pairs(entities) do
-		set_state(entity, GLOBALS.ACTIONS.Idle)
+function on_each_collision(col)
+	local bounce_speed = 50.0
+	local a_id = col.a
+	local b_id = col.b
+
+	local normal_x = col.normal[1]
+	local normal_y = col.normal[2]
+	local length = math.sqrt(normal_x ^ 2 + normal_y ^ 2)
+
+	if length == 0 then
+		normal_x = 1
+		normal_y = 0
+	else
+		normal_x = normal_x / length
+		normal_y = normal_y / length
 	end
-end
 
-function on_collision(collisions)
-	local acceleration = 1.0
-	local bounce_speed = 1.0
 
-	for _i, collision in ipairs(collisions) do
-		local a_id = collision.entity_a
-		local b_id = collision.entity_b
-
-		local normal_x = collision.normal[1]
-		local normal_y = collision.normal[2]
-		local length = math.sqrt(normal_x ^ 2 + normal_y ^ 2)
-
-		if length == 0 then
-			normal_x = 1
-			normal_y = 0
-		else
-			normal_x = normal_x / length
-			normal_y = normal_y / length
+	if a_id == STATE.player_id or b_id == STATE.player_id then
+		if a_id == STATE.player_id then
+			if STATE.entities[b_id].on_player_collision == "bounce" then
+				engine.apply_impulse_2d(
+					a_id,
+					-normal_x * bounce_speed,
+					-normal_y * bounce_speed
+				)
+				set_state(STATE.player_id, GLOBALS.ACTIONS.Idle)
+				start_input_reenable_timer(0.3)
+			end
+			if STATE.entities[b_id].on_collision == "bounce" then
+				engine.apply_impulse_2d(
+					b_id,
+					normal_x * bounce_speed,
+					normal_y * bounce_speed
+				)
+				set_state(b_id, GLOBALS.ACTIONS.Idle)
+			end
 		end
 
-		local pos_a = collision.next_pos_a
-		local pos_b = collision.next_pos_b
-		local size_a = collision.a_size
-		local size_b = collision.b_size
-
-		local delta_x = pos_a[1] - pos_b[1]
-		local delta_y = pos_a[2] - pos_b[2]
-
-		local half_a_x = size_a[1] * 0.5
-		local half_a_y = size_a[2] * 0.5
-		local half_b_x = size_b[1] * 0.5
-		local half_b_y = size_b[2] * 0.5
-
-		local proj_a = math.abs(half_a_x * normal_x) + math.abs(half_a_y * normal_y)
-		local proj_b = math.abs(half_b_x * normal_x) + math.abs(half_b_y * normal_y)
-
-		local delta_proj = delta_x * normal_x + delta_y * normal_y
-
-		local penetration = proj_a + proj_b - math.abs(delta_proj)
-
-		if penetration > 0 then
-			local sep_x = normal_x * penetration
-			local sep_y = normal_y * penetration
-
-			if a_id == STATE.player_id or b_id == STATE.player_id then
-				if a_id == STATE.player_id then
-					if STATE.entities[b_id].on_player_collision == "block" then
-						local penetration_block = proj_a - math.abs(delta_proj)
-						if penetration_block > 0 then
-							-- Separation vector for blocking, no bounce velocity
-							sep_x = normal_x * penetration_block * 1.2
-							sep_y = normal_y * penetration_block * 1.2
-
-							-- Stop player's velocity along collision normal
-							set_state(STATE.player_id, GLOBALS.ACTIONS.Idle)
-							engine.redirect(a_id, 0, 0, 0, 0, 0)
-						end
-					end
-					if STATE.entities[b_id].on_player_collision == "bounce" then
-						engine.redirect(
-							a_id,
-							normal_x * bounce_speed,
-							normal_y * bounce_speed,
-							sep_x,
-							sep_y,
-							acceleration
-						)
-						set_state(STATE.player_id, GLOBALS.ACTIONS.Idle)
-						start_input_reenable_timer(0.3)
-					end
-					if STATE.entities[b_id].on_collision == "bounce" then
-						engine.redirect(
-							b_id,
-							-normal_x * bounce_speed,
-							-normal_y * bounce_speed,
-							-sep_x,
-							-sep_y,
-							acceleration
-						)
-						set_state(b_id, GLOBALS.ACTIONS.Idle)
-					end
-				end
-
-				if b_id == STATE.player_id then
-					if STATE.entities[a_id].on_player_collision == "bounce" then
-						engine.redirect(
-							b_id,
-							-normal_x * bounce_speed,
-							-normal_y * bounce_speed,
-							-sep_x,
-							-sep_y,
-							acceleration
-						)
-						set_state(STATE.player_id, GLOBALS.ACTIONS.Idle)
-						start_input_reenable_timer(0.3)
-					end
-					if STATE.entities[a_id].on_collision == "bounce" then
-						engine.redirect(
-							a_id,
-							normal_x * bounce_speed,
-							normal_y * bounce_speed,
-							sep_x,
-							sep_y,
-							acceleration
-						)
-						set_state(a_id, GLOBALS.ACTIONS.Idle)
-					end
-				end
-				if
-						(STATE.entities[a_id] and STATE.entities[a_id].layers[GLOBALS.MASKS_AND_LAYERS.Enemy])
-						or (STATE.entities[b_id] and STATE.entities[b_id].layers[GLOBALS.MASKS_AND_LAYERS.Enemy])
-				then
-					if
-							not (
-								(STATE.untargetable[a_id] and STATE.untargetable[a_id] > 0)
-								or (STATE.untargetable[b_id] and STATE.untargetable[b_id] > 0)
-							)
-					then
-						STATE.untargetable[STATE.player_id] = 1
-						print("DAMAGE")
-						local dead = engine.damage(STATE.player_id, 2)
-						print("surely hes dead", dead)
-						if dead == true then
-							set_state(STATE.player_id, GLOBALS.ACTIONS.Dying)
-							STATE.dead = true
-							start_input_reenable_timer(100)
-						end
-					end
+		if
+				(STATE.entities[a_id] and STATE.entities[a_id].layers[GLOBALS.MASKS_AND_LAYERS.Enemy])
+				or (STATE.entities[b_id] and STATE.entities[b_id].layers[GLOBALS.MASKS_AND_LAYERS.Enemy])
+		then
+			if
+					not (
+						(STATE.untargetable[a_id] and STATE.untargetable[a_id] > 0)
+						or (STATE.untargetable[b_id] and STATE.untargetable[b_id] > 0)
+					)
+			then
+				STATE.untargetable[STATE.player_id] = 1
+				local dead = engine.damage(STATE.player_id, 2)
+				if dead == true then
+					set_state(STATE.player_id, GLOBALS.ACTIONS.Dying)
+					STATE.dead = true
+					start_input_reenable_timer(100)
 				end
 			end
 		end
 	end
 end
 
+function on_collision(collisions)
+	for _, col in ipairs(collisions) do
+		on_each_collision(col)
+	end
+end
+
 function update(dt)
+		local v = engine.get_velocity_2d(STATE.player_id)
 	local dx, dy = 0, 0
 	if STATE.untargetable[STATE.player_id] and STATE.untargetable[STATE.player_id] > 0 then
 		STATE.untargetable[STATE.player_id] = STATE.untargetable[STATE.player_id] - dt
@@ -284,10 +220,15 @@ function update(dt)
 
 	if STATE.controller:is_pressed("Dash") then
 		start_input_reenable_timer(0.3)
-		local dash = STATE.controller:get_state("Dash")
-		pretty_print(dash.mouse_loc)
-		engine.redirect_to(STATE.player_id, dash.mouse_loc.x, dash.mouse_loc.y, 3000, 0)
+		local v = engine.get_velocity_2d(STATE.player_id)
+		local x, y = normalize(v[1], v[2])
+
+		if not (x == 0 and y == 0) then
+			local impulse_strength = 100
+			engine.apply_impulse_2d(STATE.player_id, x * impulse_strength, y * impulse_strength)
+		end
 	end
+
 	if STATE.controller:is_pressed("Up") then
 		dy = dy + 1
 	end
@@ -306,7 +247,7 @@ function update(dt)
 	if length > 0 then
 		dx = dx / length
 		dy = dy / length
-		engine.add_acceleration(STATE.player_id, dx * STATE.speed, dy * STATE.speed)
+		engine.apply_force_2d(STATE.player_id, dx * STATE.run_force, dy * STATE.run_force)
 		set_state(STATE.player_id, GLOBALS.ACTIONS.Running)
 		if math.abs(dx) > 0.01 then
 			engine.flip(STATE.player_id, dx >= 0, false)
@@ -314,8 +255,54 @@ function update(dt)
 	end
 end
 
-function draw() end
-
 function getState()
 	return STATE
+end
+
+function apply_drag_to_rigids(dt)
+	for id, elem in pairs(STATE.entities) do
+		if elem.type == GLOBALS.PHYSICS_BODIES.Rigid then
+			local vel = engine.get_velocity_2d(id) -- { vx, vy }
+
+			local decel = STATE.friction * dt
+			if decel < STATE.min_friction then
+				decel = STATE.min_friction
+			end
+
+			-- Damping per component, clamped to avoid crossing zero
+			for i = 1, 2 do
+				local v = vel[i]
+				local damped = v * (1 - decel)
+				-- If it would flip sign, clamp to 0 instead
+				if v > 0 and damped < 0 then
+					vel[i] = 0
+				elseif v < 0 and damped > 0 then
+					vel[i] = 0
+				else
+					vel[i] = damped
+				end
+			end
+
+			-- 2) Enforce a max speed if not in a special state (e.g. dashing)
+			local speed = math.sqrt(vel[1] ^ 2 + vel[2] ^ 2)
+			if speed > STATE.max_speed then
+				local scale = STATE.max_speed / speed
+				vel[1] = vel[1] * scale
+				vel[2] = vel[2] * scale
+			end
+
+			speed = math.sqrt(vel[1] ^ 2 + vel[2] ^ 2)
+			engine.set_velocity_2d(id, vel[1], vel[2])
+
+			local idle = 1
+			if speed < idle then
+				set_state(id, GLOBALS.ACTIONS.Idle)
+			end
+		end
+	end
+end
+
+-- Called once per frame, after all physics substeps have run
+function after_physics(dt)
+	apply_drag_to_rigids(dt)
 end

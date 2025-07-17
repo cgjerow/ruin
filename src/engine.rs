@@ -2,7 +2,7 @@ use crate::bitmaps::vecbool_to_u8;
 use crate::camera_2d::Camera2D;
 use crate::camera_3d::{Camera3D, CameraAction};
 use crate::components_systems::physics_2d::{
-    self, ColliderComponent, FlipComponent, TransformComponent,
+    self, BodyType, ColliderComponent, FlipComponent, PhysicsBody, Shape, TransformComponent,
 };
 use crate::components_systems::{
     animation_system_update_frames, damage, set_entity_state, ActionState, ActionStateComponent,
@@ -13,6 +13,7 @@ use crate::lua_scriptor::LuaExtendedExecutor;
 use crate::texture::Texture;
 use crate::world::World;
 use crate::{debug, graphics_2d, graphics_3d};
+use cgmath::Vector2;
 use debug::Debug;
 use graphics_2d::Graphics2D;
 use graphics_3d::Graphics3D;
@@ -123,7 +124,7 @@ impl Engine {
 
     pub fn update_camera_follow(&mut self, entity: &Entity) {
         if self.dimensions == Dimensions::Two {
-            if let Some(transform) = self.world.transforms_2d.get(entity) {
+            if let Some(transform) = self.world.physics_bodies_2d.get(entity) {
                 let graphics = match &mut self.graphics {
                     Some(canvas) => canvas,
                     None => return,
@@ -131,7 +132,7 @@ impl Engine {
                 graphics.move_camera_for_follow(
                     [transform.position[0], transform.position[1], 0.0],
                     [transform.velocity[0], transform.velocity[1], 0.0],
-                    [transform.acceleration[0], transform.acceleration[1], 0.0],
+                    [0.0, 0.0, 0.0],
                     [0.0, 0.0, 0.0],
                 );
             }
@@ -153,6 +154,7 @@ impl Engine {
 
     fn update(&mut self, dt: Duration) -> anyhow::Result<()> {
         let update: mlua::Function = self.lua_context.get_function("update");
+
         let dt32 = dt.as_secs_f32();
 
         let _ = update.call::<()>(dt32);
@@ -165,20 +167,22 @@ impl Engine {
                     incremented_dt,
                 );
                 let collisions = physics_2d::collision_system(&self.world, &next_transforms);
+                physics_2d::resolve_collisions(&mut self.world, collisions.clone());
                 let collisions_table = self
                     .lua_context
                     .rust_collisions_to_lua_2d(collisions)
                     .unwrap();
-
                 self.lua_context
                     .get_function("on_collision")
                     .call::<()>(collisions_table)
                     .expect("Error handling collisions");
 
-                let transform_notices =
-                    physics_2d::transform_system_physics(&mut self.world, incremented_dt);
-                self.on_entity_idle(transform_notices.idled);
+                physics_2d::transform_system_physics(&mut self.world, incremented_dt);
             }
+            self.world.clear_forces();
+
+            let after_physics: mlua::Function = self.lua_context.get_function("after_physics");
+            let _ = after_physics.call::<()>(dt32);
 
             if self.camera_mode == CameraOption::Follow {
                 self.update_camera_follow(&self.player.clone());
@@ -197,14 +201,6 @@ impl Engine {
         return Ok(());
     }
 
-    fn on_entity_idle(&self, entities: Vec<Entity>) {
-        let on_idle: mlua::Function = self.lua_context.get_function("on_entity_idle");
-        let entity_ids: Vec<u32> = entities.iter().map(|entity| entity.0).collect();
-        on_idle
-            .call::<()>(entity_ids)
-            .expect("Error calling on_entity_idle")
-    }
-
     fn cleanup(&mut self) {
         debug_log!(self.debugger, "Cleaned it? {}", true)
     }
@@ -213,66 +209,60 @@ impl Engine {
         [self.width, self.height]
     }
 
-    fn add_acceleration(&mut self, id: u32, dx: f32, dy: f32) {
+    fn apply_force_2d(&mut self, id: u32, fx: f32, fy: f32) {
         if self.dimensions == Dimensions::Two {
-            physics_2d::transform_system_add_acceleration(&mut self.world, Entity(id), dx, dy);
+            self.world
+                .physics_bodies_2d
+                .get_mut(&Entity(id))
+                .unwrap()
+                .apply_force(cgmath::Vector2 { x: fx, y: fy });
         }
     }
 
-    fn redirect(
-        &mut self,
-        id: u32,
-        dx: f32,
-        dy: f32,
-        sep_x: f32,
-        sep_y: f32,
-        acceleration_mod: f32,
-    ) {
+    fn apply_impulse_2d(&mut self, id: u32, fx: f32, fy: f32) {
         if self.dimensions == Dimensions::Two {
-            physics_2d::transform_system_redirect(
-                &mut self.world,
-                Entity(id),
-                dx,
-                dy,
-                sep_x,
-                sep_y,
-                acceleration_mod,
-            );
+            self.world
+                .physics_bodies_2d
+                .get_mut(&Entity(id))
+                .unwrap()
+                .apply_impulse(cgmath::Vector2 { x: fx, y: fy });
         }
     }
 
-    fn redirect_to(
-        &mut self,
-        id: u32,
-        target_x: f32,
-        target_y: f32,
-        speed: f32,
-        acceleration: f32,
-    ) {
-        if let Some(pos) = self.get_position_2d(id) {
-            let dir_x = target_x - pos[0];
-            let dir_y = target_y - pos[1];
-            let len = (dir_x * dir_x + dir_y * dir_y).sqrt();
+    fn get_velocity_2d(&mut self, id: u32) -> [f32; 2] {
+        if self.dimensions == Dimensions::Two {
+            let velocity = self
+                .world
+                .physics_bodies_2d
+                .get(&Entity(id))
+                .unwrap()
+                .velocity;
+            return [velocity.x, velocity.y];
+        }
+        [0.0, 0.0]
+    }
 
-            if len == 0.0 {
-                return; // avoid division by zero
-            }
-
-            let norm_x = dir_x / len;
-            let norm_y = dir_y / len;
-
-            let vel_x = norm_x * speed;
-            let vel_y = norm_y * speed;
-
-            self.redirect(id, vel_x, vel_y, 0.0, 0.0, acceleration);
+    fn set_velocity_2d(&mut self, id: u32, vx: f32, vy: f32) {
+        if self.dimensions == Dimensions::Two {
+            self.world
+                .physics_bodies_2d
+                .get_mut(&Entity(id))
+                .unwrap()
+                .velocity = Vector2::new(vx, vy);
         }
     }
 
-    fn get_position_2d(&self, id: u32) -> Option<[f32; 2]> {
-        if let Some(transform) = self.world.transforms_2d.get(&Entity(id)) {
-            return Some(transform.position);
+    fn get_position_2d(&mut self, id: u32) -> [f32; 2] {
+        if self.dimensions == Dimensions::Two {
+            let position = self
+                .world
+                .physics_bodies_2d
+                .get(&Entity(id))
+                .unwrap()
+                .position;
+            return [position.x, position.y];
         }
-        return None;
+        [0.0, 0.0]
     }
 
     fn damage(&mut self, id: u32, amount: u16) -> bool {
@@ -287,7 +277,7 @@ impl Engine {
         );
     }
 
-    fn create_element(&mut self, lua_element: mlua::Table) -> u32 {
+    fn create_body(&mut self, lua_element: mlua::Table) -> u32 {
         let state: ActionState = lua_element.get("state").unwrap_or(0).into();
         let is_pc: bool = lua_element.get("is_pc").unwrap_or(false).into();
         let x: f32 = lua_element.get("x").unwrap_or(0.0);
@@ -356,6 +346,22 @@ impl Engine {
                     current_frame_index: 0,
                     current_frame,
                     frame_timer: 0.0,
+                },
+            );
+            self.world.physics_bodies_2d.insert(
+                entity.clone(),
+                PhysicsBody {
+                    shape: Shape::Rectangle {
+                        half_extents: cgmath::Vector2 {
+                            x: width / 2.0,
+                            y: height / 2.0,
+                        },
+                    },
+                    mass: 1.0,
+                    body_type: BodyType::from(lua_element.get("type").unwrap_or(1)),
+                    velocity: cgmath::Vector2 { x: 0.0, y: 0.0 },
+                    position: cgmath::Vector2 { x, y },
+                    force_accumulator: cgmath::Vector2 { x: 0.0, y: 0.0 },
                 },
             );
             self.world.transforms_2d.insert(
@@ -449,12 +455,12 @@ impl Engine {
                 Ok(engine.get_window_size())
             })
             .expect("Could not create function");
-        let create_element = self
+        let create_body = self
             .lua_context
             .lua
             .create_function(move |_, element: mlua::Table| {
                 let engine = unsafe { &mut *self_ptr };
-                Ok(engine.create_element(element))
+                Ok(engine.create_body(element))
             })
             .expect("Could not create function");
         let configure_camera = self
@@ -465,14 +471,47 @@ impl Engine {
                 Ok(engine.configure_camera(config))
             })
             .expect("Could not create function");
-        let add_acceleration = self
+        let apply_force_2d = self
             .lua_context
             .lua
-            .create_function(move |_, (id, dx, dy): (u32, f32, f32)| {
+            .create_function(move |_, (id, x, y): (u32, f32, f32)| {
                 let engine = unsafe { &mut *self_ptr };
-                Ok(engine.add_acceleration(id, dx, dy))
+                Ok(engine.apply_force_2d(id, x, y))
             })
             .expect("Could not create function");
+        let apply_impulse_2d = self
+            .lua_context
+            .lua
+            .create_function(move |_, (id, x, y): (u32, f32, f32)| {
+                let engine = unsafe { &mut *self_ptr };
+                Ok(engine.apply_impulse_2d(id, x, y))
+            })
+            .expect("Could not create function");
+        let set_velocity_2d = self
+            .lua_context
+            .lua
+            .create_function(move |_, (id, x, y): (u32, f32, f32)| {
+                let engine = unsafe { &mut *self_ptr };
+                Ok(engine.set_velocity_2d(id, x, y))
+            })
+            .expect("Could not create function");
+        let get_velocity_2d = self
+            .lua_context
+            .lua
+            .create_function(move |_, id: u32| {
+                let engine = unsafe { &mut *self_ptr };
+                Ok(engine.get_velocity_2d(id))
+            })
+            .expect("Could not create function");
+        let get_position_2d = self
+            .lua_context
+            .lua
+            .create_function(move |_, id: u32| {
+                let engine = unsafe { &mut *self_ptr };
+                Ok(engine.get_position_2d(id))
+            })
+            .expect("Could not create function");
+
         let damage = self
             .lua_context
             .lua
@@ -480,26 +519,6 @@ impl Engine {
                 let engine = unsafe { &mut *self_ptr };
                 Ok(engine.damage(id, amount))
             })
-            .expect("Could not create function");
-        let redirect = self
-            .lua_context
-            .lua
-            .create_function(
-                move |_, (id, dx, dy, sep_x, sep_y, a): (u32, f32, f32, f32, f32, f32)| {
-                    let engine = unsafe { &mut *self_ptr };
-                    Ok(engine.redirect(id, dx, dy, sep_x, sep_y, a))
-                },
-            )
-            .expect("Could not create function");
-        let redirect_to = self
-            .lua_context
-            .lua
-            .create_function(
-                move |_, (id, target_x, target_y, speed, a): (u32, f32, f32, f32, f32)| {
-                    let engine = unsafe { &mut *self_ptr };
-                    Ok(engine.redirect_to(id, target_x, target_y, speed, a))
-                },
-            )
             .expect("Could not create function");
         let set_state = self
             .lua_context
@@ -525,20 +544,28 @@ impl Engine {
         lua_engine
             .set("flip", flip)
             .expect("Could not set engine function");
+
         lua_engine
-            .set("add_acceleration", add_acceleration)
+            .set("apply_force_2d", apply_force_2d)
             .expect("Could not set engine function");
         lua_engine
-            .set("redirect", redirect)
+            .set("apply_impulse_2d", apply_impulse_2d)
             .expect("Could not set engine function");
         lua_engine
-            .set("redirect_to", redirect_to)
+            .set("set_velocity_2d", set_velocity_2d)
             .expect("Could not set engine function");
+        lua_engine
+            .set("get_velocity_2d", get_velocity_2d)
+            .expect("Could not set engine function");
+        lua_engine
+            .set("get_position_2d", get_position_2d)
+            .expect("Could not set engine function");
+
         lua_engine
             .set("set_state", set_state)
             .expect("Could not set engine function");
         lua_engine
-            .set("create_element", create_element)
+            .set("create_body", create_body)
             .expect("Could not set engine function");
         lua_engine
             .set("configure_camera", configure_camera)

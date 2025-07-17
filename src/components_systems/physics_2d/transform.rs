@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    components_systems::{Entity, TransformInfo},
+    components_systems::{physics_2d::PhysicsBody, Entity},
     world::World,
 };
 
@@ -13,34 +13,21 @@ pub struct TransformComponent {
     pub size: [f32; 2],
 }
 
-pub fn transform_system_physics(world: &mut World, delta_time: f32) -> TransformInfo {
-    let mut idled = Vec::new();
-    let idle_threshold = 0.9;
-
-    for (entity, transform) in world.transforms_2d.iter_mut() {
-        let prev_speed = (transform.velocity[0].powi(2) + transform.velocity[1].powi(2)).sqrt();
-
-        let updated = apply_physics_to_transform(transform.clone(), delta_time, true);
-        *transform = updated;
-
-        let new_speed = (transform.velocity[0].powi(2) + transform.velocity[1].powi(2)).sqrt();
-        if prev_speed > idle_threshold && new_speed <= idle_threshold {
-            idled.push(entity.clone());
-        }
+pub fn transform_system_physics(world: &mut World, dt: f32) {
+    for (entity, body) in world.physics_bodies_2d.iter_mut() {
+        body.integrate(dt);
     }
-
-    TransformInfo { idled }
 }
 
 pub fn transform_system_calculate_intended_position(
     world: &World,
-    delta_time: f32,
-) -> HashMap<Entity, TransformComponent> {
+    dt: f32,
+) -> HashMap<Entity, PhysicsBody> {
     world
-        .transforms_2d
+        .physics_bodies_2d
         .iter()
         .map(|(id, before)| {
-            let updated = apply_physics_to_transform(before.clone(), delta_time, true);
+            let updated = before.extrapolate(dt);
             (id.clone(), updated)
         })
         .collect()

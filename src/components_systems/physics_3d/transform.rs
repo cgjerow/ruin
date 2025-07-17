@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
-    components_systems::{Entity, TransformInfo},
-    world::World,
-};
+use crate::{components_systems::Entity, world::World};
 
 #[derive(Debug, Clone)]
 pub struct TransformComponent {
@@ -13,7 +10,7 @@ pub struct TransformComponent {
     pub size: [f32; 3],
 }
 
-pub fn transform_system_physics(world: &mut World, delta_time: f32) -> TransformInfo {
+pub fn transform_system_physics(world: &mut World, delta_time: f32) {
     let mut idled = Vec::new();
     let idle_threshold = 0.1; // velocity magnitude below which entity is considered idle
 
@@ -45,7 +42,6 @@ pub fn transform_system_physics(world: &mut World, delta_time: f32) -> Transform
         // Clear acceleration after use
         transform.acceleration = [0.0; 3];
     }
-    TransformInfo { idled }
 }
 
 pub fn transform_system_calculate_intended_position(

@@ -79,8 +79,9 @@ function ControllerBuilder()
 	return builder
 end
 
-function ElementBuilder()
-	local element = {
+function PhysicsBodyBuilder()
+	local body = {
+		type = GLOBALS.PHYSICS_BODIES.Rigid,
 		x = -1000,
 		y = -1000,
 		collision_box = {
@@ -103,51 +104,56 @@ function ElementBuilder()
 	local builder = {}
 
 	function builder:add_mask(mask)
-		element.masks[mask] = true
+		body.masks[mask] = true
+		return builder
+	end
+
+	function builder:body_type(type)
+		body.type = type
 		return builder
 	end
 
 	function builder:add_layer(layer)
-		element.layers[layer] = true
+		body.layers[layer] = true
 		return builder
 	end
 
 	function builder:add_animation(action, animation)
-		element.animations[action] = animation
+		body.animations[action] = animation
 		return builder
 	end
 
 	function builder:size(width, height)
-		element.width = width
-		element.height = height
+		body.width = width
+		body.height = height
 		return builder
 	end
 
 	function builder:position(x, y)
-		element.x = x
-		element.y = y
+		body.x = x
+		body.y = y
 		return builder
 	end
 
 	function builder:collider_offset(x, y)
-		element.collision_box.offset_x = x
-		element.collision_box.offset_y = y
+		body.collision_box.offset_x = x
+		body.collision_box.offset_y = y
 		return builder
 	end
 
 	function builder:collider_size_modifier(x, y)
-		element.collision_box.size_modifier_x = x
-		element.collision_box.size_modifier_y = y
+		body.collision_box.size_modifier_x = x
+		body.collision_box.size_modifier_y = y
 		return builder
 	end
 
 	function builder:health(h)
-		element.health = h
+		body.health = h
 		return builder
 	end
 
 	function builder:build()
-		return element
+		return body
 	end
 
 	return builder

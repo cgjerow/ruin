@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
+use cgmath::Vector2;
+
 use crate::{
     components_systems::{
-        physics_2d::{ColliderComponent, FlipComponent, TransformComponent},
+        physics_2d::{ColliderComponent, FlipComponent, PhysicsBody, TransformComponent},
         physics_3d, ActionStateComponent, AnimationComponent, Entity, HealthComponent,
         SpriteSheetComponent,
     },
@@ -19,6 +21,7 @@ pub struct World {
     pub transforms_2d: HashMap<Entity, TransformComponent>,
     pub transforms_3d: HashMap<Entity, physics_3d::TransformComponent>,
     pub action_states: HashMap<Entity, ActionStateComponent>,
+    pub physics_bodies_2d: HashMap<Entity, PhysicsBody>,
     pub colliders_2d: HashMap<Entity, ColliderComponent>,
     pub colliders_3d: HashMap<Entity, physics_3d::ColliderComponent>,
     pub flips: HashMap<Entity, FlipComponent>,
@@ -33,6 +36,7 @@ impl World {
             transforms_3d: HashMap::new(),
             action_states: HashMap::new(),
             animations: HashMap::new(),
+            physics_bodies_2d: HashMap::new(),
             sprite_sheets: HashMap::new(),
             colliders_2d: HashMap::new(),
             colliders_3d: HashMap::new(),
@@ -90,12 +94,13 @@ impl World {
         let mut elements = Vec::new();
 
         for (entity, animation) in self.animations.iter() {
-            if let Some(transform) = self.transforms_2d.get(entity) {
+            if let Some(body) = self.physics_bodies_2d.get(entity) {
                 let uv_coords = animation.current_frame.uv_coords;
                 let flip = self
                     .flips
                     .get(entity)
                     .unwrap_or(&FlipComponent { x: false, y: false });
+
                 let sprite = self
                     .sprite_sheets
                     .get(
@@ -107,10 +112,11 @@ impl World {
                             .sprite_sheet_id,
                     )
                     .expect("Sprite Sheets not found");
+
                 elements.push(RenderElement2D {
-                    position: [transform.position[0], transform.position[1]],
-                    size: transform.size,
-                    z_order: -transform.position[1], // Sort top to bottom: lower y = drawn later
+                    position: [body.position[0], body.position[1]],
+                    size: body.get_size(),
+                    z_order: -body.position[1], // Sort top to bottom: lower y = drawn later
                     texture: sprite.texture.clone(),
                     texture_id: sprite.texture_id.clone(),
                     uv_coords,
@@ -121,5 +127,11 @@ impl World {
         }
 
         RenderQueue2D { elements }
+    }
+
+    pub fn clear_forces(&mut self) {
+        for (_entity, body) in self.physics_bodies_2d.iter_mut() {
+            body.force_accumulator = Vector2::new(0.0, 0.0);
+        }
     }
 }

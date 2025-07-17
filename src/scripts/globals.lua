@@ -1,4 +1,11 @@
 GLOBALS = {
+	PHYSICS_BODIES = {
+		Rigid = 0,
+		Static = 1,
+		Kinematic = 2,
+		Trigger = 3,
+		-- Character = 4, Maybe later?
+	},
 	ACTIONS = {
 		Idle = 0,
 		Running = 1,
