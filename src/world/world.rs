@@ -1,16 +1,29 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
 use cgmath::Vector2;
 
 use crate::{
     components_systems::{
-        physics_2d::{ColliderComponent, FlipComponent, PhysicsBody, TransformComponent},
+        physics_2d::{Area2D, ColliderComponent, FlipComponent, PhysicsBody, TransformComponent},
         physics_3d, ActionStateComponent, AnimationComponent, Entity, HealthComponent,
         SpriteSheetComponent,
     },
     graphics_2d::{RenderElement2D, RenderQueue2D},
     graphics_3d::{RenderElement, RenderQueue},
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AreaRole {
+    Physics,
+    Hitbox,
+    Trigger,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AreaInfo {
+    pub role: AreaRole,
+    pub parent: Entity,
+}
 
 #[derive(Debug, Clone)]
 pub struct World {
@@ -22,7 +35,8 @@ pub struct World {
     pub transforms_3d: HashMap<Entity, physics_3d::TransformComponent>,
     pub action_states: HashMap<Entity, ActionStateComponent>,
     pub physics_bodies_2d: HashMap<Entity, PhysicsBody>,
-    pub colliders_2d: HashMap<Entity, ColliderComponent>,
+    pub physical_colliders_2d: HashMap<Entity, HashMap<Entity, Area2D>>,
+    pub area_roles: HashMap<Entity, AreaInfo>,
     pub colliders_3d: HashMap<Entity, physics_3d::ColliderComponent>,
     pub flips: HashMap<Entity, FlipComponent>,
 }
@@ -38,7 +52,8 @@ impl World {
             animations: HashMap::new(),
             physics_bodies_2d: HashMap::new(),
             sprite_sheets: HashMap::new(),
-            colliders_2d: HashMap::new(),
+            physical_colliders_2d: HashMap::new(),
+            area_roles: HashMap::new(),
             colliders_3d: HashMap::new(),
             flips: HashMap::new(),
         }
@@ -48,6 +63,48 @@ impl World {
         let entity = Entity(self.next_id);
         self.next_id += 1;
         return entity;
+    }
+
+    pub fn insert_area_2d(&mut self, info: AreaInfo, area: Area2D) -> Entity {
+        let area_entity = self.new_entity();
+        match info.role {
+            AreaRole::Physics => {
+                self.physical_colliders_2d
+                    .entry(info.parent)
+                    .or_insert_with(HashMap::new)
+                    .insert(area_entity, area);
+            }
+            _ => {}
+        }
+        self.area_roles.insert(area_entity, info);
+        return area_entity;
+    }
+
+    pub fn get_area_by_info(&self, id: &Entity, info: AreaInfo) -> Option<&Area2D> {
+        match info.role {
+            AreaRole::Physics => self
+                .physical_colliders_2d
+                .get(&info.parent)
+                .unwrap()
+                .get(id),
+            _ => None,
+        }
+    }
+
+    pub fn update_area_masks_and_layers(&mut self, id: &Entity, masks: u8, layers: u8) {
+        if let Some(info) = self.area_roles.get(id) {
+            if let Some(area) = match info.role {
+                AreaRole::Physics => self
+                    .physical_colliders_2d
+                    .get_mut(&info.parent)
+                    .unwrap()
+                    .get_mut(id),
+                _ => None,
+            } {
+                area.masks = masks;
+                area.layers = layers;
+            }
+        }
     }
 
     pub fn extract_render_queue(&self) -> RenderQueue {

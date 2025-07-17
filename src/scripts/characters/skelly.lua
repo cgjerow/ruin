@@ -40,8 +40,8 @@ local function move_skellies()
 			local ny = dy / dist
 			if random_action < 9 and dist < 4 and not ENGINE_HANDLES.is_untargetable(WORLD.player_id()) then
 				-- Movement speed or force
-				local fx = nx * 20
-				local fy = ny * 20
+				local fx = nx * 10
+				local fy = ny * 10
 				engine.apply_impulse_2d(key, fx, fy)
 			elseif random_action < 9 then
 				-- Movement speed or force

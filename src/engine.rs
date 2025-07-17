@@ -2,7 +2,8 @@ use crate::bitmaps::vecbool_to_u8;
 use crate::camera_2d::Camera2D;
 use crate::camera_3d::{Camera3D, CameraAction};
 use crate::components_systems::physics_2d::{
-    self, BodyType, ColliderComponent, FlipComponent, PhysicsBody, Shape, TransformComponent,
+    self, Area2D, BodyType, ColliderComponent, FlipComponent, PhysicsBody, Shape,
+    TransformComponent,
 };
 use crate::components_systems::{
     animation_system_update_frames, damage, set_entity_state, ActionState, ActionStateComponent,
@@ -11,7 +12,7 @@ use crate::components_systems::{
 use crate::graphics::Graphics;
 use crate::lua_scriptor::LuaExtendedExecutor;
 use crate::texture::Texture;
-use crate::world::World;
+use crate::world::{AreaInfo, AreaRole, World};
 use crate::{debug, graphics_2d, graphics_3d};
 use cgmath::Vector2;
 use debug::Debug;
@@ -233,9 +234,9 @@ impl Engine {
     fn apply_masks_and_layers(&mut self, id: u32, masks: Table, layers: Table) {
         let masks = vecbool_to_u8(LuaExtendedExecutor::table_to_vec_8(masks));
         let layers = vecbool_to_u8(LuaExtendedExecutor::table_to_vec_8(layers));
-        let collider = self.world.colliders_2d.get_mut(&Entity(id)).unwrap();
-        collider.masks = masks;
-        collider.layers = layers;
+
+        self.world
+            .update_area_masks_and_layers(&Entity(id), masks, layers);
     }
 
     fn get_velocity_2d(&mut self, id: u32) -> [f32; 2] {
@@ -302,7 +303,7 @@ impl Engine {
         );
     }
 
-    fn create_body(&mut self, lua_element: mlua::Table) -> u32 {
+    fn create_body(&mut self, lua_element: mlua::Table) -> [u32; 2] {
         let state: ActionState = lua_element.get("state").unwrap_or(0).into();
         let is_pc: bool = lua_element.get("is_pc").unwrap_or(false).into();
         let x: f32 = lua_element.get("x").unwrap_or(0.0);
@@ -362,6 +363,7 @@ impl Engine {
         }
 
         let current_frame = animations_map.get(&state).unwrap().frames[0].clone();
+        let mut collider: Entity = Entity(0);
 
         if self.dimensions == Dimensions::Two {
             self.world.animations.insert(
@@ -400,18 +402,26 @@ impl Engine {
             );
 
             if collision_box.get("enabled").unwrap_or(false) {
-                self.world.colliders_2d.insert(
-                    entity.clone(),
-                    ColliderComponent {
-                        offset: [
-                            collision_box.get("offset_x").unwrap_or(0.0),
-                            collision_box.get("offset_y").unwrap_or(0.0),
-                        ],
-                        size: [
-                            width * collision_box.get("size_modifier_x").unwrap_or(1.0),
-                            height * collision_box.get("size_modifier_y").unwrap_or(1.0),
-                        ],
-                        is_solid: true,
+                collider = self.world.insert_area_2d(
+                    AreaInfo {
+                        role: AreaRole::Physics,
+                        parent: entity.clone(),
+                    },
+                    Area2D {
+                        shape: Shape::Rectangle {
+                            half_extents: cgmath::Vector2 {
+                                x: width / 2.0,
+                                y: height / 2.0,
+                            },
+                        },
+                        size: Vector2 {
+                            x: width * collision_box.get("size_modifier_x").unwrap_or(0.0),
+                            y: height * collision_box.get("size_modifier_y").unwrap_or(0.0),
+                        },
+                        offset: Vector2 {
+                            x: collision_box.get("offset_x").unwrap_or(0.0),
+                            y: (collision_box.get("offset_y").unwrap_or(0.0)),
+                        },
                         masks: vecbool_to_u8(masks),
                         layers: vecbool_to_u8(layers),
                     },
@@ -428,7 +438,7 @@ impl Engine {
                 .action_states
                 .insert(entity.clone(), ActionStateComponent { state });
         }
-        entity.into()
+        [entity.into(), collider.into()]
     }
 
     pub fn screen_to_world(&self, loc: [f32; 2]) -> [f32; 2] {

@@ -15,8 +15,8 @@ math.randomseed(os.time())
 
 CONFIG = {
 	max_speed = 10,
-	skelly_max_speed = 5,
-	skelly_speed = 4,
+	skelly_max_speed = 3,
+	skelly_speed = 2,
 	dead = false,
 	friction = 5,
 	min_friction = .1,
@@ -49,6 +49,7 @@ WORLD = {
 WORLD.player_id = function() return WORLD.player.id end
 WORLD.is_game_over = function() return WORLD.game_over end
 WORLD.set_game_over = function() WORLD.game_over = true end
+WORLD.get_entity = function(id) return CONFIG.entities[id] end
 
 
 CONTROLLER = {
@@ -61,8 +62,17 @@ CONTROLLER = {
 }
 
 ENGINE_HANDLES = {
+	create_body = function(entity)
+		local result = engine.create_body(entity)
+		entity.id = result[1]
+		CONFIG.entities[entity.id] = entity
+		CONFIG.entities[entity.id].collider = result[2]
+		return entity.id
+	end,
+
 	set_state = function(id, state)
 		if not id == WORLD.player_id() or not WORLD.is_game_over() then
+			;
 			engine.set_state(id, state)
 		end
 	end,
@@ -81,7 +91,7 @@ ENGINE_HANDLES = {
 		if not WORLD.targetability[id] or WORLD.targetability[id].duration < duration then
 			WORLD.targetability[id] = { duration = duration }
 			local ml = MaskAndLayerBuilder():add_mask(GLOBALS.MASKS_AND_LAYERS.Env):build()
-			engine.apply_masks_and_layers(id, ml.masks, ml.layers)
+			engine.apply_masks_and_layers(WORLD.get_entity(id).collider, ml.masks, ml.layers)
 		end
 	end,
 
@@ -104,7 +114,7 @@ ENGINE_HANDLES = {
 							:add_layer(GLOBALS.MASKS_AND_LAYERS.Enemy)
 				end
 				ml = ml:build()
-				engine.apply_masks_and_layers(id, ml.masks, ml.layers)
+				engine.apply_masks_and_layers(WORLD.get_entity(id).collider, ml.masks, ml.layers)
 				table.insert(to_clear, id)
 			end
 		end
@@ -157,7 +167,7 @@ function ENGINE_update(dt)
 		local x, y = game_math.normalize(v[1], v[2])
 
 		if not (x == 0 and y == 0) then
-			local impulse_strength = 200
+			local impulse_strength = 80
 			engine.apply_impulse_2d(WORLD.player_id(), x * impulse_strength, y * impulse_strength)
 		end
 	end
@@ -190,9 +200,7 @@ function ENGINE_load()
 	local death = summon_death(0, 0)
 	death.on_collision = "bounce"
 	CONFIG.player = death
-	WORLD.player.id = engine.create_body(death)
-	death.id = WORLD.player_id()
-	CONFIG.entities[WORLD.player_id()] = death
+	WORLD.player.id = ENGINE_HANDLES.create_body(death)
 
 	local build_walls = true
 	if build_walls then
@@ -203,26 +211,22 @@ function ENGINE_load()
 			local fence = new_fence(i - 25, -25)
 			fence.on_player_collision = "block"
 			fence.on_collision = ""
-			fence.id = engine.create_body(fence)
-			CONFIG.entities[fence.id] = fence
+			fence.id = ENGINE_HANDLES.create_body(fence)
 
 			fence = new_fence(i - 25, 25)
 			fence.on_player_collision = "block"
 			fence.on_collision = ""
-			fence.id = engine.create_body(fence)
-			CONFIG.entities[fence.id] = fence
+			fence.id = ENGINE_HANDLES.create_body(fence)
 
 			fence = new_fence(-25, i - 25)
 			fence.on_player_collision = "block"
 			fence.on_collision = ""
-			fence.id = engine.create_body(fence)
-			CONFIG.entities[fence.id] = fence
+			fence.id = ENGINE_HANDLES.create_body(fence)
 
 			fence = new_fence(25, i - 25)
 			fence.on_player_collision = "block"
 			fence.on_collision = ""
-			fence.id = engine.create_body(fence)
-			CONFIG.entities[fence.id] = fence
+			fence.id = ENGINE_HANDLES.create_body(fence)
 			::continue::
 		end
 	end
@@ -242,11 +246,10 @@ function ENGINE_load()
 			end
 			local s = skelly.new(x, y)
 			-- s.is_pc = true
-			s.id = engine.create_body(s)
 			s.on_player_collision = "bounce"
 			s.on_collision = "bounce"
 			s.is_skelly = true
-			CONFIG.entities[s.id] = s
+			s.id = ENGINE_HANDLES.create_body(s)
 			-- STATE.player = new_id
 		end
 	end
