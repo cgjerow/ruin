@@ -4,7 +4,7 @@ use cgmath::Vector2;
 
 use crate::{
     components_systems::{
-        physics_2d::{Area2D, ColliderComponent, FlipComponent, PhysicsBody, TransformComponent},
+        physics_2d::{Area2D, FlipComponent, PhysicsBody, TransformComponent},
         physics_3d, ActionStateComponent, AnimationComponent, Entity, HealthComponent,
         SpriteSheetComponent,
     },
@@ -12,17 +12,23 @@ use crate::{
     graphics_3d::{RenderElement, RenderQueue},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AreaRole {
     Physics,
     Hitbox,
     Trigger,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AreaInfo {
     pub role: AreaRole,
     pub parent: Entity,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ParentAreaInfo {
+    pub masks_superset: u8,
+    pub layers_superset: u8,
 }
 
 #[derive(Debug, Clone)]
@@ -36,9 +42,13 @@ pub struct World {
     pub action_states: HashMap<Entity, ActionStateComponent>,
     pub physics_bodies_2d: HashMap<Entity, PhysicsBody>,
     pub physical_colliders_2d: HashMap<Entity, HashMap<Entity, Area2D>>,
-    pub area_roles: HashMap<Entity, AreaInfo>,
     pub colliders_3d: HashMap<Entity, physics_3d::ColliderComponent>,
     pub flips: HashMap<Entity, FlipComponent>,
+    pub area_roles: HashMap<Entity, AreaInfo>,
+
+    // keep this concept hidden for now.
+    // interactions should take place through our getters/setters
+    parent_area_info: HashMap<Entity, HashMap<AreaRole, ParentAreaInfo>>,
 }
 
 impl World {
@@ -56,6 +66,7 @@ impl World {
             area_roles: HashMap::new(),
             colliders_3d: HashMap::new(),
             flips: HashMap::new(),
+            parent_area_info: HashMap::new(),
         }
     }
 
@@ -63,6 +74,34 @@ impl World {
         let entity = Entity(self.next_id);
         self.next_id += 1;
         return entity;
+    }
+
+    fn get_all_areas_by_info(&self, info: AreaInfo) -> HashMap<Entity, Area2D> {
+        match info.role {
+            AreaRole::Physics => self
+                .physical_colliders_2d
+                .get(&info.parent)
+                .cloned()
+                .unwrap_or_else(HashMap::new),
+            _ => HashMap::new(),
+        }
+    }
+
+    pub fn masks_overlap_layers(&self, a_info: AreaInfo, b_info: AreaInfo) -> u8 {
+        let a = self
+            .parent_area_info
+            .get(&a_info.parent)
+            .unwrap()
+            .get(&a_info.role)
+            .unwrap();
+        let b = self
+            .parent_area_info
+            .get(&b_info.parent)
+            .unwrap()
+            .get(&b_info.role)
+            .unwrap();
+
+        return a.masks_superset & b.layers_superset;
     }
 
     pub fn insert_area_2d(&mut self, info: AreaInfo, area: Area2D) -> Entity {
@@ -76,8 +115,33 @@ impl World {
             }
             _ => {}
         }
-        self.area_roles.insert(area_entity, info);
+        self.area_roles.insert(
+            area_entity,
+            AreaInfo {
+                role: info.role,
+                parent: info.parent.clone(),
+            },
+        );
+
+        self.update_parent_area_info(info);
+
         return area_entity;
+    }
+
+    fn update_parent_area_info(&mut self, info: AreaInfo) {
+        let all_areas = self.get_all_areas_by_info(info);
+        let combined_masks = all_areas.values().fold(0u8, |acc, area| acc | area.masks);
+        let combined_layers = all_areas.values().fold(0u8, |acc, area| acc | area.layers);
+        self.parent_area_info
+            .entry(info.parent) // Get entry for outer map
+            .or_insert_with(HashMap::new) // Insert new inner HashMap if missing
+            .insert(
+                info.role.clone(),
+                ParentAreaInfo {
+                    masks_superset: combined_masks,
+                    layers_superset: combined_layers,
+                },
+            );
     }
 
     pub fn get_area_by_info(&self, id: &Entity, info: AreaInfo) -> Option<&Area2D> {
@@ -104,6 +168,7 @@ impl World {
                 area.masks = masks;
                 area.layers = layers;
             }
+            self.update_parent_area_info(*info);
         }
     }
 

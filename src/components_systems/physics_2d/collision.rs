@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
 use crate::{
     components_systems::{
@@ -37,8 +37,35 @@ pub fn collision_system(world: &World, next: &HashMap<Entity, PhysicsBody>) -> V
     let mut collisions = Vec::new();
 
     for (a_parent, a_map) in world.physical_colliders_2d.iter() {
+        let a_1 = Instant::now();
         for (a_area_id, a_collider) in a_map.iter() {
             for (b_parent, b_map) in world.physical_colliders_2d.iter() {
+                if world.masks_overlap_layers(
+                    AreaInfo {
+                        parent: a_parent.clone(),
+                        role: AreaRole::Physics,
+                    },
+                    AreaInfo {
+                        parent: b_parent.clone(),
+                        role: AreaRole::Physics,
+                    },
+                ) == 0
+                {
+                    continue;
+                }
+
+                if let (Some(a_next), Some(b_next)) = (next.get(a_parent), next.get(b_parent)) {
+                    let dx = a_next.position[0] - b_next.position[0];
+                    let dy = a_next.position[1] - b_next.position[1];
+                    let dist_sq = dx * dx + dy * dy;
+
+                    if dist_sq > 100.0 {
+                        continue; // Skip — too far away
+                    }
+                } else {
+                    continue;
+                }
+
                 for (b_area_id, b_collider) in b_map.iter() {
                     // Skip self-collision or uninteresting interactions
                     if a_area_id == b_area_id || a_collider.masks & b_collider.layers == 0 {
@@ -103,6 +130,7 @@ pub fn collision_system(world: &World, next: &HashMap<Entity, PhysicsBody>) -> V
                 }
             }
         }
+        // println!("---- A Outer Loop: {:.6}", a_1.elapsed().as_secs_f64());
     }
     collisions
 }

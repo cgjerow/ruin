@@ -144,7 +144,23 @@ function ENGINE_on_collision(cols)
 	end
 end
 
+local fps_debug = {
+	frame_count = 0,
+	time_accum = 0,
+	fps = 0,
+}
+
 function ENGINE_update(dt)
+	-- FPS calculation
+	fps_debug.frame_count = fps_debug.frame_count + 1
+	fps_debug.time_accum = fps_debug.time_accum + dt
+
+	if fps_debug.time_accum >= 1.0 then
+		print("FPS: ", fps_debug.frame_count)
+		fps_debug.frame_count = 0
+		fps_debug.time_accum = 0
+	end
+
 	if (WORLD.is_game_over()) then return end
 
 	local dx, dy = 0, 0

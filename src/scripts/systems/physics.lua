@@ -26,7 +26,6 @@ local function apply_drag_to_rigids(dt)
 			local speed = math.sqrt(vel[1] ^ 2 + vel[2] ^ 2)
 			local max
 			if id == WORLD.player_id() then max = CONFIG.max_speed else max = CONFIG.skelly_speed end
-			print("MAX", max)
 			if speed > max then
 				local scale = max / speed
 				vel[1] = vel[1] * scale
