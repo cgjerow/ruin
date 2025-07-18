@@ -18,11 +18,11 @@ CONFIG = {
 	skelly_max_speed = 3,
 	skelly_speed = 2,
 	dead = false,
-	friction = 5,
+	friction = 1,
 	min_friction = .1,
 	input_enabled = true,
 	input_disable_time = 0,
-	run_force = 100.0,
+	run_force = 15.0,
 	player_id = -1,
 	entities = {},
 	controller = ControllerBuilder()
@@ -48,7 +48,11 @@ WORLD = {
 }
 WORLD.player_id = function() return WORLD.player.id end
 WORLD.is_game_over = function() return WORLD.game_over end
-WORLD.set_game_over = function() WORLD.game_over = true end
+WORLD.set_game_over = function()
+	WORLD.game_over = true
+	-- probably want to idle everyone here
+	engine.set_velocity_2d(WORLD.player_id(), 0, 0)
+end
 WORLD.get_entity = function(id) return CONFIG.entities[id] end
 
 
@@ -131,7 +135,7 @@ ENGINE_HANDLES = {
 
 -- Called once per frame, after all physics substeps have run
 function ENGINE_after_physics(dt)
-	physics.apply_drag_to_rigids(dt)
+	-- physics.apply_drag_to_rigids(dt)
 end
 
 function ENGINE_input_event(input, is_pressed, mouse_position)
@@ -166,7 +170,7 @@ function ENGINE_update(dt)
 	local dx, dy = 0, 0
 	ENGINE_HANDLES.tick_targetability(dt)
 
-	skelly.move()
+	skelly.move(dt)
 
 	if not CONFIG.input_enabled then
 		CONFIG.input_disable_time = CONFIG.input_disable_time - dt
@@ -183,8 +187,8 @@ function ENGINE_update(dt)
 		local x, y = game_math.normalize(v[1], v[2])
 
 		if not (x == 0 and y == 0) then
-			local impulse_strength = 80
-			engine.apply_impulse_2d(WORLD.player_id(), x * impulse_strength, y * impulse_strength)
+			local impulse_strength = 10
+			engine.apply_move_2d(WORLD.player_id(), x * impulse_strength, y * impulse_strength)
 		end
 	end
 
@@ -206,9 +210,12 @@ function ENGINE_update(dt)
 	if length > 0 then
 		dx = dx / length
 		dy = dy / length
-		engine.apply_force_2d(WORLD.player_id(), dx * CONFIG.run_force, dy * CONFIG.run_force)
+		engine.set_velocity_2d(WORLD.player_id(), dx * CONFIG.run_force, dy * CONFIG.run_force)
 		ENGINE_HANDLES.set_state(WORLD.player_id(), GLOBALS.ACTIONS.Running)
 		ENGINE_HANDLES.flip_x(WORLD.player_id(), dx)
+	else
+		engine.set_velocity_2d(WORLD.player_id(), 0, 0)
+		ENGINE_HANDLES.set_state(WORLD.player_id(), GLOBALS.ACTIONS.Idle)
 	end
 end
 
@@ -249,7 +256,7 @@ function ENGINE_load()
 
 	local build_skellys = true
 	if build_skellys then
-		for _ = 1, 10 do
+		for _ = 1, 1 do
 			local x = math.random(10, 20)
 			local y = math.random(10, 20)
 			local flip_x = math.random(0, 1)

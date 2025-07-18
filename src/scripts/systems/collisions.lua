@@ -1,5 +1,5 @@
 local function on_each_collision(col)
-	local bounce_speed = 50.0
+	local bounce_speed = 20.0
 	local a_id = col.a
 	local b_id = col.b
 
@@ -19,7 +19,7 @@ local function on_each_collision(col)
 	if a_id == WORLD.player_id() or b_id == WORLD.player_id() then
 		if a_id == WORLD.player_id() then
 			if CONFIG.entities[b_id].on_player_collision == "bounce" then
-				engine.apply_impulse_2d(
+				engine.set_velocity_2d(
 					a_id,
 					-normal_x * bounce_speed,
 					-normal_y * bounce_speed
@@ -28,7 +28,7 @@ local function on_each_collision(col)
 				CONTROLLER.start_input_reenable_timer(0.3)
 			end
 			if CONFIG.entities[b_id].on_collision == "bounce" then
-				engine.apply_impulse_2d(
+				engine.set_velocity_2d(
 					b_id,
 					normal_x * bounce_speed,
 					normal_y * bounce_speed

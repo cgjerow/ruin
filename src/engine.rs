@@ -96,7 +96,7 @@ impl Engine {
             count: 0,
             fps_specified: fps_opt != None,
             target_rate: target_rate,
-            physics_iterations_per_frame: 4,
+            physics_iterations_per_frame: 1,
             last_frame: Instant::now() - target_rate.unwrap_or_default(),
             asset_cache: HashMap::new(),
             width: config.width,
@@ -179,12 +179,11 @@ impl Engine {
                     .expect("Error handling collisions");
 
                 physics_2d::transform_system_physics(&mut self.world, incremented_dt);
+                let after_physics: mlua::Function =
+                    self.lua_context.get_function("ENGINE_after_physics");
+                let _ = after_physics.call::<()>(incremented_dt);
             }
             self.world.clear_forces();
-
-            let after_physics: mlua::Function =
-                self.lua_context.get_function("ENGINE_after_physics");
-            let _ = after_physics.call::<()>(dt32);
 
             if self.camera_mode == CameraOption::Follow {
                 self.update_camera_follow(&self.player.clone());
@@ -222,13 +221,19 @@ impl Engine {
     }
 
     fn apply_impulse_2d(&mut self, id: u32, fx: f32, fy: f32) {
-        if self.dimensions == Dimensions::Two {
-            self.world
-                .physics_bodies_2d
-                .get_mut(&Entity(id))
-                .unwrap()
-                .apply_impulse(cgmath::Vector2 { x: fx, y: fy });
-        }
+        self.world
+            .physics_bodies_2d
+            .get_mut(&Entity(id))
+            .unwrap()
+            .apply_impulse(cgmath::Vector2 { x: fx, y: fy });
+    }
+
+    fn set_velocity_2d(&mut self, id: u32, vx: f32, vy: f32) {
+        self.world
+            .physics_bodies_2d
+            .get_mut(&Entity(id))
+            .unwrap()
+            .velocity = Vector2::new(vx, vy);
     }
 
     fn apply_masks_and_layers(&mut self, id: u32, masks: Table, layers: Table) {
@@ -252,16 +257,6 @@ impl Engine {
         [0.0, 0.0]
     }
 
-    fn set_velocity_2d(&mut self, id: u32, vx: f32, vy: f32) {
-        if self.dimensions == Dimensions::Two {
-            self.world
-                .physics_bodies_2d
-                .get_mut(&Entity(id))
-                .unwrap()
-                .velocity = Vector2::new(vx, vy);
-        }
-    }
-
     fn get_position_2d(&mut self, id: u32) -> [f32; 2] {
         if self.dimensions == Dimensions::Two {
             let position = self
@@ -273,6 +268,11 @@ impl Engine {
             return [position.x, position.y];
         }
         [0.0, 0.0]
+    }
+
+    fn apply_move_2d(&mut self, id: u32, x: f32, y: f32) {
+        let b = self.world.physics_bodies_2d.get_mut(&Entity(id)).unwrap();
+        b.position += Vector2::new(x, y);
     }
 
     fn damage(&mut self, id: u32, amount: u16) -> bool {
@@ -522,6 +522,14 @@ impl Engine {
                 Ok(engine.apply_impulse_2d(id, x, y))
             })
             .expect("Could not create function");
+        let apply_move_2d = self
+            .lua_context
+            .lua
+            .create_function(move |_, (id, x, y): (u32, f32, f32)| {
+                let engine = unsafe { &mut *self_ptr };
+                Ok(engine.apply_move_2d(id, x, y))
+            })
+            .expect("Could not create function");
         let apply_masks_and_layers = self
             .lua_context
             .lua
@@ -599,6 +607,9 @@ impl Engine {
 
         lua_engine
             .set("apply_force_2d", apply_force_2d)
+            .expect("Could not set engine function");
+        lua_engine
+            .set("apply_move_2d", apply_move_2d)
             .expect("Could not set engine function");
         lua_engine
             .set("apply_impulse_2d", apply_impulse_2d)
