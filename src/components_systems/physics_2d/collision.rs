@@ -54,18 +54,6 @@ pub fn collision_system(world: &World, next: &HashMap<Entity, PhysicsBody>) -> V
                     continue;
                 }
 
-                if let (Some(a_next), Some(b_next)) = (next.get(a_parent), next.get(b_parent)) {
-                    let dx = a_next.position[0] - b_next.position[0];
-                    let dy = a_next.position[1] - b_next.position[1];
-                    let dist_sq = dx * dx + dy * dy;
-
-                    if dist_sq > 100.0 {
-                        continue; // Skip — too far away
-                    }
-                } else {
-                    continue;
-                }
-
                 for (b_area_id, b_collider) in b_map.iter() {
                     // Skip self-collision or uninteresting interactions
                     if a_area_id == b_area_id || a_collider.masks & b_collider.layers == 0 {

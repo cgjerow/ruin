@@ -14,7 +14,7 @@ local new_fence = require("environment.fence")
 math.randomseed(os.time())
 
 CONFIG = {
-	max_speed = 10,
+	max_speed = 5,
 	skelly_max_speed = 3,
 	skelly_speed = 2,
 	dead = false,
@@ -22,7 +22,7 @@ CONFIG = {
 	min_friction = .1,
 	input_enabled = true,
 	input_disable_time = 0,
-	run_force = 200.0,
+	run_force = 100.0,
 	player_id = -1,
 	entities = {},
 	controller = ControllerBuilder()
