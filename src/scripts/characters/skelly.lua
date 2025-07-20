@@ -47,7 +47,6 @@ local function move_skellies(dt)
 			if WORLD.activity_state[key].time <= 0 then
 				WORLD.activity_state[key].activity = "pursuing"
 				engine.set_velocity_2d(key, 0, 0)
-				print("clear", WORLD.activity_state[key].activity)
 			end
 			goto continue
 		end
@@ -63,8 +62,6 @@ local function move_skellies(dt)
 				WORLD.activity_state[key].direction_y = fy
 
 				engine.set_velocity_2d(key, fx, fy)
-
-				print("clear", WORLD.activity_state[key].activity)
 			end
 			goto continue
 		end
@@ -73,7 +70,7 @@ local function move_skellies(dt)
 		if (not WORLD.activity_state[key] or WORLD.activity_state[key].activity == "pursuing") then
 			local should_lunge = dist < 8
 			if should_lunge then
-				WORLD.activity_state[key] = { activity = "lunge-ramping", time = 2 }
+				WORLD.activity_state[key] = { activity = "lunge-ramping", time = 1 }
 				engine.set_velocity_2d(key, 0, 0)
 			else
 				local fx = nx * 10

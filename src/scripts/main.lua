@@ -10,6 +10,7 @@ require("game_asset_builders")
 local summon_death = require("characters.death")
 local skelly = require("characters.skelly")
 local new_fence = require("environment.fence")
+local new_brick_tile = require("environment.brick_ground")
 
 math.randomseed(os.time())
 
@@ -47,12 +48,18 @@ WORLD = {
 	time = 0,
 }
 WORLD.player_id = function() return WORLD.player.id end
-WORLD.is_game_over = function() return WORLD.game_over end
+WORLD.is_game_over = function()
+	if WORLD.game_over then
+		engine.set_velocity_2d(WORLD.player_id(), 0, 0)
+	end
+	return WORLD.game_over
+end
+
 WORLD.set_game_over = function()
 	WORLD.game_over = true
-	-- probably want to idle everyone here
 	engine.set_velocity_2d(WORLD.player_id(), 0, 0)
 end
+
 WORLD.get_entity = function(id) return CONFIG.entities[id] end
 
 
@@ -256,7 +263,7 @@ function ENGINE_load()
 
 	local build_skellys = true
 	if build_skellys then
-		for _ = 1, 1 do
+		for _ = 1, 5 do
 			local x = math.random(10, 20)
 			local y = math.random(10, 20)
 			local flip_x = math.random(0, 1)
