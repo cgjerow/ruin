@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Instant};
+use std::collections::HashMap;
 
 use crate::{
     components_systems::{
@@ -7,15 +7,6 @@ use crate::{
     },
     world::{AreaInfo, AreaRole, World},
 };
-
-#[derive(Debug, Clone, Copy, Default)]
-pub struct ColliderComponent {
-    pub offset: [f32; 2],
-    pub size: [f32; 2],
-    pub is_solid: bool,
-    pub masks: u8,
-    pub layers: u8,
-}
 
 #[derive(Debug, Clone, Copy)]
 pub struct CollisionInfo {
@@ -37,7 +28,6 @@ pub fn collision_system(world: &World, next: &HashMap<Entity, PhysicsBody>) -> V
     let mut collisions = Vec::new();
 
     for (a_parent, a_map) in world.physical_colliders_2d.iter() {
-        let a_1 = Instant::now();
         for (a_area_id, a_collider) in a_map.iter() {
             for (b_parent, b_map) in world.physical_colliders_2d.iter() {
                 if world.masks_overlap_layers(
@@ -190,11 +180,15 @@ pub fn resolve_collisions(world: &mut World, collisions: Vec<CollisionInfo>) {
                 col.normal[0] * col.penetration,
                 col.normal[1] * col.penetration,
             ];
-            a_body.position[0] = a_body.position[0] - mtv[0];
-            a_body.position[1] = a_body.position[1] - mtv[1];
+
+            if mtv[0] > 0.5 || mtv[1] > 0.5 {
+                a_body.position[0] = a_body.position[0] - mtv[0];
+                a_body.position[1] = a_body.position[1] - mtv[1];
+            }
+
             // Simple slide: zero out the component of velocity along the normal
             let dot = a_body.velocity[0] * col.normal[0] + a_body.velocity[1] * col.normal[1];
-            if dot < 0.0 {
+            if dot != 0.0 {
                 a_body.velocity[0] -= dot * col.normal[0];
                 a_body.velocity[1] -= dot * col.normal[1];
             }

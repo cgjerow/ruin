@@ -7,13 +7,16 @@ pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
+    #[allow(unused)]
     pub size: wgpu::Extent3d,
+    #[allow(unused)]
     pub id: String,
 }
 
 impl Texture {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
+    #[allow(unused)]
     pub fn from_bytes(
         id: String,
         device: &wgpu::Device,

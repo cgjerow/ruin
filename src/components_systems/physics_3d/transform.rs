@@ -10,7 +10,8 @@ pub struct TransformComponent {
     pub size: [f32; 3],
 }
 
-pub fn transform_system_physics(world: &mut World, delta_time: f32) {
+pub fn transform_system_physics(_world: &mut World, _delta_time: f32) {
+    /*
     let mut idled = Vec::new();
     let idle_threshold = 0.1; // velocity magnitude below which entity is considered idle
 
@@ -42,13 +43,15 @@ pub fn transform_system_physics(world: &mut World, delta_time: f32) {
         // Clear acceleration after use
         transform.acceleration = [0.0; 3];
     }
+    */
 }
 
 pub fn transform_system_calculate_intended_position(
-    world: &World,
-    delta_time: f32,
+    _world: &World,
+    _delta_time: f32,
 ) -> HashMap<Entity, TransformComponent> {
-    let mut to_return = HashMap::new();
+    let to_return = HashMap::new();
+    /*
     for (id, before) in world.transforms_3d.iter() {
         let mut transform = before.clone();
         // Integrate acceleration into velocity
@@ -78,6 +81,7 @@ pub fn transform_system_calculate_intended_position(
 
         to_return.insert(id.clone(), transform);
     }
+    */
     to_return
 }
 

@@ -15,7 +15,9 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AreaRole {
     Physics,
+    #[allow(unused)]
     Hitbox,
+    #[allow(unused)]
     Trigger,
 }
 
@@ -38,11 +40,9 @@ pub struct World {
     pub animations: HashMap<Entity, AnimationComponent>,
     pub sprite_sheets: HashMap<Entity, SpriteSheetComponent>,
     pub transforms_2d: HashMap<Entity, TransformComponent>,
-    pub transforms_3d: HashMap<Entity, physics_3d::TransformComponent>,
     pub action_states: HashMap<Entity, ActionStateComponent>,
     pub physics_bodies_2d: HashMap<Entity, PhysicsBody>,
     pub physical_colliders_2d: HashMap<Entity, HashMap<Entity, Area2D>>,
-    pub colliders_3d: HashMap<Entity, physics_3d::ColliderComponent>,
     pub flips: HashMap<Entity, FlipComponent>,
     pub area_roles: HashMap<Entity, AreaInfo>,
 
@@ -57,14 +57,12 @@ impl World {
             next_id: 0,
             health_bars: HashMap::new(),
             transforms_2d: HashMap::new(),
-            transforms_3d: HashMap::new(),
             action_states: HashMap::new(),
             animations: HashMap::new(),
             physics_bodies_2d: HashMap::new(),
             sprite_sheets: HashMap::new(),
             physical_colliders_2d: HashMap::new(),
             area_roles: HashMap::new(),
-            colliders_3d: HashMap::new(),
             flips: HashMap::new(),
             parent_area_info: HashMap::new(),
         }
@@ -170,46 +168,6 @@ impl World {
             }
             self.update_parent_area_info(*info);
         }
-    }
-
-    pub fn extract_render_queue(&self) -> RenderQueue {
-        let mut elements = Vec::new();
-        for (entity, animation) in &self.animations {
-            if let Some(transform_component) = self.transforms_3d.get(entity) {
-                let uv_coords = animation.current_frame.uv_coords;
-                let flip = self
-                    .flips
-                    .get(entity)
-                    .unwrap_or(&FlipComponent { x: false, y: false });
-
-                let sprite = self
-                    .sprite_sheets
-                    .get(
-                        &animation.animations[&self
-                            .action_states
-                            .get(&entity)
-                            .expect("Animation not found")
-                            .state]
-                            .sprite_sheet_id,
-                    )
-                    .expect("Sprite Sheets not found");
-                elements.push(RenderElement {
-                    position: [
-                        transform_component.position[0],
-                        transform_component.position[1],
-                        0.0,
-                    ],
-                    size: transform_component.size,
-                    texture: sprite.texture.clone(),
-                    texture_id: sprite.texture_id.clone(),
-                    flip_x: flip.x,
-                    flip_y: flip.y,
-                    uv_coords,
-                });
-            }
-        }
-
-        RenderQueue { elements }
     }
 
     pub fn extract_render_queue_2d(&self) -> RenderQueue2D {

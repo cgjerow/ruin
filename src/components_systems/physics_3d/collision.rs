@@ -26,10 +26,11 @@ pub struct CollisionInfo {
 }
 
 pub fn collision_system(
-    world: &World,
-    next_transforms: &HashMap<Entity, TransformComponent>,
+    _world: &World,
+    _next_transforms: &HashMap<Entity, TransformComponent>,
 ) -> Vec<CollisionInfo> {
-    let mut collisions = Vec::new();
+    let collisions = Vec::new();
+    /*
 
     for (entity, next_transform) in next_transforms.iter() {
         if let Some(collider) = world.colliders_3d.get(entity) {
@@ -72,10 +73,12 @@ pub fn collision_system(
             }
         }
     }
+    */
 
     collisions
 }
 
+/*
 pub fn is_colliding_3d(
     a_transform: &TransformComponent,
     a_collider: &ColliderComponent,
@@ -112,3 +115,4 @@ pub fn is_colliding_3d(
 
     overlap_x && overlap_y && overlap_z
 }
+*/

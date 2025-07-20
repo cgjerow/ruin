@@ -6,7 +6,7 @@ mod shapes;
 mod transform;
 
 pub use area::Area2D;
-pub use collision::{collision_system, resolve_collisions, ColliderComponent, CollisionInfo};
+pub use collision::{collision_system, resolve_collisions, CollisionInfo};
 pub use flip::FlipComponent;
 pub use physics_body::{BodyType, PhysicsBody};
 pub use shapes::Shape;

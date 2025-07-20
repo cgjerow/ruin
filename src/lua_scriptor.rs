@@ -129,6 +129,7 @@ impl LuaExtendedExecutor {
         ]
     }
 
+    #[allow(unused)]
     pub fn pretty_print_table(table: LuaTable, indent: usize) -> Result<String, mlua::Error> {
         let mut output = String::new();
         let pad = "  ".repeat(indent);

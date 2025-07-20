@@ -1,9 +1,8 @@
 use crate::bitmaps::vecbool_to_u8;
 use crate::camera_2d::Camera2D;
-use crate::camera_3d::{Camera3D, CameraAction};
+use crate::camera_3d::CameraAction;
 use crate::components_systems::physics_2d::{
-    self, Area2D, BodyType, ColliderComponent, FlipComponent, PhysicsBody, Shape,
-    TransformComponent,
+    self, Area2D, BodyType, FlipComponent, PhysicsBody, Shape, TransformComponent,
 };
 use crate::components_systems::{
     animation_system_update_frames, damage, set_entity_state, ActionState, ActionStateComponent,
@@ -65,7 +64,6 @@ pub struct EngineConfig {
 #[derive(Debug, PartialEq)]
 pub enum Dimensions {
     Two,
-    Three,
 }
 
 #[derive(Debug, PartialEq)]
@@ -972,13 +970,4 @@ fn keycode_to_str(key: KeyCode) -> Option<&'static str> {
         KeyM => "m",
         _ => return None, // Unknown or unhandled key
     })
-}
-
-fn random_color() -> wgpu::Color {
-    return wgpu::Color {
-        r: rand::random(),
-        b: rand::random(),
-        g: rand::random(),
-        a: rand::random(),
-    };
 }

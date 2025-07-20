@@ -16,20 +16,6 @@ impl From<u8> for ActionState {
             other => ActionState::Custom(other),
         }
     }
-    /*
-    fn from(s: String) -> Self {
-        match s.as_str() {
-            "Idle" => ActionState::Idle,
-            "Walking" => ActionState::Walking,
-            "Running" => ActionState::Running,
-            "Jumping" => ActionState::Jumping,
-            "Landing" => ActionState::Landing,
-            "Dying" => ActionState::Dying,
-            "Colliding" => ActionState::Colliding,
-            other => ActionState::Custom(other.to_string()),
-        }
-    }
-    */
 }
 
 pub fn set_entity_state(world: &mut World, entity: Entity, state: ActionState) {
