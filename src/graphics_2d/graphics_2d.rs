@@ -28,7 +28,8 @@ pub struct RenderElement2D {
 
 #[derive(Debug, Clone)]
 pub struct RenderQueue2D {
-    pub elements: Vec<RenderElement2D>,
+    pub transparent: Vec<RenderElement2D>,
+    pub opaque: Vec<RenderElement2D>,
 }
 
 pub struct Graphics2D {
@@ -38,13 +39,182 @@ pub struct Graphics2D {
     config: SurfaceConfiguration,
     is_surface_configured: bool,
     background_color: Color,
-    window: Arc<Window>,
     pub camera: Camera2D,
     camera_buffer: Buffer,
+    vertex_buffer: Buffer,
+    index_buffer: Buffer,
     camera_bind_group_layout: BindGroupLayout,
     texture_bind_group_layout: BindGroupLayout,
     render_pipeline: RenderPipeline,
+    camera_bind_group: BindGroup,
     depth_texture: Texture,
+
+    texture_batch_context: TextureBatchContext,
+}
+
+#[derive(Debug, Clone)]
+struct TextureBatchContext {
+    current_vertex_buffer_offset: u64,
+    current_index_buffer_offset: u64,
+    vertex_count_offset: u16,
+    batched_vertices: Vec<Vertex>,
+    batched_indices: Vec<u16>,
+    previous_texture: String,
+    bind_group_cache: HashMap<String, BindGroup>,
+}
+
+impl TextureBatchContext {
+    fn new() -> Self {
+        Self {
+            current_vertex_buffer_offset: 0,
+            current_index_buffer_offset: 0,
+            vertex_count_offset: 0,
+            batched_vertices: Vec::new(),
+            batched_indices: Vec::new(),
+            previous_texture: "".to_string(),
+            bind_group_cache: HashMap::new(),
+        }
+    }
+
+    fn enqueue_next_texture(
+        &mut self,
+        element: &RenderElement2D,
+        queue: &mut Queue,
+        pass: &mut RenderPass,
+        vertex_buffer: &mut Buffer,
+        index_buffer: &mut Buffer,
+    ) {
+        let should_flush_batch =
+            self.previous_texture != "" && self.previous_texture != element.texture_id;
+        if should_flush_batch {
+            self.flush_batch(queue, pass, vertex_buffer, index_buffer);
+        }
+        let vertices = Self::build_quad_vertices_2d(&element);
+        self.batched_vertices.extend_from_slice(&vertices);
+        self.batched_indices.extend_from_slice(&[
+            self.vertex_count_offset,
+            self.vertex_count_offset + 1,
+            self.vertex_count_offset + 2,
+            self.vertex_count_offset + 2,
+            self.vertex_count_offset + 3,
+            self.vertex_count_offset,
+        ]);
+        self.vertex_count_offset += vertices.len() as u16;
+        self.previous_texture = element.texture_id.clone();
+    }
+
+    fn flush_batch(
+        &mut self,
+        queue: &mut Queue,
+        pass: &mut RenderPass,
+        vertex_buffer: &mut Buffer,
+        index_buffer: &mut Buffer,
+    ) {
+        /*
+        println!("Prev {:?}", self.previous_texture);
+        println!(
+            "Flush batch: {} vertices, offset: {}",
+            self.batched_vertices.len(),
+            self.current_vertex_buffer_offset
+        );
+        */
+        pass.set_bind_group(
+            0,
+            &*self.bind_group_cache.get(&self.previous_texture).unwrap(),
+            &[],
+        );
+        // Write vertex data to the pre-allocated buffer
+        queue.write_buffer(
+            &vertex_buffer,
+            self.current_vertex_buffer_offset as wgpu::BufferAddress, // Offset: Start writing from the beginning of the buffer
+            bytemuck::cast_slice(&self.batched_vertices),
+        );
+
+        // Write index data to the pre-allocated buffer
+        queue.write_buffer(
+            &index_buffer,
+            self.current_index_buffer_offset as wgpu::BufferAddress, // Offset: Start writing from the beginning of the buffer
+            bytemuck::cast_slice(&self.batched_indices),
+        );
+
+        // Now, set the buffers and draw, but specify the slice relevant to THIS sprite's data
+        let vertex_slice_size =
+            (self.batched_vertices.len() * std::mem::size_of::<Vertex>()) as wgpu::BufferAddress;
+        let index_slice_size =
+            (self.batched_indices.len() * std::mem::size_of::<u16>()) as wgpu::BufferAddress;
+
+        pass.set_vertex_buffer(
+            0,
+            vertex_buffer.slice(
+                self.current_vertex_buffer_offset as wgpu::BufferAddress
+                    ..(self.current_vertex_buffer_offset + vertex_slice_size)
+                        as wgpu::BufferAddress,
+            ),
+        );
+        pass.set_index_buffer(
+            index_buffer.slice(
+                self.current_index_buffer_offset as wgpu::BufferAddress
+                    ..(self.current_index_buffer_offset + index_slice_size) as wgpu::BufferAddress,
+            ),
+            wgpu::IndexFormat::Uint16,
+        );
+        pass.draw_indexed(0..self.batched_indices.len() as u32, 0, 0..1); // The indices here are relative to the start of the SLICE
+
+        // Increment offsets for the next sprite
+        self.vertex_count_offset = 0;
+        self.current_vertex_buffer_offset += vertex_slice_size;
+        self.current_index_buffer_offset += index_slice_size;
+        self.batched_indices.clear();
+        self.batched_vertices.clear();
+        self.previous_texture = "".to_string();
+    }
+
+    fn reset_context(&mut self) {
+        self.current_index_buffer_offset = 0;
+        self.current_vertex_buffer_offset = 0;
+        self.vertex_count_offset = 0;
+        self.batched_vertices.clear();
+        self.batched_indices.clear();
+        self.previous_texture = "".to_string();
+    }
+
+    fn build_quad_vertices_2d(element: &RenderElement2D) -> [Vertex; 4] {
+        let [w, h] = element.size;
+        let [x, y] = element.position;
+        let flip_x = if element.flip_x { -1.0 } else { 1.0 };
+        let flip_y = if element.flip_y { -1.0 } else { 1.0 };
+
+        let hw = w * 0.5 * flip_x;
+        let hh = h * 0.5 * flip_y;
+
+        let positions = [
+            [x - hw, y + hh],
+            [x + hw, y + hh],
+            [x + hw, y - hh],
+            [x - hw, y - hh],
+        ];
+
+        let tex = element.uv_coords;
+
+        [
+            Vertex {
+                position: positions[0],
+                tex_coords: tex[0],
+            },
+            Vertex {
+                position: positions[1],
+                tex_coords: tex[1],
+            },
+            Vertex {
+                position: positions[2],
+                tex_coords: tex[2],
+            },
+            Vertex {
+                position: positions[3],
+                tex_coords: tex[3],
+            },
+        ]
+    }
 }
 
 impl Graphics2D {
@@ -166,6 +336,32 @@ impl Graphics2D {
             contents: bytemuck::cast_slice(&[camera_uniform]),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
+        let camera_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            layout: &camera_bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+            label: Some("2D Camera Bind Group"),
+        });
+
+        // Choose a generous initial capacity. You might need to resize if you hit limits.
+        let initial_vertex_capacity = 1024 * 1024; // e.g., 1MB for vertices
+        let initial_index_capacity = 256 * 1024; // e.g., 256KB for indices
+
+        let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Sprite Vertex Buffer"),
+            size: initial_vertex_capacity as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false, // Don't map immediately
+        });
+
+        let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Sprite Index Buffer"),
+            size: initial_index_capacity as u64,
+            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false, // Don't map immediately
+        });
 
         Ok(Self {
             surface,
@@ -179,13 +375,16 @@ impl Graphics2D {
                 g: 57.0 / 255.0,
                 a: 255.0 / 255.0,
             },
-            window,
             camera,
             camera_buffer,
+            camera_bind_group,
+            vertex_buffer,
+            index_buffer,
             camera_bind_group_layout,
             texture_bind_group_layout,
             depth_texture,
             render_pipeline,
+            texture_batch_context: TextureBatchContext::new(),
         })
     }
 
@@ -251,122 +450,65 @@ impl Graphics2D {
                 timestamp_writes: None,
             });
 
-            let camera_bind_group = self.device.create_bind_group(&BindGroupDescriptor {
-                layout: &self.camera_bind_group_layout,
-                entries: &[BindGroupEntry {
-                    binding: 0,
-                    resource: self.camera_buffer.as_entire_binding(),
-                }],
-                label: Some("2D Camera Bind Group"),
+            pass.set_pipeline(&self.render_pipeline);
+            pass.set_bind_group(1, &self.camera_bind_group, &[]);
+
+            let mut opaque = render_queue.clone().opaque.clone();
+            opaque.sort_by(|a, b| {
+                b.z_order
+                    .partial_cmp(&a.z_order)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             });
 
-            pass.set_pipeline(&self.render_pipeline);
-            pass.set_bind_group(1, &camera_bind_group, &[]);
+            for element in opaque.iter() {
+                {
+                    self.texture_batch_context.enqueue_next_texture(
+                        element,
+                        &mut self.queue,
+                        &mut pass,
+                        &mut self.vertex_buffer,
+                        &mut self.index_buffer,
+                    );
+                }
+            }
+            // flush opaque
+            self.texture_batch_context.flush_batch(
+                &mut self.queue,
+                &mut pass,
+                &mut self.vertex_buffer,
+                &mut self.index_buffer,
+            );
 
-            let mut elements = render_queue.clone().elements.clone();
-            elements.sort_by(|a, b| {
+            let mut transparent = render_queue.transparent.clone();
+            transparent.sort_by(|a, b| {
                 a.z_order
                     .partial_cmp(&b.z_order)
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
-
-            // Cache bind groups
-            let mut bind_group_cache: HashMap<String, wgpu::BindGroup> = HashMap::new();
-            let mut current_texture_id: Option<String> = None;
-
-            for element in elements.iter() {
-                // Only switch texture bind group if texture_id changes
-                if current_texture_id.as_ref() != Some(&element.texture_id) {
-                    let texture = &element.texture;
-
-                    let bind_group = bind_group_cache
-                        .entry(element.texture_id.clone())
-                        .or_insert_with(|| {
-                            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                layout: &self.texture_bind_group_layout,
-                                entries: &[
-                                    wgpu::BindGroupEntry {
-                                        binding: 0,
-                                        resource: wgpu::BindingResource::TextureView(&texture.view),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 1,
-                                        resource: wgpu::BindingResource::Sampler(&texture.sampler),
-                                    },
-                                ],
-                                label: Some("Texture Bind Group"),
-                            })
-                        });
-
-                    pass.set_bind_group(0, &*bind_group, &[]);
-                    current_texture_id = Some(element.texture_id.clone());
+            for element in transparent.iter() {
+                {
+                    self.texture_batch_context.enqueue_next_texture(
+                        element,
+                        &mut self.queue,
+                        &mut pass,
+                        &mut self.vertex_buffer,
+                        &mut self.index_buffer,
+                    );
                 }
-
-                let vertices = Self::build_quad_vertices_2d(element);
-                let indices: Vec<u16> = vec![0, 1, 2, 2, 3, 0];
-
-                let vertex_buffer =
-                    self.device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("2D Vertex Buffer"),
-                            contents: bytemuck::cast_slice(&vertices),
-                            usage: wgpu::BufferUsages::VERTEX,
-                        });
-
-                let index_buffer =
-                    self.device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("2D Index Buffer"),
-                            contents: bytemuck::cast_slice(&indices),
-                            usage: wgpu::BufferUsages::INDEX,
-                        });
-
-                pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
             }
+            // do final flush
+            self.texture_batch_context.flush_batch(
+                &mut self.queue,
+                &mut pass,
+                &mut self.vertex_buffer,
+                &mut self.index_buffer,
+            );
+
+            self.texture_batch_context.reset_context();
         }
         self.queue.submit(Some(encoder.finish()));
         output.present();
         Ok(())
-    }
-
-    fn build_quad_vertices_2d(element: &RenderElement2D) -> [Vertex; 4] {
-        let [w, h] = element.size;
-        let [x, y] = element.position;
-        let flip_x = if element.flip_x { -1.0 } else { 1.0 };
-        let flip_y = if element.flip_y { -1.0 } else { 1.0 };
-
-        let hw = w * 0.5 * flip_x;
-        let hh = h * 0.5 * flip_y;
-
-        let positions = [
-            [x - hw, y + hh],
-            [x + hw, y + hh],
-            [x + hw, y - hh],
-            [x - hw, y - hh],
-        ];
-
-        let tex = element.uv_coords;
-
-        [
-            Vertex {
-                position: positions[0],
-                tex_coords: tex[0],
-            },
-            Vertex {
-                position: positions[1],
-                tex_coords: tex[1],
-            },
-            Vertex {
-                position: positions[2],
-                tex_coords: tex[2],
-            },
-            Vertex {
-                position: positions[3],
-                tex_coords: tex[3],
-            },
-        ]
     }
 }
 
@@ -395,9 +537,27 @@ impl Graphics for Graphics2D {
         let _ = self.render(queue);
     }
 
-    fn load_texture_from_path(&self, path: &str) -> Texture {
+    fn load_texture_from_path(&mut self, id: &str, path: &str) -> Texture {
         let image = image::open(path).unwrap().flipv();
-        self.create_gpu_texture(path.to_string(), &image, path)
+        let texture = self.create_gpu_texture(id.to_string(), &image, path);
+        self.texture_batch_context.bind_group_cache.insert(
+            id.to_string(),
+            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &self.texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&texture.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&texture.sampler),
+                    },
+                ],
+                label: Some("Texture Bind Group"),
+            }),
+        );
+        return texture.clone();
     }
 
     fn process_camera_event(&mut self, _event: &winit::event::WindowEvent) {}

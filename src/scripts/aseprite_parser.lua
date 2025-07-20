@@ -1,6 +1,6 @@
 local json = require("json") -- adapt to your preferred JSON library
 
-local function load_aseprite_animation(animation_name, path, json_file)
+local function load_aseprite_animation(animation_name, path, json_file, with_transparency)
 	local json_path = "src/assets/" .. path .. json_file
 	------------------------------------------------------------------ I/O
 	local fh, io_err = io.open(json_path, "r")
@@ -55,6 +55,8 @@ local function load_aseprite_animation(animation_name, path, json_file)
 			end
 		end
 	end
+
+	anim.is_transparent = with_transparency == true
 
 	return anim
 end

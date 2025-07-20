@@ -213,7 +213,8 @@ impl World {
     }
 
     pub fn extract_render_queue_2d(&self) -> RenderQueue2D {
-        let mut elements = Vec::new();
+        let mut transparent = Vec::new();
+        let mut opaque = Vec::new();
 
         for (entity, animation) in self.animations.iter() {
             if let Some(body) = self.physics_bodies_2d.get(entity) {
@@ -223,19 +224,17 @@ impl World {
                     .get(entity)
                     .unwrap_or(&FlipComponent { x: false, y: false });
 
+                let action_animation = &animation.animations[&self
+                    .action_states
+                    .get(&entity)
+                    .expect("Animation not found")
+                    .state];
                 let sprite = self
                     .sprite_sheets
-                    .get(
-                        &animation.animations[&self
-                            .action_states
-                            .get(&entity)
-                            .expect("Animation not found")
-                            .state]
-                            .sprite_sheet_id,
-                    )
+                    .get(&action_animation.sprite_sheet_id)
                     .expect("Sprite Sheets not found");
 
-                elements.push(RenderElement2D {
+                let tmp = RenderElement2D {
                     position: [body.position[0], body.position[1]],
                     size: body.get_size(),
                     z_order: -body.position[1], // Sort top to bottom: lower y = drawn later
@@ -244,11 +243,20 @@ impl World {
                     uv_coords,
                     flip_x: flip.x,
                     flip_y: flip.y,
-                });
+                };
+
+                if action_animation.is_transparent {
+                    transparent.push(tmp);
+                } else {
+                    opaque.push(tmp);
+                }
             }
         }
 
-        RenderQueue2D { elements }
+        RenderQueue2D {
+            transparent,
+            opaque,
+        }
     }
 
     pub fn clear_forces(&mut self) {

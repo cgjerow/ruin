@@ -2,6 +2,7 @@ local load_aseprite_animation = require("aseprite_parser")
 require("game_asset_builders")
 require("globals")
 
+local is_transparent = true
 local function new_skelly(x, y)
 	return PhysicsBodyBuilder()
 			:position(x, y)
@@ -11,7 +12,8 @@ local function new_skelly(x, y)
 			:add_mask(GLOBALS.MASKS_AND_LAYERS.Enemy)
 			:add_mask(GLOBALS.MASKS_AND_LAYERS.Player)
 			:collider_size_modifier(0.3, 0.3)
-			:add_animation(GLOBALS.ACTIONS.Idle, load_aseprite_animation("skelly_idle", "skelly/", "skelly_idle.json"))
+			:add_animation(GLOBALS.ACTIONS.Idle,
+				load_aseprite_animation("skelly_idle", "skelly/", "skelly_idle.json", is_transparent))
 			:build()
 end
 
@@ -49,7 +51,7 @@ local function move_skellies(dt)
 
 			local not_lunging = (not WORLD.activity_state[key]) or (WORLD.activity_state[key].activity ~= "lunge")
 			local should_lunge = not_lunging and random_action < 9 and dist < 10 and
-			not ENGINE_HANDLES.is_untargetable(WORLD.player_id())
+					not ENGINE_HANDLES.is_untargetable(WORLD.player_id())
 
 
 			if should_lunge then

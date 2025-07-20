@@ -13,6 +13,7 @@ pub struct SpriteFrame {
 
 #[derive(Debug, Clone)]
 pub struct Animation {
+    pub is_transparent: bool,
     pub sprite_sheet_id: Entity,
     pub frames: Vec<SpriteFrame>,
     pub looped: bool,
@@ -29,6 +30,7 @@ pub struct AnimationComponent {
 impl Animation {
     pub fn from_lua_table(table: mlua::Table) -> (Self, String) {
         let looped: bool = table.get("looped").unwrap_or(true);
+        let is_transparent: bool = table.get("is_transparent").unwrap_or(false);
 
         let frames_table: mlua::Table = table
             .get("frames")
@@ -74,6 +76,7 @@ impl Animation {
                 sprite_sheet_id: Entity(0),
                 frames,
                 looped,
+                is_transparent,
             },
             sprite_path,
         )

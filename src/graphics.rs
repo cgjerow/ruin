@@ -13,7 +13,7 @@ pub trait Graphics {
     fn process_camera_event(&mut self, event: &WindowEvent);
     fn set_background(&mut self, color: wgpu::Color);
     fn update_camera(&mut self);
-    fn load_texture_from_path(&self, path: &str) -> Texture;
+    fn load_texture_from_path(&mut self, id: &str, path: &str) -> Texture;
     fn get_camera_info(&self) -> CameraInfo;
     fn move_camera_for_follow(
         &mut self,

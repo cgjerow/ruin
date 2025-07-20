@@ -548,6 +548,7 @@ impl Graphics3D {
     }
 }
 
+/*
 impl Graphics for Graphics3D {
     fn resize(&mut self, width: u32, height: u32) {
         self.resize(width, height);
@@ -590,3 +591,4 @@ impl Graphics for Graphics3D {
         self.move_camera_for_follow(position, velocity, acceleration, offset);
     }
 }
+*/

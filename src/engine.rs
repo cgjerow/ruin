@@ -105,13 +105,14 @@ impl Engine {
         }
     }
 
-    fn get_texture(&mut self, path: &str) -> Texture {
-        let texture = self.asset_cache.entry(path.to_string()).or_insert_with(|| {
+    fn get_texture(&mut self, id: &str) -> Texture {
+        let path = format!("./src/assets/{}", id);
+        let texture = self.asset_cache.entry(id.to_string()).or_insert_with(|| {
             debug_log!(self.debugger, "Initialized asset: {}", path);
             self.graphics
                 .as_mut()
                 .expect("Graphics not initialized")
-                .load_texture_from_path(&format!("./src/assets/{}", path))
+                .load_texture_from_path(&id, &path)
         });
 
         texture.clone()
@@ -741,6 +742,7 @@ impl ApplicationHandler<Graphics3D> for Engine {
             Window::default_attributes().with_inner_size(LogicalSize::new(self.width, self.height));
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
+        /*
         if self.dimensions == Dimensions::Three {
             let camera_3d = Camera3D::new(
                 self.width,
@@ -750,7 +752,10 @@ impl ApplicationHandler<Graphics3D> for Engine {
             self.graphics = Some(Box::new(
                 pollster::block_on(Graphics3D::new(window.clone(), camera_3d)).unwrap(),
             ));
-        } else if self.dimensions == Dimensions::Two {
+        }
+        elseif
+            */
+        if self.dimensions == Dimensions::Two {
             let camera_2d = Camera2D::new(self.width, self.height);
             self.graphics = Some(Box::new(
                 pollster::block_on(Graphics2D::new(window.clone(), camera_2d)).unwrap(),
