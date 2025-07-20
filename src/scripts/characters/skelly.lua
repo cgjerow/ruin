@@ -14,6 +14,8 @@ local function new_skelly(x, y)
 			:collider_size_modifier(0.3, 0.3)
 			:add_animation(GLOBALS.ACTIONS.Idle,
 				load_aseprite_animation("skelly_idle", "skelly/", "skelly_idle.json", is_transparent))
+			:add_animation(GLOBALS.ACTIONS.Dashing,
+				load_aseprite_animation("skelly_lunging", "skelly/", "skelly_leaping.json", is_transparent))
 			:build()
 end
 
@@ -46,6 +48,7 @@ local function move_skellies(dt)
 			engine.set_velocity_2d(key, WORLD.activity_state[key].direction_x, WORLD.activity_state[key].direction_y)
 			if WORLD.activity_state[key].time <= 0 then
 				WORLD.activity_state[key].activity = "pursuing"
+				ENGINE_HANDLES.set_state(key, GLOBALS.ACTIONS.Idle)
 				engine.set_velocity_2d(key, 0, 0)
 			end
 			goto continue
@@ -70,8 +73,9 @@ local function move_skellies(dt)
 		if (not WORLD.activity_state[key] or WORLD.activity_state[key].activity == "pursuing") then
 			local should_lunge = dist < 8
 			if should_lunge then
-				WORLD.activity_state[key] = { activity = "lunge-ramping", time = 1 }
+				WORLD.activity_state[key] = { activity = "lunge-ramping", time = .5 }
 				engine.set_velocity_2d(key, 0, 0)
+				ENGINE_HANDLES.set_state(key, GLOBALS.ACTIONS.Dashing)
 			else
 				local fx = nx * 10
 				local fy = ny * 10

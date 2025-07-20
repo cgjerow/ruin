@@ -1,6 +1,6 @@
 ---@diagnostic disable: unused-function, lowercase-global
 ---@diagnostic disable-next-line: unused-local
-local pretty_print = require("pretty_print")
+PRETTY_PRINT = require("pretty_print")
 local game_math = require("game_math")
 local collisions = require("systems.collisions")
 local physics = require("systems.physics")
@@ -187,18 +187,6 @@ function ENGINE_update(dt)
 		return
 	end
 
-	if CONFIG.controller:is_pressed("Dash") then
-		CONTROLLER.start_input_reenable_timer(0.5)
-		ENGINE_HANDLES.mark_untargetable(WORLD.player_id(), .6)
-		local v = engine.get_velocity_2d(WORLD.player_id())
-		local x, y = game_math.normalize(v[1], v[2])
-
-		if not (x == 0 and y == 0) then
-			local impulse_strength = 10
-			engine.apply_move_2d(WORLD.player_id(), x * impulse_strength, y * impulse_strength)
-		end
-	end
-
 	if CONFIG.controller:is_pressed("Up") then
 		dy = dy + 1
 	end
@@ -212,17 +200,30 @@ function ENGINE_update(dt)
 		dx = dx + 1
 	end
 
-	-- Normalize direction vector if needed
-	local length = math.sqrt(dx * dx + dy * dy)
-	if length > 0 then
-		dx = dx / length
-		dy = dy / length
-		engine.set_velocity_2d(WORLD.player_id(), dx * CONFIG.run_force, dy * CONFIG.run_force)
-		ENGINE_HANDLES.set_state(WORLD.player_id(), GLOBALS.ACTIONS.Running)
-		ENGINE_HANDLES.flip_x(WORLD.player_id(), dx)
+	if CONFIG.controller:is_pressed("Dash") then
+		CONTROLLER.start_input_reenable_timer(0.5)
+		ENGINE_HANDLES.mark_untargetable(WORLD.player_id(), .6)
+		local x, y = game_math.normalize(dx, dy)
+
+		if not (x == 0 and y == 0) then
+			local impulse_strength = 10
+			ENGINE_HANDLES.set_state(WORLD.player_id(), GLOBALS.ACTIONS.Dashing)
+			engine.apply_move_2d(WORLD.player_id(), x * impulse_strength, y * impulse_strength)
+			engine.set_velocity_2d(WORLD.player_id(), 0, 0)
+		end
 	else
-		engine.set_velocity_2d(WORLD.player_id(), 0, 0)
-		ENGINE_HANDLES.set_state(WORLD.player_id(), GLOBALS.ACTIONS.Idle)
+		-- Normalize direction vector if needed
+		local length = math.sqrt(dx * dx + dy * dy)
+		if length > 0 then
+			dx = dx / length
+			dy = dy / length
+			engine.set_velocity_2d(WORLD.player_id(), dx * CONFIG.run_force, dy * CONFIG.run_force)
+			ENGINE_HANDLES.set_state(WORLD.player_id(), GLOBALS.ACTIONS.Running)
+			ENGINE_HANDLES.flip_x(WORLD.player_id(), dx)
+		else
+			engine.set_velocity_2d(WORLD.player_id(), 0, 0)
+			ENGINE_HANDLES.set_state(WORLD.player_id(), GLOBALS.ACTIONS.Idle)
+		end
 	end
 end
 

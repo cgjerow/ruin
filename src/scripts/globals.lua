@@ -10,6 +10,7 @@ GLOBALS = {
 		Idle = 0,
 		Running = 1,
 		Dying = 2,
+		Dashing = 3,
 	},
 	MASKS_AND_LAYERS = {
 		Enemy = 0,
