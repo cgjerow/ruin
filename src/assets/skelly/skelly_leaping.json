@@ -1,6 +1,6 @@
 { "frames": [
    {
-    "filename": "skelly_leaping 0.aseprite",
+    "filename": "skelly_leaping (Layer 1) 0.aseprite",
     "frame": { "x": 0, "y": 0, "w": 32, "h": 32 },
     "rotated": false,
     "trimmed": false,
@@ -9,7 +9,7 @@
     "duration": 100
    },
    {
-    "filename": "skelly_leaping 1.aseprite",
+    "filename": "skelly_leaping (Layer 1) 1.aseprite",
     "frame": { "x": 32, "y": 0, "w": 32, "h": 32 },
     "rotated": false,
     "trimmed": false,
@@ -18,7 +18,7 @@
     "duration": 300
    },
    {
-    "filename": "skelly_leaping 2.aseprite",
+    "filename": "skelly_leaping (Layer 1) 2.aseprite",
     "frame": { "x": 64, "y": 0, "w": 32, "h": 32 },
     "rotated": false,
     "trimmed": false,
@@ -40,6 +40,7 @@
    { "name": "Layer 1", "opacity": 255, "blendMode": "normal" }
   ],
   "slices": [
+   { "name": "key_area", "color": "#0000ffff", "data": "{\"types\": [\"hitbox\", \"hurtbox\"] }", "keys": [{ "frame": 2, "bounds": {"x": 0, "y": 6, "w": 21, "h": 18 } }] }
   ]
  }
 }

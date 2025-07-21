@@ -20,7 +20,10 @@ local function new_skelly(x, y)
 end
 
 local function move_skellies(dt)
+	local speed = 10
+	local lunge = 30
 	local player_p = engine.get_position_2d(WORLD.player_id())
+
 	for key, value in pairs(CONFIG.entities) do
 		if not value.is_skelly then goto continue end
 
@@ -57,13 +60,12 @@ local function move_skellies(dt)
 		if WORLD.activity_state[key] and WORLD.activity_state[key].activity == "lunge-ramping" then
 			WORLD.activity_state[key].time = WORLD.activity_state[key].time - dt
 			if WORLD.activity_state[key].time <= 0 then
-				local fx = nx * 50
-				local fy = ny * 50
+				local fx = nx * lunge
+				local fy = ny * lunge
 				WORLD.activity_state[key].activity = "lunge"
-				WORLD.activity_state[key].time = .3
+				WORLD.activity_state[key].time = .5
 				WORLD.activity_state[key].direction_x = fx
 				WORLD.activity_state[key].direction_y = fy
-
 				engine.set_velocity_2d(key, fx, fy)
 			end
 			goto continue
@@ -77,8 +79,8 @@ local function move_skellies(dt)
 				engine.set_velocity_2d(key, 0, 0)
 				ENGINE_HANDLES.set_state(key, GLOBALS.ACTIONS.Dashing)
 			else
-				local fx = nx * 10
-				local fy = ny * 10
+				local fx = nx * speed
+				local fy = ny * speed
 				engine.set_velocity_2d(key, fx, fy)
 			end
 			goto continue

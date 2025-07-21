@@ -121,21 +121,21 @@ pub fn check_aabb_intersects(
 ) -> bool {
     // Assuming position is center of entity and size is width/height
     let a_min = [
-        a_transform.position[0] - a_collider.size[0] / 2.0,
-        a_transform.position[1] - a_collider.size[1] / 2.0,
+        a_transform.position[0] - a_collider.shape.half_extents()[0],
+        a_transform.position[1] - a_collider.shape.half_extents()[1],
     ];
     let a_max = [
-        a_transform.position[0] + a_collider.size[0] / 2.0,
-        a_transform.position[1] + a_collider.size[1] / 2.0,
+        a_transform.position[0] + a_collider.shape.half_extents()[0],
+        a_transform.position[1] + a_collider.shape.half_extents()[1],
     ];
 
     let b_min = [
-        b_transform.position[0] - b_collider.size[0] / 2.0,
-        b_transform.position[1] - b_collider.size[1] / 2.0,
+        b_transform.position[0] - b_collider.shape.half_extents()[0],
+        b_transform.position[1] - b_collider.shape.half_extents()[1],
     ];
     let b_max = [
-        b_transform.position[0] + b_collider.size[0] / 2.0,
-        b_transform.position[1] + b_collider.size[1] / 2.0,
+        b_transform.position[0] + b_collider.shape.half_extents()[0],
+        b_transform.position[1] + b_collider.shape.half_extents()[1],
     ];
 
     let overlap_x = a_min[0] <= b_max[0] && a_max[0] >= b_min[0];

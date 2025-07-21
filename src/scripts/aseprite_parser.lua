@@ -56,6 +56,13 @@ local function load_aseprite_animation(animation_name, path, json_file, with_tra
 		end
 	end
 
+	if data.meta.slices and #data.meta.slices > 0 then
+		for _, tag in ipairs(data.meta.slices) do
+			-- parse key_areas
+		end
+	end
+
+
 	anim.is_transparent = with_transparency == true
 
 	return anim

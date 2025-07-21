@@ -15,8 +15,8 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AreaRole {
     Physics,
-    #[allow(unused)]
     Hitbox,
+    Hurtbox,
     #[allow(unused)]
     Trigger,
 }
@@ -36,6 +36,7 @@ struct ParentAreaInfo {
 #[derive(Debug, Clone)]
 pub struct World {
     next_id: u32,
+    pub flips: HashMap<Entity, FlipComponent>,
     pub health_bars: HashMap<Entity, HealthComponent>,
     pub animations: HashMap<Entity, AnimationComponent>,
     pub sprite_sheets: HashMap<Entity, SpriteSheetComponent>,
@@ -43,9 +44,9 @@ pub struct World {
     pub action_states: HashMap<Entity, ActionStateComponent>,
     pub physics_bodies_2d: HashMap<Entity, PhysicsBody>,
     pub physical_colliders_2d: HashMap<Entity, HashMap<Entity, Area2D>>,
-    pub flips: HashMap<Entity, FlipComponent>,
+    pub hitboxes_2d: HashMap<Entity, HashMap<Entity, Area2D>>,
+    pub hurtboxes_2d: HashMap<Entity, HashMap<Entity, Area2D>>,
     pub area_roles: HashMap<Entity, AreaInfo>,
-
     // keep this concept hidden for now.
     // interactions should take place through our getters/setters
     parent_area_info: HashMap<Entity, HashMap<AreaRole, ParentAreaInfo>>,
@@ -62,6 +63,8 @@ impl World {
             physics_bodies_2d: HashMap::new(),
             sprite_sheets: HashMap::new(),
             physical_colliders_2d: HashMap::new(),
+            hitboxes_2d: HashMap::new(),
+            hurtboxes_2d: HashMap::new(),
             area_roles: HashMap::new(),
             flips: HashMap::new(),
             parent_area_info: HashMap::new(),

@@ -302,6 +302,38 @@ impl Engine {
         );
     }
 
+    fn create_hitbox(&mut self, table: Table) -> u32 {
+        let entity = self.world.new_entity();
+        let offset_x: f32 = table.get("offset_x").unwrap_or(0.0);
+        let offset_y: f32 = table.get("offset_y").unwrap_or(0.0);
+        let width: f32 = table.get("width").unwrap_or(0.0);
+        let height: f32 = table.get("offset_y").unwrap_or(0.0);
+        let parent = Entity(table.get::<u32>("parent_id").unwrap() as u32);
+        let masks = vecbool_to_u8(LuaExtendedExecutor::table_to_vec_8(
+            table
+                .get("masks")
+                .unwrap_or(self.lua_context.create_table()),
+        ));
+        // hitbox doesn't need layers - only seeking out targets, not targetable
+
+        self.world.insert_area_2d(
+            AreaInfo {
+                role: AreaRole::Hitbox,
+                parent,
+            },
+            Area2D {
+                shape: Shape::Rectangle {
+                    half_extents: Vector2::from([width / 2.0, height / 2.0]),
+                },
+                offset: Vector2::from([offset_x, offset_y]),
+                layers: 0,
+                masks,
+            },
+        );
+
+        return entity.into();
+    }
+
     fn create_body(&mut self, lua_element: mlua::Table) -> [u32; 2] {
         let state: ActionState = lua_element.get("state").unwrap_or(0).into();
         let is_pc: bool = lua_element.get("is_pc").unwrap_or(false).into();
@@ -413,13 +445,9 @@ impl Engine {
                                 y: height / 2.0,
                             },
                         },
-                        size: Vector2 {
-                            x: width * collision_box.get("size_modifier_x").unwrap_or(0.0),
-                            y: height * collision_box.get("size_modifier_y").unwrap_or(0.0),
-                        },
                         offset: Vector2 {
                             x: collision_box.get("offset_x").unwrap_or(0.0),
-                            y: (collision_box.get("offset_y").unwrap_or(0.0)),
+                            y: collision_box.get("offset_y").unwrap_or(0.0),
                         },
                         masks: vecbool_to_u8(masks),
                         layers: vecbool_to_u8(layers),

@@ -15,15 +15,10 @@ local new_brick_tile = require("environment.brick_ground")
 math.randomseed(os.time())
 
 CONFIG = {
-	max_speed = 5,
-	skelly_max_speed = 3,
-	skelly_speed = 2,
 	dead = false,
-	friction = 1,
-	min_friction = .1,
 	input_enabled = true,
 	input_disable_time = 0,
-	run_force = 15.0,
+	speed = 15.0,
 	player_id = -1,
 	entities = {},
 	controller = ControllerBuilder()
@@ -54,12 +49,10 @@ WORLD.is_game_over = function()
 	end
 	return WORLD.game_over
 end
-
 WORLD.set_game_over = function()
 	WORLD.game_over = true
 	engine.set_velocity_2d(WORLD.player_id(), 0, 0)
 end
-
 WORLD.get_entity = function(id) return CONFIG.entities[id] end
 
 
@@ -211,12 +204,11 @@ function ENGINE_update(dt)
 			engine.set_velocity_2d(WORLD.player_id(), 0, 0)
 		end
 	else
-		-- Normalize direction vector if needed
 		local length = math.sqrt(dx * dx + dy * dy)
 		if length > 0 then
 			dx = dx / length
 			dy = dy / length
-			engine.set_velocity_2d(WORLD.player_id(), dx * CONFIG.run_force, dy * CONFIG.run_force)
+			engine.set_velocity_2d(WORLD.player_id(), dx * CONFIG.speed, dy * CONFIG.speed)
 			ENGINE_HANDLES.set_state(WORLD.player_id(), GLOBALS.ACTIONS.Running)
 			ENGINE_HANDLES.flip_x(WORLD.player_id(), dx)
 		else

@@ -11,7 +11,7 @@ impl Camera2D {
     pub fn new(width: u32, height: u32) -> Self {
         Self {
             position: Vector2::new(0.0, 0.0),
-            zoom: 15.0,
+            zoom: 10.0,
             aspect_ratio: width as f32 / height as f32,
             smooth_factor: 0.1,
         }
