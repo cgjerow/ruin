@@ -1,16 +1,61 @@
 local json = require("json") -- adapt to your preferred JSON library
 
+local function AnimationBuilder()
+	local anim = {
+		sprite = "",
+		sprite_sheet_height = 0,
+		sprite_sheet_width = 0,
+		frames = {},
+		looped = true,
+		is_transparent = false,
+	}
+
+	local builder = {}
+
+	function builder:set_sprite(s)
+		anim.sprite = s
+		return builder
+	end
+
+	function builder:set_layout(w, h)
+		anim.sprite_sheet_width = w
+		anim.sprite_sheet_height = h
+		return builder
+	end
+
+	function builder:loop(b)
+		anim.looped = b
+		return builder
+	end
+
+	function builder:add_frame(f)
+		anim.frames[#anim.frames + 1] = f
+		return builder
+	end
+
+	function builder:transparency(b)
+		anim.is_transparent = b
+		return builder
+	end
+
+	function builder:build()
+		return anim
+	end
+
+	return builder
+end
+
 local function load_aseprite_animation(animation_name, path, json_file, with_transparency)
 	local json_path = "src/assets/" .. path .. json_file
-	------------------------------------------------------------------ I/O
-	local fh, io_err = io.open(json_path, "r")
-	if not fh then
+	local file, io_err = io.open(json_path, "r")
+	if not file then
 		return nil, ("cannot open “%s”: %s"):format(json_path, io_err)
 	end
-	local raw = fh:read("*a")
-	fh:close()
+	local raw = file:read("*a")
+	file:close()
 
-	---------------------------------------------------------------- decode
+	local builder = AnimationBuilder()
+
 	local data, pos, decode_err = json.decode(raw)
 	if not data then
 		return nil, ("JSON error in “%s” at byte %d: %s"):format(json_path, pos or 0, decode_err)
@@ -21,51 +66,43 @@ local function load_aseprite_animation(animation_name, path, json_file, with_tra
 		return nil, ("no frames found in “%s”"):format(json_path)
 	end
 
-	---------------------------------------------------------------- sheet geometry
-	local fw, fh = frames[1].frame.w, frames[1].frame.h
-	local sheet_cols = data.meta.size.w // fw -- integer division
-	local sheet_rows = data.meta.size.h // fh
-
-	---------------------------------------------------------------- build anim table
-	local anim = {
-		sprite = path .. data.meta.image, -- e.g. "death_idle.png"
-		sprite_sheet_width = sheet_cols,
-		sprite_sheet_height = sheet_rows,
-		frames = {},
-		looped = true, -- default; may be overridden below
-	}
-
-	for _, fr in ipairs(frames) do
-		local gx = fr.frame.x // fw -- column index in sheet grid
-		local gy = fr.frame.y // fh -- row    index
-		anim.frames[#anim.frames + 1] = {
-			x = gx,
-			y = gy,
-			duration = (fr.duration or 100) / 1000, -- ms → seconds
-		}
-	end
-
-	---------------------------------------------------------------- frameTags → looped?
+	local looped = true
 	if data.meta.frameTags and #data.meta.frameTags > 0 then
 		for _, tag in ipairs(data.meta.frameTags) do
 			if tag.name == animation_name then
 				-- Aseprite directions: "forward", "reverse", "pingpong"
-				anim.looped = (tag.direction == "forward")
+				looped = (tag.direction == "forward")
 				break
 			end
 		end
 	end
 
-	if data.meta.slices and #data.meta.slices > 0 then
-		for _, tag in ipairs(data.meta.slices) do
-			-- parse key_areas
-		end
+	local slices = data.meta.slices
+	if slices and #slices > 0 then
+		print("maybe")
 	end
 
 
-	anim.is_transparent = with_transparency == true
+	local fw, fh = frames[1].frame.w, frames[1].frame.h
+	builder
+			:set_sprite(path .. data.meta.image)
+			:set_layout(data.meta.size.w // fw, data.meta.size.h // fh)
+			:loop(looped)
+			:transparency(with_transparency == true)
 
-	return anim
+	for _, fr in ipairs(frames) do
+		local gx = fr.frame.x // fw -- column index in sheet grid
+		local gy = fr.frame.y // fh -- row    index
+		builder:add_frame(
+			{
+				x = gx,
+				y = gy,
+				duration = (fr.duration or 100) / 1000, -- ms → seconds
+			}
+		)
+	end
+
+	return builder:build()
 end
 
 return load_aseprite_animation

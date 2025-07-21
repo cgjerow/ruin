@@ -16,5 +16,6 @@ GLOBALS = {
 		Enemy = 0,
 		Env = 1,
 		Player = 2,
+		Boundary = 3,
 	},
 }

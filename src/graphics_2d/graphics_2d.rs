@@ -110,6 +110,9 @@ impl TextureBatchContext {
         vertex_buffer: &mut Buffer,
         index_buffer: &mut Buffer,
     ) {
+        if self.previous_texture == "" {
+            return;
+        }
         /*
         println!("Prev {:?}", self.previous_texture);
         println!(
