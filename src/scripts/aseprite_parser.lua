@@ -33,6 +33,13 @@ local function AnimationBuilder()
 		return builder
 	end
 
+	function builder:add_hb(f, t, hb)
+		if not anim.frames[f][t] then
+			anim.frames[f][t] = {}
+		end
+		anim.frames[f][t][#anim.frames[f][t] + 1] = hb
+	end
+
 	function builder:transparency(b)
 		anim.is_transparent = b
 		return builder
@@ -77,12 +84,6 @@ local function load_aseprite_animation(animation_name, path, json_file, with_tra
 		end
 	end
 
-	local slices = data.meta.slices
-	if slices and #slices > 0 then
-		print("maybe")
-	end
-
-
 	local fw, fh = frames[1].frame.w, frames[1].frame.h
 	builder
 			:set_sprite(path .. data.meta.image)
@@ -100,6 +101,20 @@ local function load_aseprite_animation(animation_name, path, json_file, with_tra
 				duration = (fr.duration or 100) / 1000, -- ms → seconds
 			}
 		)
+	end
+
+	local slices = data.meta.slices
+	if slices and #slices > 0 then
+		for _, s in ipairs(slices) do
+			if s.name == "hitbox" or s.name == "hurtbox" then
+				local hb = json.decode(s.data)
+				if hb.frames and #hb.frames > 0 then
+					for _, f in ipairs(hb.frames) do
+						builder:add_hb(f, s.name, s.keys[1].bounds)
+					end
+				end
+			end
+		end
 	end
 
 	return builder:build()

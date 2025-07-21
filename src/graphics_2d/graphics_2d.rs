@@ -543,7 +543,6 @@ impl Graphics for Graphics2D {
     fn load_texture_from_path(&mut self, id: &str, path: &str) -> Texture {
         let image = image::open(path).unwrap().flipv();
         let texture = self.create_gpu_texture(id.to_string(), &image, path);
-        println!("Uhhm Hello? {:?} {:?}", path, texture);
         self.texture_batch_context.bind_group_cache.insert(
             id.to_string(),
             self.device.create_bind_group(&wgpu::BindGroupDescriptor {
