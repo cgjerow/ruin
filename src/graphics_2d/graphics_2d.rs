@@ -10,6 +10,7 @@ use wgpu::*;
 use winit::window::Window;
 
 use crate::camera_2d::Camera2D;
+use crate::components_systems::physics_2d::FlipComponent;
 use crate::graphics::Graphics;
 use crate::graphics_2d::{CameraUniform2D, Vertex};
 
@@ -544,6 +545,13 @@ impl Graphics2D {
         }
 
         for (entity, animation) in world.animations.iter() {
+            let flip = world
+                .flips
+                .get(&entity)
+                .unwrap_or(&FlipComponent { x: false, y: false });
+            let flip_x = if flip.x { -1.0 } else { 1.0 };
+            let flip_y = if flip.y { -1.0 } else { 1.0 };
+
             if let Some(body) = world.physics_bodies_2d.get(&entity) {
                 let current_frame = &animation.current_frame;
                 for area in &current_frame.hitboxes {
@@ -553,8 +561,8 @@ impl Graphics2D {
 
                             // Convert pixel offset to world-space offset
                             let world_offset = Vector2::new(
-                                area.offset.x / pixels_per_unit,
-                                area.offset.y / pixels_per_unit,
+                                area.offset.x / pixels_per_unit * flip_x,
+                                area.offset.y / pixels_per_unit * flip_y,
                             );
                             let world_position = body.position + world_offset;
 
