@@ -36,6 +36,7 @@ WORLD = {
 	skellies = {},
 	-- this state is more nuanced then the action state which is used for animations by the engine
 	activity_state = {},
+	activity_cooldown = {},
 	-- this should affect the layers/masks for collision somehow as well
 	-- maybe ignoring everything but environment?
 	targetability = {},
@@ -54,6 +55,49 @@ WORLD.set_game_over = function()
 	engine.set_velocity_2d(WORLD.player_id(), 0, 0)
 end
 WORLD.get_entity = function(id) return CONFIG.entities[id] end
+WORLD.set_activity_state = function(id, activity, time, cooldown)
+	if not WORLD.activity_state[id] then
+		WORLD.activity_state[id] = {}
+	end
+	if not WORLD.activity_state[id][activity] then
+		WORLD.activity_state[id][activity] = {}
+	end
+	if cooldown and not WORLD.activity_cooldown[id] then
+		WORLD.activity_cooldown[id] = {}
+	end
+	if cooldown and not WORLD.activity_cooldown[id][activity] then
+		WORLD.activity_cooldown[id][activity] = {}
+	end
+
+	WORLD.activity_state[id][activity].time = time
+
+	if cooldown then
+		WORLD.activity_cooldown[id][activity].time = cooldown
+	end
+end
+WORLD.is_activity_going = function(id, activity)
+	PRETTY_PRINT(WORLD.activity_state[id])
+	return WORLD.activity_state[id] and WORLD.activity_state[id][activity] and
+			WORLD.activity_state[id][activity].time > 0
+end
+WORLD.is_activity_done = function(id, activity)
+	return not WORLD.activity_state[id] or not WORLD.activity_state[id][activity] or
+			WORLD.activity_state[id][activity].time <= 0
+end
+WORLD.is_off_cooldown = function(id, activity)
+	return not WORLD.activity_cooldown[id] or not WORLD.activity_cooldown[id][activity] or
+			WORLD.activity_cooldown[id][activity].time <= 0
+end
+WORLD.tick_activity_state = function(id, activity, dt)
+	if WORLD.activity_state[id] and WORLD.activity_state[id][activity] then
+		WORLD.activity_state[id][activity].time = WORLD.activity_state[id][activity].time - dt
+	end
+end
+WORLD.tick_cooldown = function(id, activity, dt)
+	if WORLD.activity_cooldown[id] and WORLD.activity_cooldown[id][activity] then
+		WORLD.activity_cooldown[id][activity].time = WORLD.activity_cooldown[id][activity].time - dt
+	end
+end
 
 
 CONTROLLER = {
@@ -158,6 +202,8 @@ function ENGINE_update(dt)
 	fps_debug.frame_count = fps_debug.frame_count + 1
 	fps_debug.time_accum = fps_debug.time_accum + dt
 
+	local id = WORLD.player_id()
+
 	if fps_debug.time_accum >= 1.0 then
 		print("UPDATE FPS: ", fps_debug.frame_count)
 		fps_debug.frame_count = 0
@@ -169,8 +215,36 @@ function ENGINE_update(dt)
 	local dx, dy = 0, 0
 	ENGINE_HANDLES.tick_targetability(dt)
 
+	WORLD.tick_cooldown(id, GLOBALS.ACTIONS.Dashing, dt)
+
+	local was_dashing = WORLD.is_activity_going(id, GLOBALS.ACTIONS.Dashing)
+	if was_dashing then
+		WORLD.tick_activity_state(id, GLOBALS.ACTIONS.Dashing, dt)
+		if WORLD.is_activity_done(id, GLOBALS.ACTIONS.Dashing) then
+			ENGINE_HANDLES.set_state(id, GLOBALS.ACTIONS.Idle)
+			engine.set_velocity_2d(id, 0, 0)
+		end
+	end
+
+	--[[
+	if WORLD.activity_state[id].time > 0 then
+		WORLD.activity_state[id].time = WORLD.activity_state[id].time - dt
+
+		if WORLD.activity_state[id].activity == GLOBALS.ACTIONS.Dashing then
+			if WORLD.activity_state[id].time <= 0 then
+				WORLD.activity_state[id].activity = GLOBALS.ACTIONS.Idle
+				ENGINE_HANDLES.set_state(id, GLOBALS.ACTIONS.Idle)
+				engine.set_velocity_2d(id, 0, 0)
+			end
+		end
+	end
+	]]
+
 	--skelly.move(dt)
 
+	--[[ PROCESS INPUT ]]
+	--everything after this will only run while input is enabled
+	--
 	if not CONFIG.input_enabled then
 		CONFIG.input_disable_time = CONFIG.input_disable_time - dt
 		if CONFIG.input_disable_time <= 0 then
@@ -193,27 +267,34 @@ function ENGINE_update(dt)
 	end
 
 	if CONFIG.controller:is_pressed("Dash") then
-		CONTROLLER.start_input_reenable_timer(0.5)
-		ENGINE_HANDLES.mark_untargetable(WORLD.player_id(), .6)
-		local x, y = game_math.normalize(dx, dy)
+		if WORLD.is_off_cooldown(id, GLOBALS.ACTIONS.Dashing) then
+			local dash_time = .3
+			local dash_speed = 30
+			CONTROLLER.start_input_reenable_timer(dash_time)
+			ENGINE_HANDLES.mark_untargetable(WORLD.player_id(), .6)
+			local x, y = game_math.normalize(dx, dy)
 
-		if not (x == 0 and y == 0) then
-			local impulse_strength = 10
-			ENGINE_HANDLES.set_state(WORLD.player_id(), GLOBALS.ACTIONS.Dashing)
-			engine.apply_move_2d(WORLD.player_id(), x * impulse_strength, y * impulse_strength)
-			engine.set_velocity_2d(WORLD.player_id(), 0, 0)
+			if not (x == 0 and y == 0) then
+				ENGINE_HANDLES.set_state(id, GLOBALS.ACTIONS.Dashing)
+				WORLD.set_activity_state(id, GLOBALS.ACTIONS.Dashing, dash_time, .5)
+				engine.set_velocity_2d(id, x * dash_speed, y * dash_speed)
+				-- leaving this for now as we can implement a "blink" with this if raycasting can prevent
+				-- blinking through impassable terrain
+				-- engine.apply_move_2d(WORLD.player_id(), x * impulse_strength, y * impulse_strength)
+				-- engine.set_velocity_2d(WORLD.player_id(), 0, 0)
+			end
 		end
 	else
 		local length = math.sqrt(dx * dx + dy * dy)
 		if length > 0 then
 			dx = dx / length
 			dy = dy / length
-			engine.set_velocity_2d(WORLD.player_id(), dx * CONFIG.speed, dy * CONFIG.speed)
-			ENGINE_HANDLES.set_state(WORLD.player_id(), GLOBALS.ACTIONS.Running)
-			ENGINE_HANDLES.flip_x(WORLD.player_id(), dx)
+			engine.set_velocity_2d(id, dx * CONFIG.speed, dy * CONFIG.speed)
+			ENGINE_HANDLES.set_state(id, GLOBALS.ACTIONS.Running)
+			ENGINE_HANDLES.flip_x(id, dx)
 		else
-			engine.set_velocity_2d(WORLD.player_id(), 0, 0)
-			ENGINE_HANDLES.set_state(WORLD.player_id(), GLOBALS.ACTIONS.Idle)
+			engine.set_velocity_2d(id, 0, 0)
+			ENGINE_HANDLES.set_state(id, GLOBALS.ACTIONS.Idle)
 		end
 	end
 end
