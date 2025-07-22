@@ -15,7 +15,7 @@ local function new_skelly(x, y)
 			:add_mask(GLOBALS.MASKS_AND_LAYERS.Enemy)
 			:add_mask(GLOBALS.MASKS_AND_LAYERS.Player)
 			:collider_size_modifier(0.3, 0.3)
-			:add_animation(GLOBALS.ACTIONS.Idle, dashing)
+			:add_animation(GLOBALS.ACTIONS.Idle, idle)
 			:add_animation(GLOBALS.ACTIONS.Dashing, dashing)
 			:build()
 end
