@@ -2,7 +2,7 @@ use crate::bitmaps::vecbool_to_u8;
 use crate::camera_2d::Camera2D;
 use crate::camera_3d::CameraAction;
 use crate::components_systems::physics_2d::{
-    self, Area2D, BodyType, FlipComponent, PhysicsBody, Shape, TransformComponent,
+    self, Area2D, BodyType, FlipComponent, PhysicsBody2D, Shape, Transform2D,
 };
 use crate::components_systems::{
     animation_system_update_frames, damage, set_entity_state, ActionState, ActionStateComponent,
@@ -127,21 +127,27 @@ impl Engine {
         self.world
             .flips
             .insert(Entity(entity), FlipComponent { x, y });
+        if let Some(t) = self.world.transforms_2d.get_mut(&Entity(entity)) {
+            t.scale.x = if x { -t.scale.x.abs() } else { t.scale.x.abs() };
+            t.scale.y = if y { -t.scale.y.abs() } else { t.scale.y.abs() };
+        }
     }
 
     pub fn update_camera_follow_player(&mut self) {
         if self.dimensions == Dimensions::Two {
-            if let Some(transform) = self.world.physics_bodies_2d.get(&self.player) {
-                let graphics = match &mut self.graphics {
-                    Some(canvas) => canvas,
-                    None => return,
-                };
-                graphics.move_camera_for_follow(
-                    [transform.position[0], transform.position[1], 0.0],
-                    [transform.velocity[0], transform.velocity[1], 0.0],
-                    [0.0, 0.0, 0.0],
-                    [0.0, 0.0, 0.0],
-                );
+            if let Some(transform) = self.world.transforms_2d.get(&self.player) {
+                if let Some(body) = self.world.physics_bodies_2d.get(&self.player) {
+                    let graphics = match &mut self.graphics {
+                        Some(canvas) => canvas,
+                        None => return,
+                    };
+                    graphics.move_camera_for_follow(
+                        [transform.position[0], transform.position[1], 0.0],
+                        [body.velocity[0], body.velocity[1], 0.0],
+                        [0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0],
+                    );
+                }
             }
         }
     }
@@ -262,20 +268,15 @@ impl Engine {
 
     fn get_position_2d(&mut self, id: u32) -> [f32; 2] {
         if self.dimensions == Dimensions::Two {
-            let position = self
-                .world
-                .physics_bodies_2d
-                .get(&Entity(id))
-                .unwrap()
-                .position;
+            let position = self.world.transforms_2d.get(&Entity(id)).unwrap().position;
             return [position.x, position.y];
         }
         [0.0, 0.0]
     }
 
     fn apply_move_2d(&mut self, id: u32, x: f32, y: f32) {
-        let b = self.world.physics_bodies_2d.get_mut(&Entity(id)).unwrap();
-        b.position += Vector2::new(x, y);
+        let t = self.world.transforms_2d.get_mut(&Entity(id)).unwrap();
+        t.position += Vector2::new(x, y);
     }
 
     fn damage(&mut self, id: u32, amount: u16) -> bool {
@@ -380,7 +381,7 @@ impl Engine {
             );
             self.world.physics_bodies_2d.insert(
                 entity.clone(),
-                PhysicsBody {
+                PhysicsBody2D {
                     shape: Shape::Rectangle {
                         half_extents: cgmath::Vector2 {
                             x: width / 2.0,
@@ -390,17 +391,16 @@ impl Engine {
                     mass: 1.0,
                     body_type: BodyType::from(lua_element.get("type").unwrap_or(1)),
                     velocity: cgmath::Vector2 { x: 0.0, y: 0.0 },
-                    position: cgmath::Vector2 { x, y },
                     force_accumulator: cgmath::Vector2 { x: 0.0, y: 0.0 },
                 },
             );
+
             self.world.transforms_2d.insert(
                 entity.clone(),
-                TransformComponent {
-                    position: [x, y],
-                    velocity: [0.0, 0.0],
-                    acceleration: [0.0, 0.0],
-                    size: [width, height],
+                Transform2D {
+                    position: Vector2::new(x, y),
+                    scale: Vector2::new(width, height),
+                    rotation_radians: 0.0,
                 },
             );
 

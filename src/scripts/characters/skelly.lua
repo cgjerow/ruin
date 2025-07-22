@@ -9,7 +9,7 @@ local dashing = load_aseprite_animation("skelly_lunging", "skelly/", "skelly_lea
 local function new_skelly(x, y)
 	return PhysicsBodyBuilder()
 			:position(x, y)
-			:size(2, 2)
+			:size(4, 4)
 			:add_layer(GLOBALS.MASKS_AND_LAYERS.Enemy)
 			:add_mask(GLOBALS.MASKS_AND_LAYERS.Env)
 			:add_mask(GLOBALS.MASKS_AND_LAYERS.Enemy)
@@ -86,7 +86,6 @@ local function move_skellies(dt)
 			end
 			goto continue
 		end
-
 
 		::continue::
 	end

@@ -25,8 +25,6 @@ pub struct RenderElement2D {
     pub texture: Texture,
     pub texture_id: String,
     pub uv_coords: [[f32; 2]; 4],
-    pub flip_x: bool,
-    pub flip_y: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -188,11 +186,9 @@ impl TextureBatchContext {
     fn build_quad_vertices_2d(element: &RenderElement2D) -> [Vertex; 4] {
         let [w, h] = element.size;
         let [x, y] = element.position;
-        let flip_x = if element.flip_x { -1.0 } else { 1.0 };
-        let flip_y = if element.flip_y { -1.0 } else { 1.0 };
 
-        let hw = w * 0.5 * flip_x;
-        let hh = h * 0.5 * flip_y;
+        let hw = w * 0.5;
+        let hh = h * 0.5;
 
         let positions = [
             [x - hw, y + hh],
@@ -545,59 +541,52 @@ impl Graphics2D {
         }
 
         for (entity, animation) in world.animations.iter() {
-            let flip = world
-                .flips
-                .get(&entity)
-                .unwrap_or(&FlipComponent { x: false, y: false });
-            let flip_x = if flip.x { -1.0 } else { 1.0 };
-            let flip_y = if flip.y { -1.0 } else { 1.0 };
-
-            if let Some(body) = world.physics_bodies_2d.get(&entity) {
+            if let Some(t) = world.transforms_2d.get(&entity) {
                 let current_frame = &animation.current_frame;
+
+                // hitboxes
                 for area in &current_frame.hitboxes {
                     if world.debug.show_hitboxes {
                         if area.active {
-                            let pixels_per_unit = 32.0; // or however you scale your sprites
-
-                            // Convert pixel offset to world-space offset
+                            let pixels_per_unit = Vector2::from(current_frame.frame_pixel_dims);
                             let world_offset = Vector2::new(
-                                area.offset.x / pixels_per_unit * flip_x,
-                                area.offset.y / pixels_per_unit * flip_y,
+                                (area.offset.x) * t.scale.x / pixels_per_unit.x,
+                                (area.offset.y) * t.scale.y / pixels_per_unit.y,
                             );
-                            let world_position = body.position + world_offset;
+                            let world_half_extents = Vector2::new(
+                                area.shape.half_extents()[0] * t.scale.x.abs() / pixels_per_unit.x,
+                                area.shape.half_extents()[1] * t.scale.y.abs() / pixels_per_unit.y,
+                            );
+                            let world_position = t.position + world_offset;
 
-                            // Final world position = body.position + offset from frame center
                             self.draw_debug_rect(
                                 world_position,
-                                Vector2::from(area.shape.half_extents()) / pixels_per_unit,
+                                world_half_extents,
                                 [1.0, 0.0, 0.0, 0.5], // red with transparency
                             );
                         }
                     }
                 }
 
+                // hurtboxes
                 for area in &current_frame.hurtboxes {
                     if world.debug.show_hurtboxes {
                         if area.active {
-                            let pixels_per_unit = 32.0; // or however you scale your sprites
-
-                            // Convert pixel offset to world-space offset
+                            let pixels_per_unit = Vector2::from(current_frame.frame_pixel_dims);
                             let world_offset = Vector2::new(
-                                area.offset.x / pixels_per_unit,
-                                area.offset.y / pixels_per_unit,
+                                (area.offset.x) * t.scale.x / pixels_per_unit.x,
+                                (area.offset.y) * t.scale.y / pixels_per_unit.y,
                             );
-                            let world_position = body.position + world_offset;
+                            let world_half_extents = Vector2::new(
+                                area.shape.half_extents()[0] * t.scale.x.abs() / pixels_per_unit.x,
+                                area.shape.half_extents()[1] * t.scale.y.abs() / pixels_per_unit.y,
+                            );
+                            let world_position = t.position + world_offset;
 
-                            self.draw_debug_rect(
-                                body.position,
-                                Vector2::new(0.1, 0.1),
-                                [1.0, 1.0, 0.0, 1.0],
-                            );
-                            // Final world position = body.position + offset from frame center
                             self.draw_debug_rect(
                                 world_position,
-                                Vector2::from(area.shape.half_extents()) / pixels_per_unit,
-                                [0.0, 0.0, 01.0, 0.5], // blue with transparency
+                                world_half_extents,
+                                [0.0, 0.0, 1.0, 0.5], // blue with transparency
                             );
                         }
                     }

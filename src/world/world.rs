@@ -4,12 +4,10 @@ use cgmath::Vector2;
 
 use crate::{
     components_systems::{
-        physics_2d::{Area2D, FlipComponent, PhysicsBody, TransformComponent},
-        physics_3d, ActionStateComponent, AnimationComponent, Entity, HealthComponent,
-        SpriteSheetComponent,
+        physics_2d::{Area2D, FlipComponent, PhysicsBody2D, Transform2D},
+        ActionStateComponent, AnimationComponent, Entity, HealthComponent, SpriteSheetComponent,
     },
     graphics_2d::{RenderElement2D, RenderQueue2D},
-    graphics_3d::{RenderElement, RenderQueue},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -47,9 +45,9 @@ pub struct World {
     pub health_bars: HashMap<Entity, HealthComponent>,
     pub animations: HashMap<Entity, AnimationComponent>,
     pub sprite_sheets: HashMap<Entity, SpriteSheetComponent>,
-    pub transforms_2d: HashMap<Entity, TransformComponent>,
+    pub transforms_2d: HashMap<Entity, Transform2D>,
     pub action_states: HashMap<Entity, ActionStateComponent>,
-    pub physics_bodies_2d: HashMap<Entity, PhysicsBody>,
+    pub physics_bodies_2d: HashMap<Entity, PhysicsBody2D>,
     pub physical_colliders_2d: HashMap<Entity, HashMap<Entity, Area2D>>,
     pub hitboxes_2d: HashMap<Entity, HashMap<Entity, Area2D>>,
     pub hurtboxes_2d: HashMap<Entity, HashMap<Entity, Area2D>>,
@@ -214,13 +212,8 @@ impl World {
         let mut opaque = Vec::new();
 
         for (entity, animation) in self.animations.iter() {
-            if let Some(body) = self.physics_bodies_2d.get(entity) {
+            if let Some(transform) = self.transforms_2d.get(entity) {
                 let uv_coords = animation.current_frame.uv_coords;
-                let flip = self
-                    .flips
-                    .get(entity)
-                    .unwrap_or(&FlipComponent { x: false, y: false });
-
                 let action_animation = &animation.animations[&self
                     .action_states
                     .get(&entity)
@@ -232,14 +225,13 @@ impl World {
                     .expect("Sprite Sheets not found");
 
                 let tmp = RenderElement2D {
-                    position: [body.position[0], body.position[1]],
-                    size: body.get_size(),
-                    z_order: -body.position[1], // Sort top to bottom: lower y = drawn later
+                    position: transform.position.into(),
+                    size: transform.scale.into(),
+                    z_order: -transform.position[1], // Sort top to bottom: lower y = drawn later
+
                     texture: sprite.texture.clone(),
                     texture_id: sprite.texture_id.clone(),
                     uv_coords,
-                    flip_x: flip.x,
-                    flip_y: flip.y,
                 };
 
                 if action_animation.is_transparent {

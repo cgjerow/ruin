@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     components_systems::{
-        physics_2d::{Area2D, BodyType, PhysicsBody},
+        physics_2d::{Area2D, BodyType, PhysicsBody2D, Transform2D},
         Entity,
     },
     world::{AreaInfo, AreaRole, World},
@@ -24,7 +24,10 @@ pub struct CollisionInfo {
     pub penetration: f32,
 }
 
-pub fn collision_system(world: &World, next: &HashMap<Entity, PhysicsBody>) -> Vec<CollisionInfo> {
+pub fn collision_system(
+    world: &World,
+    next: &HashMap<Entity, (PhysicsBody2D, Transform2D)>,
+) -> Vec<CollisionInfo> {
     let mut collisions = Vec::new();
 
     for (a_parent, a_map) in world.physical_colliders_2d.iter() {
@@ -52,31 +55,31 @@ pub fn collision_system(world: &World, next: &HashMap<Entity, PhysicsBody>) -> V
 
                     // Get predicted next transforms for each parent
                     if let (Some(a_next), Some(b_next)) = (next.get(a_parent), next.get(b_parent)) {
-                        if check_aabb_intersects(a_next, a_collider, b_next, b_collider) {
+                        if check_aabb_intersects(&a_next.1, a_collider, &b_next.1, b_collider) {
                             let a_half_size = a_collider.shape.half_extents();
                             let b_half_size = b_collider.shape.half_extents();
 
-                            let a_min_x = a_next.position[0] - a_half_size[0];
-                            let a_max_x = a_next.position[0] + a_half_size[0];
-                            let a_min_y = a_next.position[1] - a_half_size[1];
-                            let a_max_y = a_next.position[1] + a_half_size[1];
+                            let a_min_x = a_next.1.position[0] - a_half_size[0];
+                            let a_max_x = a_next.1.position[0] + a_half_size[0];
+                            let a_min_y = a_next.1.position[1] - a_half_size[1];
+                            let a_max_y = a_next.1.position[1] + a_half_size[1];
 
-                            let b_min_x = b_next.position[0] - b_half_size[0];
-                            let b_max_x = b_next.position[0] + b_half_size[0];
-                            let b_min_y = b_next.position[1] - b_half_size[1];
-                            let b_max_y = b_next.position[1] + b_half_size[1];
+                            let b_min_x = b_next.1.position[0] - b_half_size[0];
+                            let b_max_x = b_next.1.position[0] + b_half_size[0];
+                            let b_min_y = b_next.1.position[1] - b_half_size[1];
+                            let b_max_y = b_next.1.position[1] + b_half_size[1];
 
                             let overlap_x = f32::min(a_max_x, b_max_x) - f32::max(a_min_x, b_min_x);
                             let overlap_y = f32::min(a_max_y, b_max_y) - f32::max(a_min_y, b_min_y);
 
                             let normal = if overlap_x < overlap_y {
-                                if a_next.position[0] < b_next.position[0] {
+                                if a_next.1.position[0] < b_next.1.position[0] {
                                     [1.0, 0.0]
                                 } else {
                                     [-1.0, 0.0]
                                 }
                             } else {
-                                if a_next.position[1] < b_next.position[1] {
+                                if a_next.1.position[1] < b_next.1.position[1] {
                                     [0.0, 1.0]
                                 } else {
                                     [0.0, -1.0]
@@ -94,12 +97,12 @@ pub fn collision_system(world: &World, next: &HashMap<Entity, PhysicsBody>) -> V
                                 entity_b: *b_parent,
                                 a_area_collider: *a_area_id,
                                 b_area_collider: *b_area_id,
-                                a_size: a_next.get_size(),
-                                b_size: b_next.get_size(),
-                                next_pos_a: a_next.position.into(),
-                                next_pos_b: b_next.position.into(),
-                                velocity_a: a_next.velocity.into(),
-                                velocity_b: b_next.velocity.into(),
+                                a_size: a_next.1.get_size().into(),
+                                b_size: b_next.1.get_size().into(),
+                                next_pos_a: a_next.1.position.into(),
+                                next_pos_b: b_next.1.position.into(),
+                                velocity_a: a_next.0.velocity.into(),
+                                velocity_b: b_next.0.velocity.into(),
                                 penetration,
                                 normal,
                             });
@@ -114,9 +117,9 @@ pub fn collision_system(world: &World, next: &HashMap<Entity, PhysicsBody>) -> V
 }
 
 pub fn check_aabb_intersects(
-    a_transform: &PhysicsBody,
+    a_transform: &Transform2D,
     a_collider: &Area2D,
-    b_transform: &PhysicsBody,
+    b_transform: &Transform2D,
     b_collider: &Area2D,
 ) -> bool {
     // Assuming position is center of entity and size is width/height
@@ -169,6 +172,7 @@ pub fn resolve_collisions(world: &mut World, collisions: Vec<CollisionInfo>) {
 
         let b_body = world.physics_bodies_2d.get(&col.entity_b).unwrap().clone();
         let a_body = world.physics_bodies_2d.get_mut(&col.entity_a).unwrap();
+        let a_pos = world.transforms_2d.get_mut(&col.entity_a).unwrap();
 
         if a_body.body_type == BodyType::Rigid
             && (b_body.body_type == BodyType::Static || b_body.body_type == BodyType::Rigid)
@@ -182,8 +186,8 @@ pub fn resolve_collisions(world: &mut World, collisions: Vec<CollisionInfo>) {
             ];
 
             if mtv[0] > 0.5 || mtv[1] > 0.5 {
-                a_body.position[0] = a_body.position[0] - mtv[0];
-                a_body.position[1] = a_body.position[1] - mtv[1];
+                a_pos.position[0] = a_pos.position[0] - mtv[0];
+                a_pos.position[1] = a_pos.position[1] - mtv[1];
             }
 
             // Simple slide: zero out the component of velocity along the normal

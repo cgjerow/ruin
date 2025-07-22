@@ -15,11 +15,11 @@ pub struct SpriteFrame {
     pub duration: f32,
     pub hitboxes: Vec<Area2D>,
     pub hurtboxes: Vec<Area2D>,
+    pub frame_pixel_dims: [f32; 2],
 }
 
 #[derive(Debug, Clone)]
 pub struct Animation {
-    pub frame_pixel_dims: [f32; 2],
     pub is_transparent: bool,
     pub sprite_sheet_id: Entity,
     pub frames: Vec<SpriteFrame>,
@@ -78,17 +78,18 @@ impl Animation {
                     [u0, v0], // top-left
                 ];
 
+                let frame_pixel_dims = [tile_w, tile_h];
                 frames.push(SpriteFrame {
                     uv_coords,
                     duration,
-                    hitboxes: parse_hitboxes_from_table(&hitboxes, i, [tile_w, tile_h]),
-                    hurtboxes: parse_hitboxes_from_table(&hurtboxes, i, [tile_w, tile_h]),
+                    hitboxes: parse_hitboxes_from_table(&hitboxes, i, frame_pixel_dims),
+                    hurtboxes: parse_hitboxes_from_table(&hurtboxes, i, frame_pixel_dims),
+                    frame_pixel_dims,
                 });
             }
         }
         (
             Animation {
-                frame_pixel_dims: [tile_w, tile_h],
                 sprite_sheet_id: Entity(0),
                 frames,
                 looped,
@@ -135,15 +136,15 @@ fn parse_hitboxes_from_table(
             let layers: [bool; 8] = b.get("layers").unwrap_or_default();
             let masks: [bool; 8] = b.get("masks").unwrap_or_default();
 
-            let frame_center_x = frame_size[0] / 2.0;
-            let frame_center_y = frame_size[1] / 2.0;
+            let frame_center_x = frame_size[0] * 0.5;
+            let frame_center_y = frame_size[1] * 0.5;
 
             let offset_x = x - frame_center_x;
             let offset_y = y - frame_center_y;
 
             boxes.push(Area2D {
                 shape: super::physics_2d::Shape::Rectangle {
-                    half_extents: Vector2::new(w, h),
+                    half_extents: Vector2::new(w * 0.5, h * 0.5),
                 },
                 offset: Vector2::new(offset_x, offset_y),
                 active: true,

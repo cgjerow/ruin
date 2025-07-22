@@ -85,12 +85,7 @@ pub fn transform_system_calculate_intended_position(
     to_return
 }
 
-pub fn transform_system_add_acceleration(world: &mut World, id: Entity, dx: f32, dy: f32) {
-    if let Some(transform) = world.transforms_2d.get_mut(&id) {
-        transform.acceleration[0] += dx;
-        transform.acceleration[1] += dy;
-    }
-}
+pub fn transform_system_add_acceleration(world: &mut World, id: Entity, dx: f32, dy: f32) {}
 
 pub fn transform_system_redirect(
     world: &mut World,
@@ -101,21 +96,4 @@ pub fn transform_system_redirect(
     sep_y: f32,
     acceleration_mod: f32,
 ) {
-    if let Some(transform) = world.transforms_2d.get_mut(&id) {
-        println!(
-            "COLLISION: {:?} {:?} {:?} {:?} {:?}",
-            dx, dy, sep_x, sep_y, acceleration_mod
-        );
-        // Apply bounce velocity
-        transform.velocity[0] = dx;
-        transform.velocity[1] = dy;
-
-        // Clear current acceleration
-        transform.acceleration[0] = dx * acceleration_mod;
-        transform.acceleration[1] = dy * acceleration_mod;
-
-        // Apply small separation offset
-        transform.position[0] += sep_x;
-        transform.position[1] += sep_y;
-    }
 }
