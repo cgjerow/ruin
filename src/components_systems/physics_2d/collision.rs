@@ -185,7 +185,7 @@ pub fn resolve_collisions(world: &mut World, collisions: Vec<CollisionInfo>) {
                 col.normal[1] * col.penetration,
             ];
 
-            if mtv[0] > 0.5 || mtv[1] > 0.5 {
+            if mtv[0] > 0.5 || mtv[1] > 0.1 {
                 a_pos.position[0] = a_pos.position[0] - mtv[0];
                 a_pos.position[1] = a_pos.position[1] - mtv[1];
             }

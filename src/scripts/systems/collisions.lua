@@ -18,6 +18,7 @@ local function on_each_collision(col)
 
 	if a_id == WORLD.player_id() or b_id == WORLD.player_id() then
 		if a_id == WORLD.player_id() then
+			--[[
 			if CONFIG.entities[b_id].on_player_collision == "bounce" then
 				engine.set_velocity_2d(
 					a_id,
@@ -35,6 +36,7 @@ local function on_each_collision(col)
 				)
 				ENGINE_HANDLES.set_state(b_id, GLOBALS.ACTIONS.Idle)
 			end
+			]]
 		end
 
 		if
@@ -47,7 +49,7 @@ local function on_each_collision(col)
 					)
 			then
 				ENGINE_HANDLES.mark_untargetable(WORLD.player_id(), 1)
-				local dead = engine.damage(WORLD.player_id(), 2)
+				-- local dead = engine.damage(WORLD.player_id(), 2)
 				if dead == true then
 					ENGINE_HANDLES.set_state(WORLD.player_id(), GLOBALS.ACTIONS.Dying)
 					WORLD.set_game_over()

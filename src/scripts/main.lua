@@ -169,7 +169,7 @@ function ENGINE_update(dt)
 	local dx, dy = 0, 0
 	ENGINE_HANDLES.tick_targetability(dt)
 
-	skelly.move(dt)
+	--skelly.move(dt)
 
 	if not CONFIG.input_enabled then
 		CONFIG.input_disable_time = CONFIG.input_disable_time - dt
