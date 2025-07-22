@@ -159,7 +159,7 @@ function ENGINE_update(dt)
 	fps_debug.time_accum = fps_debug.time_accum + dt
 
 	if fps_debug.time_accum >= 1.0 then
-		print("FPS: ", fps_debug.frame_count)
+		print("UPDATE FPS: ", fps_debug.frame_count)
 		fps_debug.frame_count = 0
 		fps_debug.time_accum = 0
 	end
@@ -169,7 +169,7 @@ function ENGINE_update(dt)
 	local dx, dy = 0, 0
 	ENGINE_HANDLES.tick_targetability(dt)
 
-	skelly.move(dt)
+	--skelly.move(dt)
 
 	if not CONFIG.input_enabled then
 		CONFIG.input_disable_time = CONFIG.input_disable_time - dt
@@ -255,7 +255,7 @@ function ENGINE_load()
 
 	local build_skellys = true
 	if build_skellys then
-		for _ = 1, 3 do
+		for _ = 1, 5 do
 			local x = math.random(10, 20)
 			local y = math.random(10, 20)
 			local flip_x = math.random(0, 1)

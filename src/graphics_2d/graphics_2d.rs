@@ -2,6 +2,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use bytemuck::{Pod, Zeroable};
+use cgmath::Vector2;
 use image::DynamicImage;
 use wgpu::util::DeviceExt;
 use wgpu::*;
@@ -48,8 +50,9 @@ pub struct Graphics2D {
     render_pipeline: RenderPipeline,
     camera_bind_group: BindGroup,
     depth_texture: Texture,
-
     texture_batch_context: TextureBatchContext,
+    debug_quads_pipeline: RenderPipeline,
+    debug_quads_batch: DebugQuadBatch,
 }
 
 #[derive(Debug, Clone)]
@@ -289,6 +292,7 @@ impl Graphics2D {
 
         let shader =
             device.create_shader_module(include_wgsl!("shaders/2d_camera_and_sprite.wgsl"));
+        let debug_shader = device.create_shader_module(include_wgsl!("shaders/quad_shader.wgsl"));
 
         let depth_texture = Texture::create_depth_texture(&device, &config, "2d_depth_texture");
 
@@ -330,6 +334,14 @@ impl Graphics2D {
             multiview: None,
             cache: None,
         });
+
+        // Create debug pipeline
+        let debug_quads_pipeline = Self::create_debug_pipeline(
+            &device,
+            config.format,
+            &debug_shader,
+            &camera_bind_group_layout,
+        );
 
         let mut camera_uniform = CameraUniform2D::new();
         camera_uniform.update(&camera);
@@ -388,6 +400,11 @@ impl Graphics2D {
             depth_texture,
             render_pipeline,
             texture_batch_context: TextureBatchContext::new(),
+            debug_quads_pipeline,
+            debug_quads_batch: DebugQuadBatch {
+                vertices: Vec::new(),
+                indices: Vec::new(),
+            },
         })
     }
 
@@ -413,7 +430,11 @@ impl Graphics2D {
             .write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[uniform]));
     }
 
-    pub fn render(&mut self, render_queue: RenderQueue2D) -> Result<(), SurfaceError> {
+    pub fn render(
+        &mut self,
+        world: &World,
+        render_queue: RenderQueue2D,
+    ) -> Result<(), SurfaceError> {
         if !self.is_surface_configured {
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
@@ -509,9 +530,182 @@ impl Graphics2D {
 
             self.texture_batch_context.reset_context();
         }
+        // Draw debug quads after main pass
+        self.debug_renderer(world);
+        self.draw_quad_debug_batch(&mut encoder, &view);
         self.queue.submit(Some(encoder.finish()));
         output.present();
         Ok(())
+    }
+
+    pub fn debug_renderer(&mut self, world: &World) {
+        if !world.debug.enabled {
+            return;
+        }
+
+        for (entity, animation) in world.animations.iter() {
+            if let Some(body) = world.physics_bodies_2d.get(&entity) {
+                let current_frame = &animation.current_frame;
+                for area in &current_frame.hitboxes {
+                    if world.debug.show_hitboxes {
+                        if area.active {
+                            let pixels_per_unit = 32.0; // or however you scale your sprites
+
+                            // Convert pixel offset to world-space offset
+                            let world_offset = Vector2::new(
+                                area.offset.x / pixels_per_unit,
+                                area.offset.y / pixels_per_unit,
+                            );
+                            let world_position = body.position + world_offset;
+
+                            // Final world position = body.position + offset from frame center
+                            self.draw_debug_rect(
+                                world_position,
+                                Vector2::from(area.shape.half_extents()) / pixels_per_unit,
+                                [1.0, 0.0, 0.0, 0.5], // red with transparency
+                            );
+                        }
+                    }
+                }
+
+                for area in &current_frame.hurtboxes {
+                    if world.debug.show_hurtboxes {
+                        if area.active {
+                            let pixels_per_unit = 32.0; // or however you scale your sprites
+
+                            // Convert pixel offset to world-space offset
+                            let world_offset = Vector2::new(
+                                area.offset.x / pixels_per_unit,
+                                area.offset.y / pixels_per_unit,
+                            );
+                            let world_position = body.position + world_offset;
+
+                            self.draw_debug_rect(
+                                body.position,
+                                Vector2::new(0.1, 0.1),
+                                [1.0, 1.0, 0.0, 1.0],
+                            );
+                            // Final world position = body.position + offset from frame center
+                            self.draw_debug_rect(
+                                world_position,
+                                Vector2::from(area.shape.half_extents()) / pixels_per_unit,
+                                [0.0, 0.0, 01.0, 0.5], // blue with transparency
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn draw_debug_rect(
+        &mut self,
+        center: Vector2<f32>,
+        half_extents: Vector2<f32>,
+        color: [f32; 4],
+    ) {
+        // Build a rectangle (quad) mesh with the given size and center
+        // Push to a debug batch or immediate rendering layer
+
+        let vertices = [
+            center + Vector2::new(-half_extents.x, -half_extents.y),
+            center + Vector2::new(half_extents.x, -half_extents.y),
+            center + Vector2::new(half_extents.x, half_extents.y),
+            center + Vector2::new(-half_extents.x, half_extents.y),
+        ];
+
+        // Insert quad with solid color, e.g., no texture bound
+        self.debug_quads_batch.push_quad(vertices, color);
+    }
+
+    pub fn draw_quad_debug_batch(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+    ) {
+        if self.debug_quads_batch.vertices.is_empty() {
+            return;
+        }
+
+        let vertex_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Debug Vertex Buffer"),
+                contents: bytemuck::cast_slice(&self.debug_quads_batch.vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+        let index_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Debug Index Buffer"),
+                contents: bytemuck::cast_slice(&self.debug_quads_batch.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+
+        let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("Debug Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load, // Keep main pass contents
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            occlusion_query_set: None,
+            timestamp_writes: None,
+            depth_stencil_attachment: None,
+        });
+
+        render_pass.set_pipeline(&self.debug_quads_pipeline);
+        render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+        render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        render_pass.draw_indexed(0..self.debug_quads_batch.indices.len() as u32, 0, 0..1);
+        self.debug_quads_batch.clear();
+    }
+
+    pub fn create_debug_pipeline(
+        device: &wgpu::Device,
+        surface_format: wgpu::TextureFormat,
+        shader_module: &wgpu::ShaderModule,
+        camera_bind_group_layout: &wgpu::BindGroupLayout, // Optional, see note below
+    ) -> wgpu::RenderPipeline {
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Debug Pipeline Layout"),
+            bind_group_layouts: &[camera_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("Debug Pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: shader_module,
+                entry_point: Some("vs_main"),
+                buffers: &[DebugQuadVertex::desc()],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(FragmentState {
+                module: shader_module,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: surface_format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        })
     }
 }
 
@@ -537,7 +731,7 @@ impl Graphics for Graphics2D {
 
     fn render(&mut self, world: &World) {
         let queue = world.extract_render_queue_2d();
-        let _ = self.render(queue);
+        let _ = self.render(world, queue);
     }
 
     fn load_texture_from_path(&mut self, id: &str, path: &str) -> Texture {
@@ -573,5 +767,75 @@ impl Graphics for Graphics2D {
         _o: [f32; 3],
     ) {
         self.update_camera([position[0], position[1]]);
+    }
+}
+
+struct DebugQuadBatch {
+    pub vertices: Vec<DebugQuadVertex>, // Includes position + color
+    pub indices: Vec<u16>,              // For indexed quads
+}
+
+impl DebugQuadBatch {
+    pub fn new() -> Self {
+        Self {
+            vertices: Vec::new(),
+            indices: Vec::new(),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.vertices.clear();
+        self.indices.clear();
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+struct DebugQuadVertex {
+    pub position: [f32; 2],
+    pub color: [f32; 4],
+}
+
+impl DebugQuadVertex {
+    pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
+        use std::mem;
+        wgpu::VertexBufferLayout {
+            array_stride: mem::size_of::<DebugQuadVertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+            ],
+        }
+    }
+}
+
+impl DebugQuadBatch {
+    pub fn push_quad(&mut self, vertices: [Vector2<f32>; 4], color: [f32; 4]) {
+        let base_index = self.vertices.len() as u16;
+
+        for &pos in &vertices {
+            self.vertices.push(DebugQuadVertex {
+                position: [pos.x, pos.y],
+                color,
+            });
+        }
+
+        self.indices.extend_from_slice(&[
+            base_index,
+            base_index + 1,
+            base_index + 2,
+            base_index,
+            base_index + 2,
+            base_index + 3,
+        ]);
     }
 }

@@ -3,9 +3,13 @@ local json = require("json") -- adapt to your preferred JSON library
 local function AnimationBuilder()
 	local anim = {
 		sprite = "",
+		tile_height = 32,
+		tile_width = 32,
 		sprite_sheet_height = 0,
 		sprite_sheet_width = 0,
 		frames = {},
+		hitboxes = {},
+		hurtboxes = {},
 		looped = true,
 		is_transparent = false,
 	}
@@ -33,11 +37,22 @@ local function AnimationBuilder()
 		return builder
 	end
 
-	function builder:add_hb(f, t, hb)
-		if not anim.frames[f][t] then
-			anim.frames[f][t] = {}
+	function builder:add_hb(f, t, hb, masks, layers)
+		t = t .. "es"
+		if not anim[t][f] then
+			anim[t][f] = {}
 		end
-		anim.frames[f][t][#anim.frames[f][t] + 1] = hb
+
+		local flipped_y = anim.tile_height - (hb.y + hb.h)
+		anim[t][f][#anim[t][f] + 1] = {
+			center_x = hb.x + (hb.w / 2),
+			center_y = flipped_y + (hb.h / 2),
+			width = hb.w,
+			height = hb.h,
+			masks,
+			layers,
+		}
+		PRETTY_PRINT(anim[t][f])
 	end
 
 	function builder:transparency(b)
@@ -110,7 +125,7 @@ local function load_aseprite_animation(animation_name, path, json_file, with_tra
 				local hb = json.decode(s.data)
 				if hb.frames and #hb.frames > 0 then
 					for _, f in ipairs(hb.frames) do
-						builder:add_hb(f, s.name, s.keys[1].bounds)
+						builder:add_hb(f, s.name, s.keys[1].bounds, hb.masks, hb.layers)
 					end
 				end
 			end

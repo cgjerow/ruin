@@ -34,6 +34,8 @@ pub struct Engine {
     player: Entity,
     mouse_pos: [f32; 2], // TODO!!!
     //
+    physics_tick_rate: f32,
+    physics_accumulator: f32,
     window: Option<Arc<Window>>,
     graphics: Option<Box<dyn Graphics>>,
     camera_mode: CameraOption,
@@ -41,7 +43,6 @@ pub struct Engine {
     count: u64,
     #[allow(dead_code)]
     fps_specified: bool,
-    physics_iterations_per_frame: u8,
     target_rate: Option<Duration>,
     last_frame: Instant,
     debugger: Debug,
@@ -50,6 +51,7 @@ pub struct Engine {
     world: World,
     width: u32,
     height: u32,
+    fps: FPS,
 }
 
 pub struct EngineConfig {
@@ -85,6 +87,8 @@ impl Engine {
         Self {
             mouse_pos: [0.0, 0.0],
             player: Entity(0),
+            physics_tick_rate: 1.0 / 60.0,
+            physics_accumulator: 0.0,
             lua_context: lua_executor,
             window: None,
             graphics: None,
@@ -94,12 +98,15 @@ impl Engine {
             count: 0,
             fps_specified: fps_opt != None,
             target_rate: target_rate,
-            physics_iterations_per_frame: 1,
             last_frame: Instant::now() - target_rate.unwrap_or_default(),
             asset_cache: HashMap::new(),
             width: config.width,
             height: config.height,
             world: World::new(),
+            fps: FPS {
+                frame_count: 0,
+                time_accum: 0.0,
+            },
         }
     }
 
@@ -153,18 +160,19 @@ impl Engine {
     }
 
     fn update(&mut self, dt: Duration) -> anyhow::Result<()> {
+        let dt32 = dt.as_secs_f32();
         let update: mlua::Function = self.lua_context.get_function("ENGINE_update");
 
-        let dt32 = dt.as_secs_f32();
+        self.physics_accumulator += dt32;
 
         let _ = update.call::<()>(dt32);
+        while self.physics_accumulator >= self.physics_tick_rate {
+            self.physics_accumulator -= self.physics_tick_rate;
 
-        if self.dimensions == Dimensions::Two {
-            let incremented_dt = dt32 / self.physics_iterations_per_frame as f32;
-            for _i in 0..self.physics_iterations_per_frame {
+            if self.dimensions == Dimensions::Two {
                 let next_transforms = physics_2d::transform_system_calculate_intended_position(
                     &self.world,
-                    incremented_dt,
+                    self.physics_tick_rate,
                 );
                 let collisions = physics_2d::collision_system(&self.world, &next_transforms);
                 physics_2d::resolve_collisions(&mut self.world, collisions.clone());
@@ -176,28 +184,20 @@ impl Engine {
                     .get_function("ENGINE_on_collision")
                     .call::<()>(collisions_table)
                     .expect("Error handling collisions");
+                physics_2d::transform_system_physics(&mut self.world, self.physics_tick_rate);
 
-                physics_2d::transform_system_physics(&mut self.world, incremented_dt);
-                let after_physics: mlua::Function =
-                    self.lua_context.get_function("ENGINE_after_physics");
-                let _ = after_physics.call::<()>(incremented_dt);
-            }
-            self.world.clear_forces();
-
-            if self.camera_mode == CameraOption::Follow {
-                self.update_camera_follow(&self.player.clone());
+                if self.camera_mode == CameraOption::Follow {
+                    self.update_camera_follow(&self.player.clone());
+                }
             }
         }
 
+        let _ = self
+            .lua_context
+            .get_function("ENGINE_after_physics")
+            .call::<()>(dt32);
+
         animation_system_update_frames(&mut self.world, dt32);
-
-        let graphics = match &mut self.graphics {
-            Some(canvas) => canvas,
-            None => return Ok(()),
-        };
-
-        graphics.update_camera();
-
         return Ok(());
     }
 
@@ -241,6 +241,10 @@ impl Engine {
 
         self.world
             .update_area_masks_and_layers(&Entity(id), masks, layers);
+    }
+
+    fn toggle_area(&mut self, id: u32, active: bool) {
+        self.world.toggle_area(&Entity(id), active);
     }
 
     fn get_velocity_2d(&mut self, id: u32) -> [f32; 2] {
@@ -302,38 +306,6 @@ impl Engine {
         );
     }
 
-    fn create_hitbox(&mut self, table: Table) -> u32 {
-        let entity = self.world.new_entity();
-        let offset_x: f32 = table.get("offset_x").unwrap_or(0.0);
-        let offset_y: f32 = table.get("offset_y").unwrap_or(0.0);
-        let width: f32 = table.get("width").unwrap_or(0.0);
-        let height: f32 = table.get("offset_y").unwrap_or(0.0);
-        let parent = Entity(table.get::<u32>("parent_id").unwrap() as u32);
-        let masks = vecbool_to_u8(LuaExtendedExecutor::table_to_vec_8(
-            table
-                .get("masks")
-                .unwrap_or(self.lua_context.create_table()),
-        ));
-        // hitbox doesn't need layers - only seeking out targets, not targetable
-
-        self.world.insert_area_2d(
-            AreaInfo {
-                role: AreaRole::Hitbox,
-                parent,
-            },
-            Area2D {
-                shape: Shape::Rectangle {
-                    half_extents: Vector2::from([width / 2.0, height / 2.0]),
-                },
-                offset: Vector2::from([offset_x, offset_y]),
-                layers: 0,
-                masks,
-            },
-        );
-
-        return entity.into();
-    }
-
     fn create_body(&mut self, lua_element: mlua::Table) -> [u32; 2] {
         let state: ActionState = lua_element.get("state").unwrap_or(0).into();
         let is_pc: bool = lua_element.get("is_pc").unwrap_or(false).into();
@@ -375,7 +347,7 @@ impl Engine {
                 let numeric_key =
                     key.as_u32()
                         .expect("Numeric key required for Action States") as u8;
-                let (mut animation, sprite_path) = Animation::from_lua_table(tbl);
+                let (mut animation, sprite_path) = Animation::from_lua_table(tbl, &mut self.world);
                 let action_state = ActionState::from(numeric_key);
 
                 let sprite_id: Entity = self.world.new_entity();
@@ -451,6 +423,7 @@ impl Engine {
                         },
                         masks: vecbool_to_u8(masks),
                         layers: vecbool_to_u8(layers),
+                        active: true,
                     },
                 );
             }
@@ -565,6 +538,15 @@ impl Engine {
                 Ok(engine.apply_masks_and_layers(id, masks, layers))
             })
             .expect("Could not create function");
+        let toggle_area_2d = self
+            .lua_context
+            .lua
+            .create_function(move |_, (id, b): (u32, bool)| {
+                let engine = unsafe { &mut *self_ptr };
+                Ok(engine.toggle_area(id, b))
+            })
+            .expect("Could not create function");
+
         let set_velocity_2d = self
             .lua_context
             .lua
@@ -643,6 +625,9 @@ impl Engine {
             .expect("Could not set engine function");
         lua_engine
             .set("apply_masks_and_layers", apply_masks_and_layers)
+            .expect("Could not set engine function");
+        lua_engine
+            .set("toggle_area_2d", toggle_area_2d)
             .expect("Could not set engine function");
         lua_engine
             .set("set_velocity_2d", set_velocity_2d)
@@ -738,6 +723,14 @@ impl ApplicationHandler<Graphics3D> for Engine {
         let now = Instant::now();
         let dt = self.last_frame.elapsed();
 
+        self.fps.frame_count += 1;
+        self.fps.time_accum += dt.as_secs_f32();
+        if self.fps.time_accum > 1.0 {
+            println!("FPS: {:?}", self.fps.frame_count);
+            self.fps.time_accum = 0.0;
+            self.fps.frame_count = 0;
+        }
+
         if self.fps_specified {
             let target = self.last_frame + self.target_rate.unwrap_or_default();
             if now < target {
@@ -746,13 +739,14 @@ impl ApplicationHandler<Graphics3D> for Engine {
             }
         }
 
-        self.last_frame = Instant::now();
+        self.last_frame = now;
         let _ = self.update(dt);
 
         let graphics = match &mut self.graphics {
             Some(canvas) => canvas,
             None => return,
         };
+        let _ = graphics.update_camera();
         let _ = graphics.render(&self.world);
 
         self.count += 1;
@@ -998,4 +992,9 @@ fn keycode_to_str(key: KeyCode) -> Option<&'static str> {
         KeyM => "m",
         _ => return None, // Unknown or unhandled key
     })
+}
+
+struct FPS {
+    pub frame_count: u32,
+    pub time_accum: f32,
 }

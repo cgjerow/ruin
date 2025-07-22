@@ -33,6 +33,13 @@ struct ParentAreaInfo {
     pub layers_superset: u8,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct WorldDebug {
+    pub show_hitboxes: bool,
+    pub enabled: bool,
+    pub show_hurtboxes: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct World {
     next_id: u32,
@@ -47,6 +54,8 @@ pub struct World {
     pub hitboxes_2d: HashMap<Entity, HashMap<Entity, Area2D>>,
     pub hurtboxes_2d: HashMap<Entity, HashMap<Entity, Area2D>>,
     pub area_roles: HashMap<Entity, AreaInfo>,
+    pub debug: WorldDebug,
+
     // keep this concept hidden for now.
     // interactions should take place through our getters/setters
     parent_area_info: HashMap<Entity, HashMap<AreaRole, ParentAreaInfo>>,
@@ -68,6 +77,11 @@ impl World {
             area_roles: HashMap::new(),
             flips: HashMap::new(),
             parent_area_info: HashMap::new(),
+            debug: WorldDebug {
+                show_hitboxes: true,
+                enabled: true,
+                show_hurtboxes: true,
+            },
         }
     }
 
@@ -131,8 +145,14 @@ impl World {
 
     fn update_parent_area_info(&mut self, info: AreaInfo) {
         let all_areas = self.get_all_areas_by_info(info);
-        let combined_masks = all_areas.values().fold(0u8, |acc, area| acc | area.masks);
-        let combined_layers = all_areas.values().fold(0u8, |acc, area| acc | area.layers);
+        let combined_masks = all_areas
+            .values()
+            .filter(|area| area.active)
+            .fold(0u8, |acc, area| acc | area.masks);
+        let combined_layers = all_areas
+            .values()
+            .filter(|area| area.active)
+            .fold(0u8, |acc, area| acc | area.layers);
         self.parent_area_info
             .entry(info.parent) // Get entry for outer map
             .or_insert_with(HashMap::new) // Insert new inner HashMap if missing
@@ -153,6 +173,22 @@ impl World {
                 .unwrap()
                 .get(id),
             _ => None,
+        }
+    }
+
+    pub fn toggle_area(&mut self, id: &Entity, active: bool) {
+        if let Some(info) = self.area_roles.get(id) {
+            if let Some(area) = match info.role {
+                AreaRole::Physics => self
+                    .physical_colliders_2d
+                    .get_mut(&info.parent)
+                    .unwrap()
+                    .get_mut(id),
+                _ => None,
+            } {
+                area.active = active;
+            }
+            self.update_parent_area_info(*info);
         }
     }
 

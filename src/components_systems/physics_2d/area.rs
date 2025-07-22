@@ -8,4 +8,5 @@ pub struct Area2D {
     pub offset: Vector2<f32>,
     pub layers: u8,
     pub masks: u8,
+    pub active: bool,
 }
