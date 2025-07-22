@@ -129,9 +129,9 @@ impl Engine {
             .insert(Entity(entity), FlipComponent { x, y });
     }
 
-    pub fn update_camera_follow(&mut self, entity: &Entity) {
+    pub fn update_camera_follow_player(&mut self) {
         if self.dimensions == Dimensions::Two {
-            if let Some(transform) = self.world.physics_bodies_2d.get(entity) {
+            if let Some(transform) = self.world.physics_bodies_2d.get(&self.player) {
                 let graphics = match &mut self.graphics {
                     Some(canvas) => canvas,
                     None => return,
@@ -187,7 +187,7 @@ impl Engine {
                 physics_2d::transform_system_physics(&mut self.world, self.physics_tick_rate);
 
                 if self.camera_mode == CameraOption::Follow {
-                    self.update_camera_follow(&self.player.clone());
+                    self.update_camera_follow_player();
                 }
             }
         }
