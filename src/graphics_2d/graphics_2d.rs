@@ -562,7 +562,7 @@ impl Graphics2D {
                             self.draw_debug_rect(
                                 world_position,
                                 world_half_extents,
-                                [1.0, 0.0, 0.0, 0.5], // red with transparency
+                                [1.0, 0.0, 0.0, 1.0], // red with transparency
                             );
                         }
                     }
@@ -586,7 +586,7 @@ impl Graphics2D {
                             self.draw_debug_rect(
                                 world_position,
                                 world_half_extents,
-                                [0.0, 0.0, 1.0, 0.5], // blue with transparency
+                                [0.0, 0.0, 1.0, 1.0], // blue with transparency
                             );
                         }
                     }
@@ -609,7 +609,7 @@ impl Graphics2D {
                             self.draw_debug_rect(
                                 world_position,
                                 world_half_extents,
-                                [0.0, 1.0, 1.0, 0.1], // blue with transparency
+                                [0.0, 1.0, 1.0, 1.0], // blue with transparency
                             );
                         }
                     }
@@ -718,7 +718,7 @@ impl Graphics2D {
                 compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
+                topology: wgpu::PrimitiveTopology::LineList,
                 ..Default::default()
             },
             depth_stencil: None,
@@ -852,10 +852,12 @@ impl DebugQuadBatch {
         self.indices.extend_from_slice(&[
             base_index,
             base_index + 1,
+            base_index + 1,
             base_index + 2,
-            base_index,
             base_index + 2,
             base_index + 3,
+            base_index + 3,
+            base_index,
         ]);
     }
 }

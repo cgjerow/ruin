@@ -307,6 +307,12 @@ impl Engine {
         );
     }
 
+    fn create_ui_element(&mut self, lua_element: mlua::Table) -> [u32; 1] {
+        let entity = self.world.new_entity();
+
+        [entity.into()]
+    }
+
     fn create_body(&mut self, lua_element: mlua::Table) -> [u32; 2] {
         let state: ActionState = lua_element.get("state").unwrap_or(0).into();
         let is_pc: bool = lua_element.get("is_pc").unwrap_or(false).into();
@@ -320,6 +326,8 @@ impl Engine {
         let collision_box: mlua::Table = lua_element
             .get("collision_box")
             .unwrap_or(self.lua_context.create_table());
+        let collision_box_x_modifier: f32 = collision_box.get("size_modifier_x").unwrap_or(1.0);
+        let collision_box_y_modifier: f32 = collision_box.get("size_modifier_y").unwrap_or(1.0);
 
         let masks = LuaExtendedExecutor::table_to_vec_8(
             lua_element
@@ -408,9 +416,9 @@ impl Engine {
                     Area2D {
                         shape: Shape::Rectangle {
                             half_extents: cgmath::Vector2 {
-                                x: 1.0 * 0.5, // assuming all entities are using the same tile size
+                                x: 1.0 * 0.5 * collision_box_x_modifier, // assuming all entities are using the same tile size
                                 // (1 world unit) for now
-                                y: 1.0 * 0.5,
+                                y: 1.0 * 0.5 * collision_box_y_modifier,
                             },
                         },
                         offset: Vector2 {
