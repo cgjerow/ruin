@@ -306,31 +306,33 @@ function ENGINE_load()
 
 	local build_walls = true
 	if build_walls then
-		for i = 0, 50 do
-			if i % 2 == 0 then
-				goto continue
-			end
-			local fence = new_fence(i - 25, -25)
-			fence.on_player_collision = "block"
-			fence.on_collision = ""
-			fence.id = ENGINE_HANDLES.create_body(fence)
+		local fence_thickness = 2
+		local fence_count_per_side = 25
+		local half_length = fence_thickness * fence_count_per_side / 2
 
-			fence = new_fence(i - 25, 25)
-			fence.on_player_collision = "block"
-			fence.on_collision = ""
-			fence.id = ENGINE_HANDLES.create_body(fence)
+		-- Bottom wall: centered on y = -half_length, full width
+		local bottom_wall = new_fence(0, -half_length, fence_thickness * fence_count_per_side, fence_thickness)
+		bottom_wall.on_player_collision = "block"
+		bottom_wall.on_collision = ""
+		bottom_wall.id = ENGINE_HANDLES.create_body(bottom_wall)
 
-			fence = new_fence(-25, i - 25)
-			fence.on_player_collision = "block"
-			fence.on_collision = ""
-			fence.id = ENGINE_HANDLES.create_body(fence)
+		-- Top wall: centered on y = half_length, full width
+		local top_wall = new_fence(0, half_length, fence_thickness * fence_count_per_side, fence_thickness)
+		top_wall.on_player_collision = "block"
+		top_wall.on_collision = ""
+		top_wall.id = ENGINE_HANDLES.create_body(top_wall)
 
-			fence = new_fence(25, i - 25)
-			fence.on_player_collision = "block"
-			fence.on_collision = ""
-			fence.id = ENGINE_HANDLES.create_body(fence)
-			::continue::
-		end
+		-- Left wall: centered on x = -half_length, full height
+		local left_wall = new_fence(-half_length, 0, fence_thickness, fence_thickness * fence_count_per_side)
+		left_wall.on_player_collision = "block"
+		left_wall.on_collision = ""
+		left_wall.id = ENGINE_HANDLES.create_body(left_wall)
+
+		-- Right wall: centered on x = half_length, full height
+		local right_wall = new_fence(half_length, 0, fence_thickness, fence_thickness * fence_count_per_side)
+		right_wall.on_player_collision = "block"
+		right_wall.on_collision = ""
+		right_wall.id = ENGINE_HANDLES.create_body(right_wall)
 	end
 
 	local build_skellys = true
