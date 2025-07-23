@@ -76,7 +76,6 @@ WORLD.set_activity_state = function(id, activity, time, cooldown)
 	end
 end
 WORLD.is_activity_going = function(id, activity)
-	PRETTY_PRINT(WORLD.activity_state[id])
 	return WORLD.activity_state[id] and WORLD.activity_state[id][activity] and
 			WORLD.activity_state[id][activity].time > 0
 end
@@ -138,8 +137,8 @@ ENGINE_HANDLES = {
 	mark_untargetable = function(id, duration)
 		if not WORLD.targetability[id] or WORLD.targetability[id].duration < duration then
 			WORLD.targetability[id] = { duration = duration }
-			local ml = MaskAndLayerBuilder():add_mask(GLOBALS.MASKS_AND_LAYERS.Env):build()
-			engine.apply_masks_and_layers(WORLD.get_entity(id).collider, ml.masks, ml.layers)
+			-- local ml = MaskAndLayerBuilder():add_mask(GLOBALS.MASKS_AND_LAYERS.Env):build()
+			-- engine.apply_masks_and_layers(WORLD.get_entity(id).collider, ml.masks, ml.layers)
 		end
 	end,
 

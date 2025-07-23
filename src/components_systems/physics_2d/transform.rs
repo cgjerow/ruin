@@ -16,7 +16,10 @@ pub struct Transform2D {
 
 impl Transform2D {
     pub fn get_size(&self) -> Vector2<f32> {
-        self.scale.clone()
+        Vector2::new(self.scale.x.abs(), self.scale.y.abs())
+    }
+    pub fn get_scale_abs(&self) -> Vector2<f32> {
+        Vector2::new(self.scale.x.abs(), self.scale.y.abs())
     }
 }
 /*

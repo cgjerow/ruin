@@ -30,7 +30,6 @@ pub struct PhysicsBody2D {
     pub velocity: Vector2<f32>,
     pub force_accumulator: Vector2<f32>,
     pub mass: f32,
-    pub shape: Shape,
 }
 
 const DEADZONE: f32 = 0.00001;

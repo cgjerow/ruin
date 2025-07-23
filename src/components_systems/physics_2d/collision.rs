@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     components_systems::{
-        physics_2d::{Area2D, BodyType, PhysicsBody2D, Transform2D},
+        physics_2d::{BodyType, PhysicsBody2D, Transform2D},
         Entity,
     },
     world::{AreaInfo, AreaRole, World},
@@ -55,10 +55,15 @@ pub fn collision_system(
 
                     // Get predicted next transforms for each parent
                     if let (Some(a_next), Some(b_next)) = (next.get(a_parent), next.get(b_parent)) {
-                        if check_aabb_intersects(&a_next.1, a_collider, &b_next.1, b_collider) {
-                            let a_half_size = a_collider.shape.half_extents();
-                            let b_half_size = b_collider.shape.half_extents();
-
+                        let a_half_size = [
+                            a_collider.shape.half_extents()[0] * a_next.1.get_scale_abs()[0],
+                            a_collider.shape.half_extents()[1] * a_next.1.get_scale_abs()[1],
+                        ];
+                        let b_half_size = [
+                            b_collider.shape.half_extents()[0] * b_next.1.get_scale_abs()[0],
+                            b_collider.shape.half_extents()[1] * b_next.1.get_scale_abs()[1],
+                        ];
+                        if check_aabb_intersects(&a_next.1, &b_next.1, a_half_size, b_half_size) {
                             let a_min_x = a_next.1.position[0] - a_half_size[0];
                             let a_max_x = a_next.1.position[0] + a_half_size[0];
                             let a_min_y = a_next.1.position[1] - a_half_size[1];
@@ -71,6 +76,7 @@ pub fn collision_system(
 
                             let overlap_x = f32::min(a_max_x, b_max_x) - f32::max(a_min_x, b_min_x);
                             let overlap_y = f32::min(a_max_y, b_max_y) - f32::max(a_min_y, b_min_y);
+                            println!("overlap x {:?} y {:?}", overlap_x, overlap_y);
 
                             let normal = if overlap_x < overlap_y {
                                 if a_next.1.position[0] < b_next.1.position[0] {
@@ -118,37 +124,49 @@ pub fn collision_system(
 
 pub fn check_aabb_intersects(
     a_transform: &Transform2D,
-    a_collider: &Area2D,
     b_transform: &Transform2D,
-    b_collider: &Area2D,
+    a_half: [f32; 2],
+    b_half: [f32; 2],
 ) -> bool {
     // Assuming position is center of entity and size is width/height
+
     let a_min = [
-        a_transform.position[0] - a_collider.shape.half_extents()[0],
-        a_transform.position[1] - a_collider.shape.half_extents()[1],
+        a_transform.position[0] - a_half[0],
+        a_transform.position[1] - a_half[1],
     ];
     let a_max = [
-        a_transform.position[0] + a_collider.shape.half_extents()[0],
-        a_transform.position[1] + a_collider.shape.half_extents()[1],
+        a_transform.position[0] + a_half[0],
+        a_transform.position[1] + a_half[1],
     ];
-
     let b_min = [
-        b_transform.position[0] - b_collider.shape.half_extents()[0],
-        b_transform.position[1] - b_collider.shape.half_extents()[1],
+        b_transform.position[0] - b_half[0],
+        b_transform.position[1] - b_half[1],
     ];
     let b_max = [
-        b_transform.position[0] + b_collider.shape.half_extents()[0],
-        b_transform.position[1] + b_collider.shape.half_extents()[1],
+        b_transform.position[0] + b_half[0],
+        b_transform.position[1] + b_half[1],
     ];
 
     let overlap_x = a_min[0] <= b_max[0] && a_max[0] >= b_min[0];
     let overlap_y = a_min[1] <= b_max[1] && a_max[1] >= b_min[1];
 
+    println!(
+        "POS {:?} and {:?} with extents {:?} and {:?} overlap {:?}",
+        a_transform.position,
+        b_transform.position,
+        a_half,
+        b_half,
+        overlap_y && overlap_x
+    );
+
     overlap_x && overlap_y
 }
 
 pub fn resolve_collisions(world: &mut World, collisions: Vec<CollisionInfo>) {
+    let slop = 0.1;
+
     for col in collisions {
+        // Get colliders for both entities
         let a_collider = world
             .get_area_by_info(
                 &col.a_area_collider,
@@ -159,6 +177,7 @@ pub fn resolve_collisions(world: &mut World, collisions: Vec<CollisionInfo>) {
             )
             .unwrap()
             .clone();
+
         let b_collider = world
             .get_area_by_info(
                 &col.b_area_collider,
@@ -170,27 +189,50 @@ pub fn resolve_collisions(world: &mut World, collisions: Vec<CollisionInfo>) {
             .unwrap()
             .clone();
 
+        // Get physics bodies and transform for entity A and B
         let b_body = world.physics_bodies_2d.get(&col.entity_b).unwrap().clone();
         let a_body = world.physics_bodies_2d.get_mut(&col.entity_a).unwrap();
         let a_pos = world.transforms_2d.get_mut(&col.entity_a).unwrap();
 
-        if a_body.body_type == BodyType::Rigid
-            && (b_body.body_type == BodyType::Static || b_body.body_type == BodyType::Rigid)
-            && a_collider.masks & b_collider.layers != 0
-        {
-            // We should handle the collision
-            // minimum translation vector
+        // Check conditions for collision resolution
+        let masks_overlap = (a_collider.masks & b_collider.layers) != 0;
+        let a_is_rigid = a_body.body_type == BodyType::Rigid;
+        let b_is_rigid = b_body.body_type == BodyType::Rigid;
+        let b_is_static = b_body.body_type == BodyType::Static;
+
+        if a_is_rigid && b_is_rigid && masks_overlap {
+            // Calculate half penetration vector (MTV)
+            let mtv = [
+                (col.normal[0] * col.penetration) * 0.5,
+                (col.normal[1] * col.penetration) * 0.5,
+            ];
+
+            // Only apply correction if above slop threshold
+            if mtv[0] > slop || mtv[1] > slop {
+                a_pos.position[0] -= mtv[0];
+                a_pos.position[1] -= mtv[1];
+            }
+
+            // Remove velocity component along collision normal (slide)
+            let dot = a_body.velocity[0] * col.normal[0] + a_body.velocity[1] * col.normal[1];
+            if dot != 0.0 {
+                a_body.velocity[0] -= dot * col.normal[0];
+                a_body.velocity[1] -= dot * col.normal[1];
+            }
+        } else if a_is_rigid && b_is_static && masks_overlap {
+            // Calculate full penetration vector (MTV)
             let mtv = [
                 col.normal[0] * col.penetration,
                 col.normal[1] * col.penetration,
             ];
 
-            if mtv[0] > 0.5 || mtv[1] > 0.1 {
-                a_pos.position[0] = a_pos.position[0] - mtv[0];
-                a_pos.position[1] = a_pos.position[1] - mtv[1];
+            // Apply correction if above slop threshold
+            if mtv[0] > slop || mtv[1] > slop {
+                a_pos.position[0] -= mtv[0];
+                a_pos.position[1] -= mtv[1];
             }
 
-            // Simple slide: zero out the component of velocity along the normal
+            // Remove velocity component along collision normal (slide)
             let dot = a_body.velocity[0] * col.normal[0] + a_body.velocity[1] * col.normal[1];
             if dot != 0.0 {
                 a_body.velocity[0] -= dot * col.normal[0];

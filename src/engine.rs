@@ -379,15 +379,10 @@ impl Engine {
                     frame_timer: 0.0,
                 },
             );
+
             self.world.physics_bodies_2d.insert(
                 entity.clone(),
                 PhysicsBody2D {
-                    shape: Shape::Rectangle {
-                        half_extents: cgmath::Vector2 {
-                            x: width / 2.0,
-                            y: height / 2.0,
-                        },
-                    },
                     mass: 1.0,
                     body_type: BodyType::from(lua_element.get("type").unwrap_or(1)),
                     velocity: cgmath::Vector2 { x: 0.0, y: 0.0 },
@@ -413,8 +408,9 @@ impl Engine {
                     Area2D {
                         shape: Shape::Rectangle {
                             half_extents: cgmath::Vector2 {
-                                x: width / 2.0,
-                                y: height / 2.0,
+                                x: 1.0 * 0.5, // assuming all entities are using the same tile size
+                                // (1 world unit) for now
+                                y: 1.0 * 0.5,
                             },
                         },
                         offset: Vector2 {
@@ -427,6 +423,7 @@ impl Engine {
                     },
                 );
             }
+
             self.world.health_bars.insert(
                 entity.clone(),
                 HealthComponent {

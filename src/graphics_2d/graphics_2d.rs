@@ -591,6 +591,29 @@ impl Graphics2D {
                         }
                     }
                 }
+
+                for (_, area) in world.physical_colliders_2d.get(&entity).unwrap().iter() {
+                    if world.debug.show_hurtboxes {
+                        if area.active {
+                            let pixels_per_unit = Vector2::new(1.0, 1.0); //Vector2::from(current_frame.frame_pixel_dims);
+                            let world_offset = Vector2::new(
+                                (area.offset.x) * t.scale.x / pixels_per_unit.x,
+                                (area.offset.y) * t.scale.y / pixels_per_unit.y,
+                            );
+                            let world_half_extents = Vector2::new(
+                                area.shape.half_extents()[0] * t.scale.x.abs() / pixels_per_unit.x,
+                                area.shape.half_extents()[1] * t.scale.y.abs() / pixels_per_unit.y,
+                            );
+                            let world_position = t.position + world_offset;
+
+                            self.draw_debug_rect(
+                                world_position,
+                                world_half_extents,
+                                [0.0, 1.0, 1.0, 0.1], // blue with transparency
+                            );
+                        }
+                    }
+                }
             }
         }
     }
