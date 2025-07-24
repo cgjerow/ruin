@@ -8,6 +8,7 @@ use wgpu::*;
 use winit::window::Window;
 
 use crate::camera_2d::Camera2D;
+use crate::components_systems::physics_2d::Shape;
 use crate::graphics::Graphics;
 use crate::graphics_2d::shape_pipelines::create_2d_pipeline;
 use crate::graphics_2d::shape_tesselation::TessellatedShape2D;
@@ -18,19 +19,19 @@ use crate::texture::Texture;
 use crate::world::World;
 
 #[derive(Debug, Clone)]
-pub struct RenderElement2D {
+pub struct RenderElement2D<'a> {
+    pub shape: &'a Shape,
     pub position: [f32; 2],
     pub size: [f32; 2],
     pub z_order: f32, // for Y-based sorting (e.g., lower y = drawn on top)
-    pub texture: Texture,
     pub texture_id: String,
     pub uv_coords: [[f32; 2]; 4],
 }
 
 #[derive(Debug, Clone)]
-pub struct RenderQueue2D {
-    pub transparent: Vec<RenderElement2D>,
-    pub opaque: Vec<RenderElement2D>,
+pub struct RenderQueue2D<'a> {
+    pub transparent: Vec<RenderElement2D<'a>>,
+    pub opaque: Vec<RenderElement2D<'a>>,
 }
 
 pub struct Graphics2D {
@@ -93,16 +94,27 @@ impl TextureBatchContext {
         if should_flush_batch {
             self.flush_batch(queue, pass, vertex_buffer, index_buffer);
         }
-        let vertices = Self::build_quad_vertices_2d(&element);
-        self.batched_vertices.extend_from_slice(&vertices);
-        self.batched_indices.extend_from_slice(&[
-            self.vertex_count_offset,
-            self.vertex_count_offset + 1,
-            self.vertex_count_offset + 2,
-            self.vertex_count_offset + 2,
-            self.vertex_count_offset + 3,
-            self.vertex_count_offset,
-        ]);
+
+        let mut shape = TessellatedShape2D::from(
+            &element.shape.scale(Vector2 {
+                x: element.size[0],
+                y: element.size[1],
+            }),
+            100,
+        );
+        shape.recenter(Vector2 {
+            x: element.position[0],
+            y: element.position[1],
+        });
+
+        let vertices = shape.into_tex(element.uv_coords);
+        let indices: Vec<u16> = shape
+            .indices
+            .iter()
+            .map(|i| i + self.vertex_count_offset)
+            .collect();
+        self.batched_vertices.extend(&vertices);
+        self.batched_indices.extend(indices);
         self.vertex_count_offset += vertices.len() as u16;
         self.previous_texture = element.texture_id.clone();
     }

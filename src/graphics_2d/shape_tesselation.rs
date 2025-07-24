@@ -1,4 +1,7 @@
-use crate::graphics_2d::vertex::ColorVertex;
+use crate::{
+    components_systems::physics_2d::Shape,
+    graphics_2d::vertex::{ColorVertex, TextureVertex},
+};
 use cgmath::Vector2;
 
 pub struct TessellatedShape2D {
@@ -7,6 +10,22 @@ pub struct TessellatedShape2D {
 }
 
 impl TessellatedShape2D {
+    pub fn from(shape: &Shape, segments: u32) -> TessellatedShape2D {
+        match shape {
+            Shape::Circle { radius } => Self::circle(*radius, segments),
+            Shape::Rectangle { half_extents } => Self::rect(half_extents.x, half_extents.y),
+        }
+    }
+
+    pub fn outline_from(shape: &Shape, thickness: f32, segments: u32) -> TessellatedShape2D {
+        match shape {
+            Shape::Circle { radius } => Self::circle_outline(*radius, thickness, segments),
+            Shape::Rectangle { half_extents } => {
+                Self::rect_outline(half_extents.x, half_extents.y, thickness)
+            }
+        }
+    }
+
     pub fn circle(radius: f32, segments: u32) -> Self {
         let mut vertices = Vec::with_capacity((segments + 1) as usize);
         let mut indices = Vec::with_capacity((segments * 3) as usize);
@@ -33,13 +52,13 @@ impl TessellatedShape2D {
 
     pub fn rect(hw: f32, hh: f32) -> Self {
         let vertices = vec![
-            Vector2::new(-hw, -hh),
-            Vector2::new(hw, -hh),
-            Vector2::new(hw, hh),
             Vector2::new(-hw, hh),
+            Vector2::new(hw, hh),
+            Vector2::new(hw, -hh),
+            Vector2::new(-hw, -hh),
         ];
 
-        let indices = vec![0, 1, 2, 0, 2, 3];
+        let indices = vec![0, 1, 2, 2, 3, 0];
 
         Self { vertices, indices }
     }
@@ -131,6 +150,17 @@ impl TessellatedShape2D {
             .map(|pos| ColorVertex {
                 position: [pos.x, pos.y],
                 color,
+            })
+            .collect()
+    }
+
+    pub fn into_tex(&self, tex_coords: [[f32; 2]; 4]) -> Vec<TextureVertex> {
+        self.vertices
+            .iter()
+            .zip(tex_coords.iter())
+            .map(|(v, &uv)| TextureVertex {
+                position: [v.x, v.y],
+                tex_coords: uv,
             })
             .collect()
     }

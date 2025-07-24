@@ -408,6 +408,10 @@ impl Engine {
                 Transform2D {
                     position: Vector2::new(x, y),
                     scale: Vector2::new(width, height),
+                    shape: Shape::Rectangle {
+                        // hard coding for now
+                        half_extents: Vector2 { x: 0.5, y: 0.5 },
+                    },
                     rotation_radians: 0.0,
                 },
             );

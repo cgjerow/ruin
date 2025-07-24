@@ -225,11 +225,10 @@ impl World {
                     .expect("Sprite Sheets not found");
 
                 let tmp = RenderElement2D {
+                    shape: &transform.shape,
                     position: transform.position.into(),
                     size: transform.scale.into(),
                     z_order: -transform.position[1], // Sort top to bottom: lower y = drawn later
-
-                    texture: sprite.texture.clone(),
                     texture_id: sprite.texture_id.clone(),
                     uv_coords,
                 };

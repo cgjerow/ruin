@@ -1,4 +1,4 @@
-use cgmath::Vector2;
+use cgmath::{InnerSpace, Vector2};
 
 #[derive(Debug, Clone)]
 pub enum Shape {
@@ -14,6 +14,20 @@ impl Shape {
         match *self {
             Shape::Rectangle { half_extents } => [half_extents.x, half_extents.y],
             Shape::Circle { radius } => [radius, radius],
+        }
+    }
+
+    pub fn scale(&self, scale: Vector2<f32>) -> Self {
+        match *self {
+            Shape::Rectangle { half_extents } => Shape::Rectangle {
+                half_extents: Vector2 {
+                    x: half_extents.x * scale.x,
+                    y: half_extents.y * scale.y,
+                },
+            },
+            Shape::Circle { radius } => Shape::Circle {
+                radius: radius * scale.magnitude(),
+            },
         }
     }
 }
