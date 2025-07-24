@@ -1,4 +1,3 @@
-// Core 2D rendering engine
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -10,7 +9,7 @@ use winit::window::Window;
 
 use crate::camera_2d::Camera2D;
 use crate::graphics::Graphics;
-use crate::graphics_2d::shape_pipelines::create_color_shapes_pipeline;
+use crate::graphics_2d::shape_pipelines::create_2d_pipeline;
 use crate::graphics_2d::shape_tesselation::TessellatedShape2D;
 use crate::graphics_2d::space::Space;
 use crate::graphics_2d::{CameraUniform2D, ColorVertex, TextureVertex};
@@ -118,34 +117,23 @@ impl TextureBatchContext {
         if self.previous_texture == "" {
             return;
         }
-        /*
-        println!("Prev {:?}", self.previous_texture);
-        println!(
-            "Flush batch: {} vertices, offset: {}",
-            self.batched_vertices.len(),
-            self.current_vertex_buffer_offset
-        );
-        */
         pass.set_bind_group(
             0,
             &*self.bind_group_cache.get(&self.previous_texture).unwrap(),
             &[],
         );
-        // Write vertex data to the pre-allocated buffer
         queue.write_buffer(
             &vertex_buffer,
-            self.current_vertex_buffer_offset as wgpu::BufferAddress, // Offset: Start writing from the beginning of the buffer
+            self.current_vertex_buffer_offset as wgpu::BufferAddress,
             bytemuck::cast_slice(&self.batched_vertices),
         );
 
-        // Write index data to the pre-allocated buffer
         queue.write_buffer(
             &index_buffer,
-            self.current_index_buffer_offset as wgpu::BufferAddress, // Offset: Start writing from the beginning of the buffer
+            self.current_index_buffer_offset as wgpu::BufferAddress,
             bytemuck::cast_slice(&self.batched_indices),
         );
 
-        // Now, set the buffers and draw, but specify the slice relevant to THIS sprite's data
         let vertex_slice_size = (self.batched_vertices.len() * std::mem::size_of::<TextureVertex>())
             as wgpu::BufferAddress;
         let index_slice_size =
@@ -166,7 +154,7 @@ impl TextureBatchContext {
             ),
             wgpu::IndexFormat::Uint16,
         );
-        pass.draw_indexed(0..self.batched_indices.len() as u32, 0, 0..1); // The indices here are relative to the start of the SLICE
+        pass.draw_indexed(0..self.batched_indices.len() as u32, 0, 0..1);
 
         // Increment offsets for the next sprite
         self.vertex_count_offset = 0;
@@ -297,50 +285,28 @@ impl Graphics2D {
 
         let depth_texture = Texture::create_depth_texture(&device, &config, "2d_depth_texture");
 
-        let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: Some("2D Render Pipeline Layout"),
-            bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("2D Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[TextureVertex::desc()],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(ColorTargetState {
-                    format: config.format,
-                    blend: Some(BlendState::ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
-                })],
-                compilation_options: Default::default(),
-            }),
-            primitive: PrimitiveState::default(),
-            multisample: MultisampleState::default(),
-            depth_stencil: Some(wgpu::DepthStencilState {
+        let render_pipeline = create_2d_pipeline(
+            &device,
+            config.format,
+            &shader,
+            &[TextureVertex::desc()],
+            &Vec::from([&texture_bind_group_layout, &camera_bind_group_layout]),
+            Some(wgpu::DepthStencilState {
                 format: Texture::DEPTH_FORMAT,
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::LessEqual, // only draw if closer
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),
+        );
 
-            multiview: None,
-            cache: None,
-        });
-
-        let color_shapes_pipeline = create_color_shapes_pipeline(
+        let color_shapes_pipeline = create_2d_pipeline(
             &device,
             config.format,
             &debug_shader,
-            &camera_bind_group_layout,
+            &[ColorVertex::desc()],
+            &Vec::from([&camera_bind_group_layout]),
+            None,
         );
 
         let mut camera_uniform = CameraUniform2D::new();

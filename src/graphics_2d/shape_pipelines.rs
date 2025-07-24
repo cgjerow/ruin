@@ -1,29 +1,30 @@
 use wgpu::{FragmentState, RenderPipelineDescriptor, VertexState};
 
-use crate::graphics_2d::vertex::ColorVertex;
-
-pub fn create_color_shapes_pipeline(
+pub fn create_2d_pipeline(
     device: &wgpu::Device,
     surface_format: wgpu::TextureFormat,
-    shader_module: &wgpu::ShaderModule,
-    camera_bind_group_layout: &wgpu::BindGroupLayout,
+    shader: &wgpu::ShaderModule,
+    vertex_desc: &[wgpu::VertexBufferLayout],
+    bind_group_layouts: &Vec<&wgpu::BindGroupLayout>,
+    depth_stencil: Option<wgpu::DepthStencilState>,
 ) -> wgpu::RenderPipeline {
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("Debug Pipeline Layout"),
-        bind_group_layouts: &[camera_bind_group_layout],
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("2D Texture Shape Pipeline Layout"),
+        bind_group_layouts: bind_group_layouts,
         push_constant_ranges: &[],
     });
+
     device.create_render_pipeline(&RenderPipelineDescriptor {
-        label: Some("Debug Quad Outlines"),
-        layout: Some(&pipeline_layout),
+        label: Some("2D Texture Render Pipeline"),
+        layout: Some(&layout),
         vertex: VertexState {
-            module: shader_module,
+            module: &shader,
             entry_point: Some("vs_main"),
-            buffers: &[ColorVertex::desc()],
+            buffers: vertex_desc,
             compilation_options: Default::default(),
         },
         fragment: Some(FragmentState {
-            module: shader_module,
+            module: &shader,
             entry_point: Some("fs_main"),
             targets: &[Some(wgpu::ColorTargetState {
                 format: surface_format,
@@ -33,8 +34,8 @@ pub fn create_color_shapes_pipeline(
             compilation_options: Default::default(),
         }),
         primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
+        depth_stencil,
         multiview: None,
         cache: None,
     })
