@@ -10,6 +10,7 @@ mod graphics_2d;
 mod graphics_3d;
 mod lua_scriptor;
 mod texture;
+mod ui_canvas;
 mod world;
 
 use engine::{Engine, EngineConfig};

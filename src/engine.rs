@@ -156,6 +156,7 @@ impl Engine {
         return self.fps_specified;
     }
 
+    // this may not be necessary, as we don't force redraws, changes just get picked up next cycle
     fn redraw(&self) {
         if self.is_targetting_fps() {
             self.window
@@ -416,8 +417,7 @@ impl Engine {
                     Area2D {
                         shape: Shape::Rectangle {
                             half_extents: cgmath::Vector2 {
-                                x: 1.0 * 0.5 * collision_box_x_modifier, // assuming all entities are using the same tile size
-                                // (1 world unit) for now
+                                x: 1.0 * 0.5 * collision_box_x_modifier, // assuming all entities are using the same tile size (1 world unit) for now
                                 y: 1.0 * 0.5 * collision_box_y_modifier,
                             },
                         },
@@ -736,7 +736,7 @@ impl ApplicationHandler<Graphics3D> for Engine {
             self.fps.frame_count = 0;
         }
 
-        if self.fps_specified {
+        if self.is_targetting_fps() {
             let target = self.last_frame + self.target_rate.unwrap_or_default();
             if now < target {
                 event_loop.set_control_flow(ControlFlow::WaitUntil(target));

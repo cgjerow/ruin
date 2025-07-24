@@ -76,7 +76,6 @@ pub fn collision_system(
 
                             let overlap_x = f32::min(a_max_x, b_max_x) - f32::max(a_min_x, b_min_x);
                             let overlap_y = f32::min(a_max_y, b_max_y) - f32::max(a_min_y, b_min_y);
-                            println!("overlap x {:?} y {:?}", overlap_x, overlap_y);
 
                             let normal = if overlap_x < overlap_y {
                                 if a_next.1.position[0] < b_next.1.position[0] {
@@ -117,7 +116,6 @@ pub fn collision_system(
                 }
             }
         }
-        // println!("---- A Outer Loop: {:.6}", a_1.elapsed().as_secs_f64());
     }
     collisions
 }
@@ -149,15 +147,6 @@ pub fn check_aabb_intersects(
 
     let overlap_x = a_min[0] <= b_max[0] && a_max[0] >= b_min[0];
     let overlap_y = a_min[1] <= b_max[1] && a_max[1] >= b_min[1];
-
-    println!(
-        "POS {:?} and {:?} with extents {:?} and {:?} overlap {:?}",
-        a_transform.position,
-        b_transform.position,
-        a_half,
-        b_half,
-        overlap_y && overlap_x
-    );
 
     overlap_x && overlap_y
 }

@@ -17,4 +17,8 @@ impl CameraUniform2D {
     pub fn update(&mut self, camera: &Camera2D) {
         self.view_proj = camera.build_matrix().into();
     }
+
+    pub fn static_update(&mut self, camera: &Camera2D) {
+        self.view_proj = camera.build_static_center_matrix().into();
+    }
 }
