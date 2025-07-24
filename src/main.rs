@@ -28,6 +28,9 @@ fn load_engine_config() -> EngineConfig {
     let fps: String = config_table.get("fps").unwrap_or("auto".to_string());
     let width: u32 = config_table.get("width").unwrap_or(1000);
     let height: u32 = config_table.get("height").unwrap_or(1000);
+    let camera2d_config: mlua::Table = config_table
+        .get("camera_config")
+        .unwrap_or(scriptor.lua.create_table().unwrap());
     let debug_enabled: bool = config_table.get("debug_enabled").unwrap_or(false);
     return EngineConfig {
         fps,
@@ -36,6 +39,20 @@ fn load_engine_config() -> EngineConfig {
         height,
         dimensions: Dimensions::Two,
         camera: CameraOption::Follow,
+        camera2d_config: camera_2d::camera_2d::Camera2DConfig {
+            zoom: camera2d_config.get("zoom").unwrap_or(15.0),
+            initial_position: [
+                camera2d_config.get("initial_pos_x").unwrap_or(0.0),
+                camera2d_config.get("initial_pos_y").unwrap_or(0.0),
+            ],
+            look_ahead_smooth_factor: camera2d_config
+                .get("look_ahead_smooth_factor")
+                .unwrap_or(0.3),
+            look_ahead_distance: camera2d_config.get("look_ahead_distance").unwrap_or(3.0),
+            look_ahead_lerp_speed: camera2d_config.get("look_ahead_lerp_speed").unwrap_or(0.1),
+            screen_width: width as f32,
+            screen_height: height as f32,
+        },
     };
 }
 

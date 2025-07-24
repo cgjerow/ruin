@@ -1,4 +1,5 @@
 use crate::bitmaps::vecbool_to_u8;
+use crate::camera_2d::camera_2d::Camera2DConfig;
 use crate::camera_2d::Camera2D;
 use crate::camera_3d::CameraAction;
 use crate::components_systems::physics_2d::{
@@ -52,6 +53,7 @@ pub struct Engine {
     width: u32,
     height: u32,
     fps: FPS,
+    camera2d_config: Camera2DConfig,
 }
 
 pub struct EngineConfig {
@@ -61,6 +63,7 @@ pub struct EngineConfig {
     pub height: u32,
     pub dimensions: Dimensions,
     pub camera: CameraOption,
+    pub camera2d_config: Camera2DConfig,
 }
 
 #[derive(Debug, PartialEq)]
@@ -107,6 +110,7 @@ impl Engine {
                 frame_count: 0,
                 time_accum: 0.0,
             },
+            camera2d_config: config.camera2d_config,
         }
     }
 
@@ -767,21 +771,8 @@ impl ApplicationHandler<Graphics3D> for Engine {
             Window::default_attributes().with_inner_size(LogicalSize::new(self.width, self.height));
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
-        /*
-        if self.dimensions == Dimensions::Three {
-            let camera_3d = Camera3D::new(
-                self.width,
-                self.height,
-                crate::camera_3d::camera_3d::CameraMode::Orthographic2D,
-            );
-            self.graphics = Some(Box::new(
-                pollster::block_on(Graphics3D::new(window.clone(), camera_3d)).unwrap(),
-            ));
-        }
-        elseif
-            */
         if self.dimensions == Dimensions::Two {
-            let camera_2d = Camera2D::new(self.width, self.height);
+            let camera_2d = Camera2D::new(&self.camera2d_config);
             self.graphics = Some(Box::new(
                 pollster::block_on(Graphics2D::new(window.clone(), camera_2d)).unwrap(),
             ));

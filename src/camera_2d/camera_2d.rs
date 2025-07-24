@@ -1,31 +1,41 @@
 use cgmath::{ortho, InnerSpace, Matrix4, Vector2};
 
-pub struct Camera2D {
-    pub position: Vector2<f32>,
+pub struct Camera2DConfig {
     pub zoom: f32, // how much of the world you see. larger = more
-    pub aspect_ratio: f32,
-    pub smooth_factor: f32,
-    pub look_ahead: f32,
-    pub look_ahead_offset: Vector2<f32>,
+    pub initial_position: [f32; 2],
+    pub look_ahead_smooth_factor: f32,
+    pub look_ahead_distance: f32,
     pub look_ahead_lerp_speed: f32,
-    pub previous_velocity: Vector2<f32>,
     pub screen_width: f32,
     pub screen_height: f32,
 }
 
+pub struct Camera2D {
+    pub position: Vector2<f32>,
+    pub zoom: f32,
+    aspect_ratio: f32,
+    smooth_factor: f32,
+    look_ahead: f32,
+    look_ahead_offset: Vector2<f32>,
+    look_ahead_lerp_speed: f32,
+    screen_width: f32,
+    screen_height: f32,
+    previous_velocity: Vector2<f32>,
+}
+
 impl Camera2D {
-    pub fn new(width: u32, height: u32) -> Self {
+    pub fn new(config: &Camera2DConfig) -> Self {
         Self {
-            position: Vector2::new(0.0, 0.0),
-            zoom: 10.0,
-            aspect_ratio: width as f32 / height as f32,
-            smooth_factor: 0.3,
-            look_ahead: 3.0,
+            position: Vector2::new(config.initial_position[0], config.initial_position[1]),
+            zoom: config.zoom,
+            aspect_ratio: config.screen_width / config.screen_height,
+            smooth_factor: config.look_ahead_smooth_factor,
+            look_ahead: config.look_ahead_distance,
+            look_ahead_lerp_speed: config.look_ahead_lerp_speed,
             look_ahead_offset: Vector2::new(0.0, 0.0),
-            look_ahead_lerp_speed: 0.05,
             previous_velocity: Vector2::new(0.0, 0.0),
-            screen_width: width as f32,
-            screen_height: height as f32,
+            screen_width: config.screen_width,
+            screen_height: config.screen_height,
         }
     }
 
@@ -55,6 +65,10 @@ impl Camera2D {
         let after_move_to_predicted = predicted - self.position;
         if to_predicted.dot(after_move_to_predicted) < 0.0 {
             self.position = predicted;
+        }
+
+        if speed < 0.01 && (self.position - target).magnitude() < 0.1 {
+            self.position = target;
         }
 
         self.previous_velocity = velocity;

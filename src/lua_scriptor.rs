@@ -5,7 +5,7 @@ use mlua::prelude::*;
 use crate::components_systems::physics_2d::CollisionInfo;
 
 pub struct LuaScriptor {
-    lua: Lua,
+    pub lua: Lua,
 }
 
 impl LuaScriptor {
