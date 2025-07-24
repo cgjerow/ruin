@@ -48,7 +48,6 @@ pub struct Graphics2D {
     static_camera_bind_group: BindGroup,
     vertex_buffer: Buffer,
     index_buffer: Buffer,
-    camera_bind_group_layout: BindGroupLayout,
     texture_bind_group_layout: BindGroupLayout,
     render_pipeline: RenderPipeline,
     depth_texture: Texture,
@@ -184,42 +183,6 @@ impl TextureBatchContext {
         self.batched_vertices.clear();
         self.batched_indices.clear();
         self.previous_texture = "".to_string();
-    }
-
-    fn build_quad_vertices_2d(element: &RenderElement2D) -> [TextureVertex; 4] {
-        let [w, h] = element.size;
-        let [x, y] = element.position;
-
-        let hw = w * 0.5;
-        let hh = h * 0.5;
-
-        let positions = [
-            [x - hw, y + hh],
-            [x + hw, y + hh],
-            [x + hw, y - hh],
-            [x - hw, y - hh],
-        ];
-
-        let tex = element.uv_coords;
-
-        [
-            TextureVertex {
-                position: positions[0],
-                tex_coords: tex[0],
-            },
-            TextureVertex {
-                position: positions[1],
-                tex_coords: tex[1],
-            },
-            TextureVertex {
-                position: positions[2],
-                tex_coords: tex[2],
-            },
-            TextureVertex {
-                position: positions[3],
-                tex_coords: tex[3],
-            },
-        ]
     }
 }
 
@@ -390,7 +353,6 @@ impl Graphics2D {
             static_camera_bind_group,
             vertex_buffer,
             index_buffer,
-            camera_bind_group_layout,
             texture_bind_group_layout,
             depth_texture,
             render_pipeline,
@@ -600,7 +562,7 @@ impl Graphics2D {
                 }
 
                 for (_, area) in world.physical_colliders_2d.get(&entity).unwrap().iter() {
-                    if world.debug.show_hurtboxes {
+                    if world.debug.show_colliders {
                         if area.active {
                             let pixels_per_unit = Vector2::new(1.0, 1.0); //Vector2::from(current_frame.frame_pixel_dims);
                             let world_offset = Vector2::new(
@@ -634,8 +596,8 @@ impl Graphics2D {
         space: Space,
     ) {
         let thickness = match space {
-            Space::World => 0.03,
-            Space::Canvas => 1.0,
+            Space::World => 0.05,
+            Space::Canvas => 2.0,
         };
 
         let mut quad = TessellatedShape2D::rect_outline(half_extents.x, half_extents.y, thickness);
@@ -703,42 +665,6 @@ impl Graphics2D {
 
         {
             self.draw_debug_rect(
-                Vector2 { x: 2.0, y: 2.0 },
-                Vector2 { x: 0.5, y: 0.5 },
-                [1.0, 0.0, 0.0, 1.0],
-                Space::Canvas,
-            );
-            self.draw_debug_rect(
-                Vector2 { x: 2.0, y: 2.0 },
-                Vector2 { x: 3.0, y: 3.0 },
-                [1.0, 0.0, 0.0, 1.0],
-                Space::Canvas,
-            );
-            self.draw_debug_rect(
-                Vector2 { x: 5.0, y: -5.0 },
-                Vector2 { x: 300.0, y: 300.5 },
-                [1.0, 0.0, 0.0, 1.0],
-                Space::Canvas,
-            );
-            self.draw_debug_rect(
-                Vector2 { x: 5.0, y: 5.0 },
-                Vector2 { x: 300.0, y: 300.5 },
-                [1.0, 0.0, 0.0, 1.0],
-                Space::Canvas,
-            );
-            self.draw_debug_rect(
-                Vector2 { x: 0.0, y: 0.0 },
-                Vector2 { x: 3.0, y: 3.0 },
-                [1.0, 0.0, 0.0, 1.0],
-                Space::Canvas,
-            );
-            self.draw_debug_rect(
-                Vector2 { x: 0.0, y: 0.0 },
-                Vector2 { x: 0.5, y: 0.5 },
-                [1.0, 0.0, 0.0, 1.0],
-                Space::Canvas,
-            );
-            self.draw_debug_rect(
                 Vector2 { x: 0.0, y: 0.0 },
                 Vector2 { x: 3.0, y: 3.0 },
                 [1.0, 0.0, 0.0, 1.0],
@@ -747,12 +673,6 @@ impl Graphics2D {
             self.draw_debug_rect(
                 Vector2 { x: 0.0, y: 0.0 },
                 Vector2 { x: 300.0, y: 300.5 },
-                [1.0, 0.0, 0.0, 1.0],
-                Space::Canvas,
-            );
-            self.draw_debug_rect(
-                Vector2 { x: 0.0, y: 0.0 },
-                Vector2 { x: 3.0, y: 3.0 },
                 [1.0, 0.0, 0.0, 1.0],
                 Space::Canvas,
             );
@@ -892,27 +812,5 @@ impl DebugShapesBatch {
                 .collect::<Vec<u16>>()
                 .as_slice(),
         );
-    }
-
-    pub fn push_quad(&mut self, vertices: [Vector2<f32>; 4], color: [f32; 4]) {
-        let base_index = self.vertices.len() as u16;
-
-        for &pos in &vertices {
-            self.vertices.push(ColorVertex {
-                position: [pos.x, pos.y],
-                color,
-            });
-        }
-
-        self.indices.extend_from_slice(&[
-            base_index,
-            base_index + 1,
-            base_index + 1,
-            base_index + 2,
-            base_index + 2,
-            base_index + 3,
-            base_index + 3,
-            base_index,
-        ]);
     }
 }

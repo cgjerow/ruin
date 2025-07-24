@@ -33,9 +33,10 @@ struct ParentAreaInfo {
 
 #[derive(Debug, Clone, Copy)]
 pub struct WorldDebug {
-    pub show_hitboxes: bool,
     pub enabled: bool,
+    pub show_hitboxes: bool,
     pub show_hurtboxes: bool,
+    pub show_colliders: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -76,9 +77,10 @@ impl World {
             flips: HashMap::new(),
             parent_area_info: HashMap::new(),
             debug: WorldDebug {
-                show_hitboxes: true,
                 enabled: true,
+                show_hitboxes: true,
                 show_hurtboxes: true,
+                show_colliders: true,
             },
         }
     }
