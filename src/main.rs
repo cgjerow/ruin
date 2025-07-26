@@ -8,6 +8,7 @@ mod engine;
 mod graphics;
 mod graphics_2d;
 mod graphics_3d;
+mod inputs;
 mod lua_scriptor;
 mod texture;
 mod ui_canvas;

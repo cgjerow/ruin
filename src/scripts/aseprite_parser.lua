@@ -52,7 +52,6 @@ local function AnimationBuilder()
 			masks,
 			layers,
 		}
-		PRETTY_PRINT(anim[t][f])
 	end
 
 	function builder:transparency(b)

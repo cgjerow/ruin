@@ -130,7 +130,7 @@ impl LuaExtendedExecutor {
     }
 
     #[allow(unused)]
-    pub fn pretty_print_table(table: LuaTable, indent: usize) -> Result<String, mlua::Error> {
+    pub fn pretty_print_table(table: &LuaTable, indent: usize) -> Result<String, mlua::Error> {
         let mut output = String::new();
         let pad = "  ".repeat(indent);
 
@@ -146,7 +146,7 @@ impl LuaExtendedExecutor {
             };
 
             let value_str = match &value {
-                LuaValue::Table(t) => Self::pretty_print_table(t.clone(), indent + 1)?,
+                LuaValue::Table(t) => Self::pretty_print_table(&t, indent + 1)?,
                 LuaValue::String(s) => format!("{:?}", s.to_str()?),
                 LuaValue::Boolean(b) => b.to_string(),
                 LuaValue::Integer(i) => i.to_string(),

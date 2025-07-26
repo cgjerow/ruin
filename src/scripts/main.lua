@@ -299,6 +299,21 @@ function ENGINE_update(dt)
 end
 
 function ENGINE_load()
+	engine.create_ui_scene({
+		elements = {
+			{ position_x = 1, position_y = 2, scale_x = 3, scale_y = 4, width = 5, height = 6, initially_active = true },
+			{ position_x = 1, position_y = 2, scale_x = 3, scale_y = 4, width = 5, height = 6, initially_active = false },
+		},
+		scenes = { {
+			elements = {
+				{ position_x = 1, position_y = 2, scale_x = 3, scale_y = 4, width = 5, height = 6, initially_active = true },
+				{ position_x = 1, position_y = 2, scale_x = 3, scale_y = 4, width = 5, height = 6 },
+			},
+			scenes = {},
+		}
+		},
+	})
+
 	local death = summon_death(0, 0)
 	death.on_collision = "bounce"
 	CONFIG.player = death
@@ -337,7 +352,7 @@ function ENGINE_load()
 
 	local build_skellys = true
 	if build_skellys then
-		for _ = 1, 5 do
+		for _ = 1, 100 do
 			local x = math.random(10, 20)
 			local y = math.random(10, 20)
 			local flip_x = math.random(0, 1)

@@ -103,6 +103,9 @@ impl World {
     }
 
     pub fn masks_overlap_layers(&self, a_info: AreaInfo, b_info: AreaInfo) -> u8 {
+        if a_info.parent == b_info.parent {
+            return 0;
+        }
         let a = self
             .parent_area_info
             .get(&a_info.parent)
@@ -117,6 +120,24 @@ impl World {
             .unwrap();
 
         return a.masks_superset & b.layers_superset;
+    }
+
+    pub fn layers_superset(&self, info: &AreaInfo) -> u8 {
+        self.parent_area_info
+            .get(&info.parent)
+            .unwrap()
+            .get(&info.role)
+            .unwrap()
+            .layers_superset
+    }
+
+    pub fn masks_superset(&self, info: &AreaInfo) -> u8 {
+        self.parent_area_info
+            .get(&info.parent)
+            .unwrap()
+            .get(&info.role)
+            .unwrap()
+            .masks_superset
     }
 
     pub fn insert_area_2d(&mut self, info: AreaInfo, area: Area2D) -> Entity {

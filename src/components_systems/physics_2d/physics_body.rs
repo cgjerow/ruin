@@ -1,9 +1,9 @@
 use cgmath::Vector2;
 use std::u8;
 
-use crate::components_systems::physics_2d::{Shape, Transform2D};
+use crate::components_systems::physics_2d::Transform2D;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq)]
 pub enum BodyType {
     Static,
     Rigid,

@@ -130,7 +130,6 @@ fn parse_hitboxes_from_table(
         if let Ok(b) = entry {
             let x: f32 = b.get("center_x").unwrap_or(0.0);
             let y: f32 = b.get("center_y").unwrap_or(0.0);
-            println!("CENTER {} {}", x, y);
             let w: f32 = b.get("width").unwrap_or(0.0);
             let h: f32 = b.get("height").unwrap_or(0.0);
             let layers: [bool; 8] = b.get("layers").unwrap_or_default();
@@ -161,7 +160,7 @@ pub fn animation_system_update_frames(world: &mut World, dt: f32) {
     for (entity, animation) in world.animations.iter_mut() {
         if let Some(action_state) = world.action_states.get(entity) {
             if let Some(anim) = animation.animations.get(&action_state.state) {
-                if anim.frames.is_empty() {
+                if anim.frames.len() <= 1 {
                     return;
                 }
 

@@ -10,8 +10,10 @@ use crate::components_systems::{
     Animation, AnimationComponent, Entity, HealthComponent, SpriteSheetComponent,
 };
 use crate::graphics::Graphics;
+use crate::inputs::{keycode_to_str, mousebutton_to_str};
 use crate::lua_scriptor::LuaExtendedExecutor;
 use crate::texture::Texture;
+use crate::ui_canvas::{parse_scene_from_lua, Canvas};
 use crate::world::{AreaInfo, AreaRole, World};
 use crate::{debug, graphics_2d, graphics_3d};
 use cgmath::Vector2;
@@ -20,6 +22,7 @@ use graphics_2d::Graphics2D;
 use graphics_3d::Graphics3D;
 use mlua::{Result, Table};
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use winit::application::ApplicationHandler;
@@ -50,6 +53,7 @@ pub struct Engine {
     asset_cache: HashMap<String, Texture>,
     lua_context: LuaExtendedExecutor,
     world: World,
+    canvas: Canvas,
     width: u32,
     height: u32,
     fps: FPS,
@@ -77,6 +81,18 @@ pub enum CameraOption {
     Independent,
 }
 
+impl FromStr for CameraOption {
+    type Err = ();
+
+    fn from_str(s: &str) -> std::result::Result<CameraOption, ()> {
+        match s.to_lowercase().as_str() {
+            "follow" => Ok(CameraOption::Follow),
+            "independent" => Ok(CameraOption::Independent),
+            _ => Err(()),
+        }
+    }
+}
+
 impl Engine {
     pub fn new(config: EngineConfig, lua_executor: LuaExtendedExecutor) -> Self {
         let fps_opt = if config.fps.trim().eq_ignore_ascii_case("auto") {
@@ -90,7 +106,7 @@ impl Engine {
         Self {
             mouse_pos: [0.0, 0.0],
             player: Entity(0),
-            physics_tick_rate: 1.0 / 60.0,
+            physics_tick_rate: 1.0 / 30.0,
             physics_accumulator: 0.0,
             lua_context: lua_executor,
             window: None,
@@ -106,6 +122,7 @@ impl Engine {
             width: config.width,
             height: config.height,
             world: World::new(),
+            canvas: Canvas::new(),
             fps: FPS {
                 frame_count: 0,
                 time_accum: 0.0,
@@ -177,16 +194,20 @@ impl Engine {
         self.physics_accumulator += dt32;
 
         let _ = update.call::<()>(dt32);
+        let b = Instant::now();
         while self.physics_accumulator >= self.physics_tick_rate {
             self.physics_accumulator -= self.physics_tick_rate;
 
+            let a = Instant::now();
             if self.dimensions == Dimensions::Two {
                 let next_transforms = physics_2d::transform_system_calculate_intended_position(
                     &self.world,
                     self.physics_tick_rate,
                 );
+                let bp = Instant::now();
                 let collisions = physics_2d::collision_system(&self.world, &next_transforms);
                 physics_2d::resolve_collisions(&mut self.world, collisions.clone());
+                println!("Collisions : {:?}", bp.elapsed().as_secs_f64());
                 let collisions_table = self
                     .lua_context
                     .rust_collisions_to_lua_2d(collisions)
@@ -201,14 +222,18 @@ impl Engine {
                     self.update_camera_follow_player();
                 }
             }
+            println!("One P Loop : {:?}", a.elapsed().as_secs_f64());
         }
+        println!("All P Loops : {:?}", b.elapsed().as_secs_f64());
 
+        let c = Instant::now();
         let _ = self
             .lua_context
             .get_function("ENGINE_after_physics")
             .call::<()>(dt32);
 
         animation_system_update_frames(&mut self.world, dt32);
+        println!("After P Loops : {:?}", c.elapsed().as_secs_f64());
         return Ok(());
     }
 
@@ -312,9 +337,10 @@ impl Engine {
         );
     }
 
-    fn create_ui_element(&mut self, lua_element: mlua::Table) -> [u32; 1] {
-        let entity = self.world.new_entity();
-
+    fn create_ui_scene(&mut self, lua_scene: mlua::Table) -> [u32; 1] {
+        let entity = self.canvas.new_entity();
+        let scene = parse_scene_from_lua(lua_scene, &mut self.canvas);
+        self.canvas.add_scene(entity.clone(), scene);
         [entity.into()]
     }
 
@@ -397,7 +423,7 @@ impl Engine {
                 entity.clone(),
                 PhysicsBody2D {
                     mass: 1.0,
-                    body_type: BodyType::from(lua_element.get("type").unwrap_or(1)),
+                    body_type: BodyType::from(lua_element.get("type").unwrap_or(0)),
                     velocity: cgmath::Vector2 { x: 0.0, y: 0.0 },
                     force_accumulator: cgmath::Vector2 { x: 0.0, y: 0.0 },
                 },
@@ -494,181 +520,45 @@ impl Engine {
     }
 
     fn setup(&mut self) {
+        macro_rules! expose_fn {
+            // Function with return type
+            ($lua:expr, $ptr:expr, $table:expr, $name:ident, ($($arg:ident : $typ:ty),*) -> $ret:ty) => {{
+                let func = $lua.create_function(move |_, ($($arg,)*): ($($typ,)*)| {
+                    let engine = unsafe { &mut *$ptr };
+                    Ok::<$ret, mlua::Error>(engine.$name($($arg),*))
+                }).expect("Failed to create Lua function");
+                $table.set(stringify!($name), func).expect("Failed to register Lua function");
+            }};
+
+            // Function with no return value (i.e. returns ())
+            ($lua:expr, $ptr:expr, $table:expr, $name:ident, ($($arg:ident : $typ:ty),*)) => {{
+                let func = $lua.create_function(move |_, ($($arg,)*): ($($typ,)*)| {
+                    let engine = unsafe { &mut *$ptr };
+                    engine.$name($($arg),*);
+                    Ok(())
+                }).expect("Failed to create Lua function");
+                $table.set(stringify!($name), func).expect("Failed to register Lua function");
+            }};
+        }
+
         let self_ptr = self as *mut Self;
-        let get_window_size = self
-            .lua_context
-            .lua
-            .create_function(move |_, ()| {
-                let engine = unsafe { &*self_ptr };
-                Ok(engine.get_window_size())
-            })
-            .expect("Could not create function");
-        let create_body = self
-            .lua_context
-            .lua
-            .create_function(move |_, element: mlua::Table| {
-                let engine = unsafe { &mut *self_ptr };
-                Ok(engine.create_body(element))
-            })
-            .expect("Could not create function");
-        let configure_camera = self
-            .lua_context
-            .lua
-            .create_function(move |_, config: mlua::Table| {
-                let engine = unsafe { &mut *self_ptr };
-                Ok(engine.configure_camera(config))
-            })
-            .expect("Could not create function");
-        let apply_force_2d = self
-            .lua_context
-            .lua
-            .create_function(move |_, (id, x, y): (u32, f32, f32)| {
-                let engine = unsafe { &mut *self_ptr };
-                Ok(engine.apply_force_2d(id, x, y))
-            })
-            .expect("Could not create function");
-        let apply_impulse_2d = self
-            .lua_context
-            .lua
-            .create_function(move |_, (id, x, y): (u32, f32, f32)| {
-                let engine = unsafe { &mut *self_ptr };
-                Ok(engine.apply_impulse_2d(id, x, y))
-            })
-            .expect("Could not create function");
-        let apply_move_2d = self
-            .lua_context
-            .lua
-            .create_function(move |_, (id, x, y): (u32, f32, f32)| {
-                let engine = unsafe { &mut *self_ptr };
-                Ok(engine.apply_move_2d(id, x, y))
-            })
-            .expect("Could not create function");
-        let apply_masks_and_layers = self
-            .lua_context
-            .lua
-            .create_function(move |_, (id, masks, layers): (u32, Table, Table)| {
-                let engine = unsafe { &mut *self_ptr };
-                Ok(engine.apply_masks_and_layers(id, masks, layers))
-            })
-            .expect("Could not create function");
-        let toggle_area_2d = self
-            .lua_context
-            .lua
-            .create_function(move |_, (id, b): (u32, bool)| {
-                let engine = unsafe { &mut *self_ptr };
-                Ok(engine.toggle_area(id, b))
-            })
-            .expect("Could not create function");
-
-        let set_velocity_2d = self
-            .lua_context
-            .lua
-            .create_function(move |_, (id, x, y): (u32, f32, f32)| {
-                let engine = unsafe { &mut *self_ptr };
-                Ok(engine.set_velocity_2d(id, x, y))
-            })
-            .expect("Could not create function");
-        let get_velocity_2d = self
-            .lua_context
-            .lua
-            .create_function(move |_, id: u32| {
-                let engine = unsafe { &mut *self_ptr };
-                Ok(engine.get_velocity_2d(id))
-            })
-            .expect("Could not create function");
-        let get_position_2d = self
-            .lua_context
-            .lua
-            .create_function(move |_, id: u32| {
-                let engine = unsafe { &mut *self_ptr };
-                Ok(engine.get_position_2d(id))
-            })
-            .expect("Could not create function");
-
-        let damage = self
-            .lua_context
-            .lua
-            .create_function(move |_, (id, amount): (u32, u16)| {
-                let engine = unsafe { &mut *self_ptr };
-                Ok(engine.damage(id, amount))
-            })
-            .expect("Could not create function");
-        let get_health = self
-            .lua_context
-            .lua
-            .create_function(move |_, id: u32| {
-                let engine = unsafe { &mut *self_ptr };
-                Ok(engine.get_health_table(id))
-            })
-            .expect("Could not create function");
-
-        let set_state = self
-            .lua_context
-            .lua
-            .create_function(move |_, (id, state): (u32, u8)| {
-                let engine = unsafe { &mut *self_ptr };
-                Ok(engine.set_state(id, state))
-            })
-            .expect("Could not create function");
-        let flip = self
-            .lua_context
-            .lua
-            .create_function(move |_, (id, x, y): (u32, bool, bool)| {
-                let engine = unsafe { &mut *self_ptr };
-                Ok(engine.flip(id, x, y))
-            })
-            .expect("Could not create function");
-
         let lua_engine = self.lua_context.create_table();
-        lua_engine
-            .set("get_window_size", get_window_size)
-            .expect("Could not set engine function");
-        lua_engine
-            .set("flip", flip)
-            .expect("Could not set engine function");
-
-        lua_engine
-            .set("apply_force_2d", apply_force_2d)
-            .expect("Could not set engine function");
-        lua_engine
-            .set("apply_move_2d", apply_move_2d)
-            .expect("Could not set engine function");
-        lua_engine
-            .set("apply_impulse_2d", apply_impulse_2d)
-            .expect("Could not set engine function");
-        lua_engine
-            .set("apply_masks_and_layers", apply_masks_and_layers)
-            .expect("Could not set engine function");
-        lua_engine
-            .set("toggle_area_2d", toggle_area_2d)
-            .expect("Could not set engine function");
-        lua_engine
-            .set("set_velocity_2d", set_velocity_2d)
-            .expect("Could not set engine function");
-        lua_engine
-            .set("get_velocity_2d", get_velocity_2d)
-            .expect("Could not set engine function");
-        lua_engine
-            .set("get_position_2d", get_position_2d)
-            .expect("Could not set engine function");
-
-        lua_engine
-            .set("set_state", set_state)
-            .expect("Could not set engine function");
-        lua_engine
-            .set("create_body", create_body)
-            .expect("Could not set engine function");
-
-        lua_engine
-            .set("damage", damage)
-            .expect("Could not set engine function");
-        lua_engine
-            .set("get_health", get_health)
-            .expect("Could not set engine function");
-
-        lua_engine
-            .set("configure_camera", configure_camera)
-            .expect("Could not set engine function");
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, flip, (id: u32, x: bool, y: bool));
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, apply_force_2d, (id: u32, x: f32, y: f32));
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, apply_impulse_2d, (id: u32, x: f32, y: f32));
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, apply_move_2d, (id: u32, x: f32, y: f32));
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, apply_masks_and_layers, (id: u32, masks: Table, layers: Table));
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, toggle_area, (id: u32, b: bool));
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, set_velocity_2d, (id: u32, x: f32, y: f32));
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, set_state, (id: u32, state: u8));
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, get_window_size, () -> [u32; 2]);
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, get_velocity_2d, (id: u32) -> [f32; 2]);
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, get_position_2d, (id: u32) -> [f32; 2]);
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, damage, (id: u32, amount: u16) -> bool);
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, get_health_table, (id: u32) -> Table);
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, create_body, (data: Table) -> [u32; 2]);
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, create_ui_scene, (data: Table) -> [u32; 1]);
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, configure_camera, (data: Table) -> Result<()>);
 
         let now_ns = self
             .lua_context
@@ -753,14 +643,18 @@ impl ApplicationHandler<Graphics3D> for Engine {
         }
 
         self.last_frame = now;
+        let bp = Instant::now();
         let _ = self.update(dt);
+        println!("Physics: {:?}", bp.elapsed().as_secs_f64());
 
         let graphics = match &mut self.graphics {
             Some(canvas) => canvas,
             None => return,
         };
         let _ = graphics.update_camera();
+        let bg = Instant::now();
         let _ = graphics.render(&self.world);
+        println!("Render: {:?}", bg.elapsed().as_secs_f64());
 
         self.count += 1;
         if self.count > SAFETY_MAX_FOR_DEV {
@@ -865,17 +759,15 @@ struct LuaCameraKeyBinding {
 
 #[derive(Debug)]
 struct LuaCameraConfig {
-    mode: String,
+    mode: CameraOption,
     speed: f32,
-    locked: bool,
     keys: Vec<LuaCameraKeyBinding>,
 }
 
 impl LuaCameraConfig {
     fn from_lua_table(table: Table) -> Result<Self> {
-        let mode: String = table.get("mode")?;
+        let mode = table.get("mode").unwrap_or("Follow".to_string());
         let speed: f32 = table.get("speed")?;
-        let locked: bool = table.get("locked")?;
 
         let keys_table: Table = table.get("keys")?;
         let mut keys = Vec::new();
@@ -889,12 +781,12 @@ impl LuaCameraConfig {
         }
 
         Ok(LuaCameraConfig {
-            mode,
+            mode: CameraOption::from_str(&mode).unwrap_or(CameraOption::Follow),
             speed,
-            locked,
             keys,
         })
     }
+
     fn parse_keycode(s: &str) -> Result<KeyCode> {
         use KeyCode::*;
         let code = match s {
@@ -937,61 +829,6 @@ impl LuaCameraConfig {
         };
         Ok(action)
     }
-}
-
-fn mousebutton_to_str(button: MouseButton) -> Option<&'static str> {
-    use MouseButton::*;
-    Some(match button {
-        Left => "mouseleft",
-        Right => "mouseright",
-        Middle => "mousemiddle",
-        _ => return None,
-    })
-}
-
-fn keycode_to_str(key: KeyCode) -> Option<&'static str> {
-    use winit::keyboard::KeyCode::*;
-    Some(match key {
-        KeyW => "w",
-        KeyA => "a",
-        KeyS => "s",
-        KeyD => "d",
-        ArrowUp => "up",
-        ArrowDown => "down",
-        ArrowLeft => "left",
-        ArrowRight => "right",
-        Space => "space",
-        Enter => "enter",
-        Escape => "escape",
-        KeyZ => "z",
-        KeyX => "x",
-        KeyC => "c",
-        KeyV => "v",
-        Digit0 => "0",
-        Digit1 => "1",
-        Digit2 => "2",
-        Digit3 => "3",
-        Digit4 => "4",
-        Digit5 => "5",
-        Digit6 => "6",
-        Digit7 => "7",
-        Digit8 => "8",
-        Digit9 => "9",
-        KeyQ => "q",
-        KeyE => "e",
-        KeyR => "r",
-        KeyF => "f",
-        KeyT => "t",
-        KeyY => "y",
-        KeyU => "u",
-        KeyI => "i",
-        KeyO => "o",
-        KeyP => "p",
-        KeyB => "b",
-        KeyN => "n",
-        KeyM => "m",
-        _ => return None, // Unknown or unhandled key
-    })
 }
 
 struct FPS {
