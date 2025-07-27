@@ -9,7 +9,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy)]
-pub struct CollisionInfo {
+pub struct CollisionPair {
     pub entity_a: Entity,
     pub entity_b: Entity,
     pub a_area_collider: Entity,
@@ -27,7 +27,7 @@ pub struct CollisionInfo {
 pub fn collision_system(
     world: &World,
     next: &HashMap<Entity, (PhysicsBody2D, Transform2D)>,
-) -> Vec<CollisionInfo> {
+) -> Vec<CollisionPair> {
     let mut collisions = Vec::new();
 
     for (a_parent, a_map) in world.physical_colliders_2d.iter() {
@@ -97,7 +97,7 @@ pub fn collision_system(
                                 overlap_y
                             };
 
-                            collisions.push(CollisionInfo {
+                            collisions.push(CollisionPair {
                                 entity_a: *a_parent,
                                 entity_b: *b_parent,
                                 a_area_collider: *a_area_id,
@@ -151,7 +151,7 @@ pub fn check_aabb_intersects(
     overlap_x && overlap_y
 }
 
-pub fn resolve_collisions(world: &mut World, collisions: Vec<CollisionInfo>) {
+pub fn resolve_collisions(world: &mut World, collisions: Vec<CollisionPair>) {
     let slop = 0.1;
 
     for col in collisions {

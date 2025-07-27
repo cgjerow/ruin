@@ -52,6 +52,8 @@ pub fn transform_system_physics(world: &mut World, dt: f32) {
     }
 }
 
+// doing it this way actually has noticable performance gains over just writing over long lived
+// objects off the bat.
 pub fn transform_system_calculate_intended_position(
     world: &World,
     dt: f32,
