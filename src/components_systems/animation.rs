@@ -160,7 +160,7 @@ pub fn animation_system_update_frames(world: &mut World, dt: f32) {
     for (entity, animation) in world.animations.iter_mut() {
         if let Some(action_state) = world.action_states.get(entity) {
             if let Some(anim) = animation.animations.get(&action_state.state) {
-                if anim.frames.len() <= 1 {
+                if anim.frames.is_empty() {
                     return;
                 }
 
