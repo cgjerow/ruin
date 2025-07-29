@@ -40,7 +40,7 @@ impl Canvas {
     }
 
     pub fn new_entity(&mut self) -> Entity {
-        let e = Entity(self.next_id);
+        let e = self.next_id;
         self.next_id += 1;
         return e;
     }

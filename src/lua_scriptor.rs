@@ -79,8 +79,8 @@ impl LuaExtendedExecutor {
         for (i, col) in collisions.iter().enumerate() {
             let entry = self.lua.create_table()?;
 
-            entry.set("a", col.entity_a.0)?;
-            entry.set("b", col.entity_b.0)?;
+            entry.set("a", col.entity_a)?;
+            entry.set("b", col.entity_b)?;
             entry.set(
                 "next_pos_a",
                 self.lua.create_sequence_from(col.next_pos_a.to_vec())?,

@@ -107,7 +107,7 @@ impl Engine {
 
         Self {
             mouse_pos: [0.0, 0.0],
-            player: Entity(0),
+            player: 0,
             physics_tick_rate: 1.0 / 60.0, // 1.0 / (60.0 * 8.0),
             physics_accumulator: 0.0,
             lua_context: lua_executor,
@@ -148,10 +148,8 @@ impl Engine {
     }
 
     fn flip(&mut self, entity: u32, x: bool, y: bool) {
-        self.world
-            .flips
-            .insert(Entity(entity), FlipComponent { x, y });
-        if let Some(t) = self.world.transforms_2d.get_mut(&Entity(entity)) {
+        self.world.flips.insert(entity, FlipComponent { x, y });
+        if let Some(t) = self.world.transforms_2d.get_mut(&entity) {
             t.scale.x = if x { -t.scale.x.abs() } else { t.scale.x.abs() };
             t.scale.y = if y { -t.scale.y.abs() } else { t.scale.y.abs() };
         }
@@ -253,68 +251,67 @@ impl Engine {
         [self.width, self.height]
     }
 
-    fn apply_force_2d(&mut self, id: u32, fx: f32, fy: f32) {
+    fn apply_force_2d(&mut self, id: Entity, fx: f32, fy: f32) {
         if self.dimensions == Dimensions::Two {
             self.world
                 .physics_bodies_2d
-                .get_mut(&Entity(id))
+                .get_mut(&id)
                 .unwrap()
                 .apply_force(cgmath::Vector2 { x: fx, y: fy });
         }
     }
 
-    fn apply_impulse_2d(&mut self, id: u32, fx: f32, fy: f32) {
+    fn apply_impulse_2d(&mut self, id: Entity, fx: f32, fy: f32) {
         self.world
             .physics_bodies_2d
-            .get_mut(&Entity(id))
+            .get_mut(&id)
             .unwrap()
             .apply_impulse(cgmath::Vector2 { x: fx, y: fy });
     }
 
-    fn set_velocity_2d(&mut self, id: u32, vx: f32, vy: f32) {
+    fn set_velocity_2d(&mut self, id: Entity, vx: f32, vy: f32) {
         self.physics
-            .set_velocity(&Entity(id), physics2d::Vector2D::new(vx, vy));
+            .set_velocity(&id, physics2d::Vector2D::new(vx, vy));
     }
 
-    fn apply_masks_and_layers(&mut self, id: u32, masks: Table, layers: Table) {
+    fn apply_masks_and_layers(&mut self, id: Entity, masks: Table, layers: Table) {
         let masks = vecbool_to_u8(LuaExtendedExecutor::table_to_vec_8(masks));
         let layers = vecbool_to_u8(LuaExtendedExecutor::table_to_vec_8(layers));
 
-        self.world
-            .update_area_masks_and_layers(&Entity(id), masks, layers);
+        self.world.update_area_masks_and_layers(&id, masks, layers);
     }
 
-    fn toggle_area(&mut self, id: u32, active: bool) {
-        self.world.toggle_area(&Entity(id), active);
+    fn toggle_area(&mut self, id: Entity, active: bool) {
+        self.world.toggle_area(&id, active);
     }
 
-    fn get_velocity_2d(&mut self, id: u32) -> [f32; 2] {
-        self.physics.get_velocity(&Entity(id)).into()
+    fn get_velocity_2d(&mut self, id: Entity) -> [f32; 2] {
+        self.physics.get_velocity(&id).into()
     }
 
-    fn get_position_2d(&mut self, id: u32) -> [f32; 2] {
+    fn get_position_2d(&mut self, id: Entity) -> [f32; 2] {
         if self.dimensions == Dimensions::Two {
-            let position = self.world.transforms_2d.get(&Entity(id)).unwrap().position;
+            let position = self.world.transforms_2d.get(&id).unwrap().position;
             return [position.x, position.y];
         }
         [0.0, 0.0]
     }
 
-    fn apply_move_2d(&mut self, id: u32, x: f32, y: f32) {
+    fn apply_move_2d(&mut self, id: Entity, x: f32, y: f32) {
         // TODO
-        let t = self.world.transforms_2d.get_mut(&Entity(id)).unwrap();
+        let t = self.world.transforms_2d.get_mut(&id).unwrap();
         t.position += Vector2::new(x, y);
     }
 
-    fn damage(&mut self, id: u32, amount: u16) -> bool {
-        damage(&mut self.world, &Entity(id), amount)
+    fn damage(&mut self, id: Entity, amount: u16) -> bool {
+        damage(&mut self.world, &id, amount)
     }
 
-    fn get_health_table(&self, id: u32) -> Table {
+    fn get_health_table(&self, id: Entity) -> Table {
         let h = self
             .world
             .health_bars
-            .get(&Entity(id))
+            .get(&id)
             .unwrap_or(&HealthComponent {
                 total: 0,
                 current: 0,
@@ -326,12 +323,8 @@ impl Engine {
         health
     }
 
-    fn set_state(&mut self, id: u32, state: u8) {
-        set_entity_state(
-            &mut self.world,
-            Entity(id),
-            ActionState::from(state.clone()),
-        );
+    fn set_state(&mut self, id: Entity, state: u8) {
+        set_entity_state(&mut self.world, id, ActionState::from(state.clone()));
     }
 
     fn create_ui_scene(&mut self, lua_scene: mlua::Table) -> [u32; 1] {
@@ -384,7 +377,7 @@ impl Engine {
                 let numeric_key =
                     key.as_u32()
                         .expect("Numeric key required for Action States") as u8;
-                let (mut animation, sprite_path) = Animation::from_lua_table(tbl, &mut self.world);
+                let (mut animation, sprite_path) = Animation::from_lua_table(tbl);
                 let action_state = ActionState::from(numeric_key);
 
                 let sprite_id: Entity = self.world.new_entity();
@@ -403,8 +396,6 @@ impl Engine {
         }
 
         let current_frame = animations_map.get(&state).unwrap().frames[0].clone();
-        // old
-        let collider: Entity = Entity(0);
 
         if self.dimensions == Dimensions::Two {
             self.world.animations.insert(
@@ -467,7 +458,7 @@ impl Engine {
                 },
             );
         }
-        [entity.into(), collider.into()]
+        [entity.into(), 0]
     }
 
     pub fn screen_to_world(&self, loc: [f32; 2]) -> [f32; 2] {

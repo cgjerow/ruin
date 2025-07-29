@@ -89,7 +89,7 @@ impl World {
     }
 
     pub fn new_entity(&mut self) -> Entity {
-        let entity = Entity(self.next_id);
+        let entity = self.next_id;
         self.next_id += 1;
         return entity;
     }

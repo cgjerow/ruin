@@ -1,6 +1,5 @@
-use std::{collections::HashMap, u16};
+use std::collections::HashMap;
 
-use bytemuck::offset_of;
 use cgmath::Vector2;
 
 use crate::{
@@ -20,8 +19,8 @@ pub struct SpriteFrame {
 
 #[derive(Debug, Clone)]
 pub struct Animation {
-    pub is_transparent: bool,
     pub sprite_sheet_id: Entity,
+    pub is_transparent: bool,
     pub frames: Vec<SpriteFrame>,
     pub looped: bool,
 }
@@ -35,7 +34,7 @@ pub struct AnimationComponent {
 }
 
 impl Animation {
-    pub fn from_lua_table(table: mlua::Table, world: &mut World) -> (Self, String) {
+    pub fn from_lua_table(table: mlua::Table) -> (Self, String) {
         let looped: bool = table.get("looped").unwrap_or(true);
         let is_transparent: bool = table.get("is_transparent").unwrap_or(false);
 
@@ -90,7 +89,7 @@ impl Animation {
         }
         (
             Animation {
-                sprite_sheet_id: Entity(0),
+                sprite_sheet_id: 0,
                 frames,
                 looped,
                 is_transparent,
