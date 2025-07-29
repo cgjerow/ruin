@@ -196,7 +196,21 @@ local fps_debug = {
 	fps = 0,
 }
 
+local count = 0;
 function ENGINE_update(dt)
+	local x = math.random(0, 100)
+	local y = math.random(0, 100)
+	local flip_x = math.random(0, 1)
+	local flip_y = math.random(0, 1)
+	if flip_x == 1 then
+		y = y * -1
+	end
+	if flip_y == 1 then
+		x = x * -1
+	end
+	local s = skelly.new(x, y)
+	count = count + 1
+	s.id = ENGINE_HANDLES.create_body(s)
 	-- FPS calculation
 	fps_debug.frame_count = fps_debug.frame_count + 1
 	fps_debug.time_accum = fps_debug.time_accum + dt
@@ -205,6 +219,7 @@ function ENGINE_update(dt)
 
 	if fps_debug.time_accum >= 1.0 then
 		print("UPDATE FPS: ", fps_debug.frame_count)
+		print(count)
 		fps_debug.frame_count = 0
 		fps_debug.time_accum = 0
 	end
@@ -320,7 +335,7 @@ function ENGINE_load()
 	WORLD.player.id = ENGINE_HANDLES.create_body(death)
 
 	local build_walls = true
-	if build_walls then
+	if not build_walls then
 		local fence_thickness = 2
 		local fence_count_per_side = 25
 		local half_length = fence_thickness * fence_count_per_side / 2
@@ -351,7 +366,7 @@ function ENGINE_load()
 	end
 
 	local build_skellys = true
-	if build_skellys then
+	if not build_skellys then
 		for _ = 1, 500 do
 			local x = math.random(10, 20)
 			local y = math.random(10, 20)

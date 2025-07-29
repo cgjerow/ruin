@@ -2,11 +2,7 @@ use std::collections::HashMap;
 
 use cgmath::Vector2;
 
-use crate::{
-    components_systems::{physics_2d::Shape2D, Entity},
-    lua_scriptor,
-    world::World,
-};
+use crate::components_systems::{physics_2d::Shape2D, Entity};
 
 #[derive(Debug)]
 pub struct CanvasElement {

@@ -108,7 +108,7 @@ impl Engine {
         Self {
             mouse_pos: [0.0, 0.0],
             player: 0,
-            physics_tick_rate: 1.0 / 60.0, // 1.0 / (60.0 * 8.0),
+            physics_tick_rate: 1.0 / 60.0,
             physics_accumulator: 0.0,
             lua_context: lua_executor,
             window: None,
@@ -158,8 +158,6 @@ impl Engine {
     pub fn update_camera_follow_player(&mut self) {
         if self.dimensions == Dimensions::Two {
             if let Some(transform) = self.world.transforms_2d.get(&self.player) {
-                println!("POS {:?}", transform.position[0]);
-
                 let velocity = self.physics.get_velocity(&self.player);
                 let graphics = match &mut self.graphics {
                     Some(canvas) => canvas,
@@ -699,7 +697,7 @@ impl ApplicationHandler<Graphics3D> for Engine {
                 };
                 // this is the only place we want to call graphics.render()
                 // any other situation should use self.redraw();
-                let _ = graphics.render(&self.world, &self.physics);
+                //let _ = graphics.render(&self.world, &self.physics);
             }
             WindowEvent::KeyboardInput {
                 event:

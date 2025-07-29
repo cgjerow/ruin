@@ -83,40 +83,26 @@ impl Area2D {
 
 pub struct ShapeSystem {}
 impl ShapeSystem {
-    pub fn superset(aabbs: &Vec<AABB>) -> AABB {
+    pub fn superset(aabbs: &Vec<AABBMasksAndLayers>) -> AABB {
         assert!(
             !aabbs.is_empty(),
             "Cannot compute superset of empty AABB list"
         );
 
-        let mut superset = aabbs[0];
+        let mut superset = aabbs[0].aabb;
         for aabb in aabbs.iter().skip(1) {
-            superset.merge(aabb);
+            superset.merge(&aabb.aabb);
         }
 
         return superset;
     }
+}
 
-    pub fn superset_with_positions(shapes: &[PositionedShape]) -> AABB {
-        assert!(
-            !shapes.is_empty(),
-            "Cannot compute superset of empty shape list"
-        );
-
-        let first_aabb = shapes[0].0.compute_aabb(shapes[0].1);
-        let mut min = first_aabb.min;
-        let mut max = first_aabb.max;
-
-        for (shape, center) in shapes.iter().skip(1) {
-            let aabb = shape.compute_aabb(*center);
-            min.x = min.x.min(aabb.min.x);
-            min.y = min.y.min(aabb.min.y);
-            max.x = max.x.max(aabb.max.x);
-            max.y = max.y.max(aabb.max.y);
-        }
-
-        AABB { min, max }
-    }
+#[derive(Debug, Copy, Clone)]
+struct AABBMasksAndLayers {
+    aabb: AABB,
+    masks: MaskLayerBitmap,
+    layers: MaskLayerBitmap,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -138,40 +124,6 @@ impl AABB {
             && self.max.x > other.min.x
             && self.min.y < other.max.y
             && self.max.y > other.min.y
-    }
-
-    pub fn overlap_vector(&self, other: &AABB) -> Vector2D {
-        let dx1 = other.max.x - self.min.x;
-        let dx2 = self.max.x - other.min.x;
-        let dy1 = other.max.y - self.min.y;
-        let dy2 = self.max.y - other.min.y;
-
-        let overlap_x = dx1.min(dx2);
-        let overlap_y = dy1.min(dy2);
-
-        if overlap_x < overlap_y {
-            Vector2D::new(
-                if self.center().x < other.center().x {
-                    -overlap_x
-                } else {
-                    overlap_x
-                },
-                0.0,
-            )
-        } else {
-            Vector2D::new(
-                0.0,
-                if self.center().y < other.center().y {
-                    -overlap_y
-                } else {
-                    overlap_y
-                },
-            )
-        }
-    }
-
-    pub fn center(&self) -> Point2D {
-        (self.min + self.max) * 0.5
     }
 }
 
@@ -209,7 +161,7 @@ pub struct Body2D {
     pub position: Point2D,
     velocity: Vector2D,
     pub colliders: Vec<Area2D>,
-    aabbs: Vec<AABB>,
+    aabbs: Vec<AABBMasksAndLayers>,
     pub aabb_superset: AABB,
     masks_superset: MaskLayerBitmap,
     layers_superset: MaskLayerBitmap,
@@ -247,7 +199,11 @@ impl Body2D {
         } else {
             self.aabb_superset.merge(&aabb);
         }
-        self.aabbs.push(aabb);
+        self.aabbs.push(AABBMasksAndLayers {
+            aabb,
+            masks: collider.masks,
+            layers: collider.layers,
+        });
         self.colliders.push(collider);
     }
 
@@ -257,17 +213,23 @@ impl Body2D {
         }
 
         match self.body_type {
-            BodyType2D::Rigid | BodyType2D::Kinematic if self.is_active => {
+            BodyType2D::Rigid | BodyType2D::Kinematic => {
                 self.position += self.velocity * dt;
 
                 self.aabbs.clear();
                 for collider in &self.colliders {
                     let center = self.position + collider.offset;
                     let aabb = collider.compute_aabb(center);
-                    self.aabbs.push(aabb);
+                    self.aabbs.push(AABBMasksAndLayers {
+                        aabb,
+                        masks: collider.masks,
+                        layers: collider.layers,
+                    });
                 }
 
-                self.aabb_superset = ShapeSystem::superset(&self.aabbs);
+                if self.aabbs.len() > 0 {
+                    self.aabb_superset = ShapeSystem::superset(&self.aabbs);
+                }
             }
             _ => {}
         }
@@ -290,8 +252,8 @@ impl PhysicsWorld {
             grid: SpatialGrid {
                 dynamic_tiles: HashMap::new(),
                 static_tiles: HashMap::new(),
-                tile_size: 10.0,
-                grid_radius: 20,
+                tile_size: 3.0,
+                grid_radius: 50,
             },
             player_pos: Point2D { x: 0.0, y: 0.0 },
             slop: 0.0,
@@ -341,8 +303,10 @@ impl PhysicsWorld {
 
             for a_aabb in &a.aabbs {
                 for b_aabb in &b.aabbs {
-                    if a_aabb.overlaps(b_aabb) {
-                        if let Some(overlap) = compute_mtv(a_aabb, b_aabb) {
+                    if Self::masks_overlap_layers(a_aabb.masks, b_aabb.layers)
+                        && a_aabb.aabb.overlaps(&b_aabb.aabb)
+                    {
+                        if let Some(overlap) = compute_mtv(&a_aabb.aabb, &b_aabb.aabb) {
                             let penetration = overlap.magnitude();
                             if penetration <= self.slop {
                                 continue; // Ignore very small penetrations
@@ -396,6 +360,10 @@ impl PhysicsWorld {
         }
     }
 
+    fn masks_overlap_layers(a: MaskLayerBitmap, b: MaskLayerBitmap) -> bool {
+        a & b > 0
+    }
+
     fn integrate(&mut self, dt: TimeUnit) {
         for body in &mut self.bodies {
             body.integrate(dt);
@@ -421,7 +389,12 @@ impl PhysicsWorld {
         self.grid.dynamic_tiles.clear();
         self.grid.static_tiles.clear();
 
-        for (i, body) in self.bodies.iter().enumerate() {
+        for (i, body) in self
+            .bodies
+            .iter()
+            .filter(|b| !b.colliders.is_empty())
+            .enumerate()
+        {
             let target_map = if matches!(body.body_type, BodyType2D::Rigid | BodyType2D::Kinematic)
             {
                 &mut self.grid.dynamic_tiles
@@ -458,7 +431,13 @@ impl PhysicsWorld {
                         let b = dynamic[j];
                         // Check superset AABB overlap before pushing pair
                         if visited.insert((a.min(b), a.max(b))) {
-                            if self.bodies[a]
+                            if (Self::masks_overlap_layers(
+                                self.bodies[a].masks_superset,
+                                self.bodies[b].layers_superset,
+                            ) || Self::masks_overlap_layers(
+                                self.bodies[b].masks_superset,
+                                self.bodies[a].layers_superset,
+                            )) && self.bodies[a]
                                 .aabb_superset
                                 .overlaps(&self.bodies[b].aabb_superset)
                             {
@@ -485,7 +464,7 @@ impl PhysicsWorld {
         }
         //println!("Visits {:?}", i.elapsed().as_secs_f64());
 
-        // println!("Pairs {:?}", pairs.len());
+        //println!("Pairs {:?}", pairs.len());
         /*
         println!(
             "Pairs-0 {:?} {:?} {:?}",
