@@ -4,7 +4,7 @@ use cgmath::Vector2;
 
 use crate::{
     components_systems::{
-        physics_2d::{PhysicsBody2D, Shape},
+        physics_2d::{PhysicsBody2D, Shape2D},
         Entity,
     },
     world::World,
@@ -13,7 +13,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Transform2D {
     pub position: Vector2<f32>,
-    pub shape: Shape,
+    pub shape: Shape2D,
     pub scale: Vector2<f32>,
     pub rotation_radians: f32,
 }
@@ -24,12 +24,12 @@ impl Transform2D {
     }
     pub fn get_size(&self) -> [f32; 2] {
         match &self.shape {
-            Shape::Rectangle { half_extents } => [
+            Shape2D::Rectangle { half_extents } => [
                 half_extents.x * 2.0 * self.scale.x.abs(),
                 half_extents.y * 2.0 * self.scale.y.abs(),
             ],
 
-            Shape::Circle { radius } => {
+            Shape2D::Circle { radius } => {
                 let diameter = *radius * 2.0;
                 [diameter * self.scale.x.abs(), diameter * self.scale.y.abs()]
             } /*

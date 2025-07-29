@@ -1,14 +1,15 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use cgmath::Vector2;
+use cgmath::{ElementWise, Vector2};
 use image::DynamicImage;
 use wgpu::util::DeviceExt;
 use wgpu::*;
 use winit::window::Window;
 
 use crate::camera_2d::Camera2D;
-use crate::components_systems::physics_2d::Shape;
+use crate::components_systems::physics2d::{self, PhysicsWorld};
+use crate::components_systems::physics_2d::Shape2D;
 use crate::graphics::Graphics;
 use crate::graphics_2d::shape_pipelines::create_2d_pipeline;
 use crate::graphics_2d::shape_tesselation::TessellatedShape2D;
@@ -20,7 +21,7 @@ use crate::world::World;
 
 #[derive(Debug, Clone)]
 pub struct RenderElement2D<'a> {
-    pub shape: &'a Shape,
+    pub shape: &'a Shape2D,
     pub position: [f32; 2],
     pub size: [f32; 2],
     pub z_order: f32, // for Y-based sorting (e.g., lower y = drawn on top)
@@ -317,8 +318,8 @@ impl Graphics2D {
         });
 
         // Choose a generous initial capacity. You might need to resize if you hit limits.
-        let initial_vertex_capacity = 1024 * 1024; // e.g., 1MB for vertices
-        let initial_index_capacity = 256 * 1024; // e.g., 256KB for indices
+        let initial_vertex_capacity: u64 = 1024 * 1024; // e.g., 1MB for vertices
+        let initial_index_capacity: u64 = 1024 * 1024; // e.g., 256KB for indices
 
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Sprite Vertex Buffer"),
@@ -393,7 +394,7 @@ impl Graphics2D {
         );
     }
 
-    pub fn render(&mut self, world: &World) -> Result<(), SurfaceError> {
+    pub fn render(&mut self, world: &World, physics: &PhysicsWorld) -> Result<(), SurfaceError> {
         if !self.is_surface_configured {
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
@@ -410,7 +411,7 @@ impl Graphics2D {
             });
 
         self.draw_game(world, &mut encoder, &view);
-        self.draw_debug_batch(world, &mut encoder, &view);
+        self.draw_debug_batch(world, physics, &mut encoder, &view);
         self.queue.submit(Some(encoder.finish()));
         output.present();
         Ok(())
@@ -502,7 +503,7 @@ impl Graphics2D {
         self.texture_batch_context.reset_context();
     }
 
-    pub fn build_debug_assets(&mut self, world: &World) {
+    pub fn build_debug_assets(&mut self, world: &World, physics: &PhysicsWorld) {
         if !world.debug.enabled {
             return;
         }
@@ -512,8 +513,8 @@ impl Graphics2D {
                 let current_frame = &animation.current_frame;
 
                 // hitboxes
-                for area in &current_frame.hitboxes {
-                    if world.debug.show_hitboxes {
+                if world.debug.show_hitboxes {
+                    for area in &current_frame.hitboxes {
                         if area.active {
                             let pixels_per_unit = Vector2::from(current_frame.frame_pixel_dims);
                             let world_offset = Vector2::new(
@@ -537,8 +538,8 @@ impl Graphics2D {
                 }
 
                 // hurtboxes
-                for area in &current_frame.hurtboxes {
-                    if world.debug.show_hurtboxes {
+                if world.debug.show_hurtboxes {
+                    for area in &current_frame.hurtboxes {
                         if area.active {
                             let pixels_per_unit = Vector2::from(current_frame.frame_pixel_dims);
                             let world_offset = Vector2::new(
@@ -561,29 +562,23 @@ impl Graphics2D {
                     }
                 }
 
-                for (_, area) in world.physical_colliders_2d.get(&entity).unwrap().iter() {
-                    if world.debug.show_colliders {
-                        if area.active {
-                            let pixels_per_unit = Vector2::new(1.0, 1.0); //Vector2::from(current_frame.frame_pixel_dims);
-                            let world_offset = Vector2::new(
-                                (area.offset.x) * t.scale.x / pixels_per_unit.x,
-                                (area.offset.y) * t.scale.y / pixels_per_unit.y,
-                            );
-                            let world_half_extents = Vector2::new(
-                                area.shape.half_extents()[0] * t.scale.x.abs() / pixels_per_unit.x,
-                                area.shape.half_extents()[1] * t.scale.y.abs() / pixels_per_unit.y,
-                            );
-                            let world_position = t.position + world_offset;
-
-                            self.draw_debug_rect(
-                                world_position,
-                                world_half_extents,
-                                [0.0, 1.0, 1.0, 1.0], // blue with transparency
-                                Space::World,
-                            );
+                let mut count = 0;
+                if world.debug.show_colliders {
+                    for body in physics.bodies.iter() {
+                        for area in &body.colliders {
+                            if area.active {
+                                count += 1;
+                                self.draw_debug_rect(
+                                    body.position.add_element_wise(area.offset),
+                                    area.shape.half_extents(),
+                                    [0.0, 1.0, 1.0, 1.0],
+                                    Space::World,
+                                );
+                            }
                         }
                     }
                 }
+                println!("Count colliders {:?}", count)
             }
         }
     }
@@ -607,16 +602,17 @@ impl Graphics2D {
 
         // Insert quad with solid color, e.g., no texture bound
         self.debug_shapes_batch.push_tesselated_shape(quad, color);
-        self.debug_shapes_batch.push_tesselated_shape(circle, color);
+        //self.debug_shapes_batch.push_tesselated_shape(circle, color);
     }
 
     pub fn draw_debug_batch(
         &mut self,
         world: &World,
+        physics: &PhysicsWorld,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
     ) {
-        self.build_debug_assets(world);
+        self.build_debug_assets(world, physics);
 
         if self.debug_shapes_batch.vertices.is_empty() {
             return;
@@ -737,8 +733,8 @@ impl Graphics for Graphics2D {
         self.background_color = color;
     }
 
-    fn render(&mut self, world: &World) {
-        let _ = self.render(world);
+    fn render(&mut self, world: &World, physics: &PhysicsWorld) {
+        let _ = self.render(world, physics);
     }
 
     fn load_texture_from_path(&mut self, id: &str, path: &str) -> Texture {

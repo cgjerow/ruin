@@ -2,8 +2,9 @@ use crate::bitmaps::vecbool_to_u8;
 use crate::camera_2d::camera_2d::Camera2DConfig;
 use crate::camera_2d::Camera2D;
 use crate::camera_3d::CameraAction;
+use crate::components_systems::physics2d::{self, PhysicsWorld, Point2D};
 use crate::components_systems::physics_2d::{
-    self, Area2D, BodyType, FlipComponent, PhysicsBody2D, Shape, Transform2D,
+    self, Area2D, BodyType, FlipComponent, PhysicsBody2D, Shape2D, Transform2D,
 };
 use crate::components_systems::{
     animation_system_update_frames, damage, set_entity_state, ActionState, ActionStateComponent,
@@ -53,6 +54,7 @@ pub struct Engine {
     asset_cache: HashMap<String, Texture>,
     lua_context: LuaExtendedExecutor,
     world: World,
+    physics: PhysicsWorld,
     canvas: Canvas,
     width: u32,
     height: u32,
@@ -106,7 +108,7 @@ impl Engine {
         Self {
             mouse_pos: [0.0, 0.0],
             player: Entity(0),
-            physics_tick_rate: 1.0 / 30.0,
+            physics_tick_rate: 1.0 / 60.0, // 1.0 / (60.0 * 8.0),
             physics_accumulator: 0.0,
             lua_context: lua_executor,
             window: None,
@@ -122,6 +124,7 @@ impl Engine {
             width: config.width,
             height: config.height,
             world: World::new(),
+            physics: PhysicsWorld::new(),
             canvas: Canvas::new(),
             fps: FPS {
                 frame_count: 0,
@@ -157,18 +160,19 @@ impl Engine {
     pub fn update_camera_follow_player(&mut self) {
         if self.dimensions == Dimensions::Two {
             if let Some(transform) = self.world.transforms_2d.get(&self.player) {
-                if let Some(body) = self.world.physics_bodies_2d.get(&self.player) {
-                    let graphics = match &mut self.graphics {
-                        Some(canvas) => canvas,
-                        None => return,
-                    };
-                    graphics.move_camera_for_follow(
-                        [transform.position[0], transform.position[1], 0.0],
-                        [body.velocity[0], body.velocity[1], 0.0],
-                        [0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0],
-                    );
-                }
+                println!("POS {:?}", transform.position[0]);
+
+                let velocity = self.physics.get_velocity(&self.player);
+                let graphics = match &mut self.graphics {
+                    Some(canvas) => canvas,
+                    None => return,
+                };
+                graphics.move_camera_for_follow(
+                    [transform.position[0], transform.position[1], 0.0],
+                    [velocity.x, velocity.y, 0.0],
+                    [0.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                );
             }
         }
     }
@@ -200,6 +204,8 @@ impl Engine {
 
             let a = Instant::now();
             if self.dimensions == Dimensions::Two {
+                self.physics.step(self.physics_tick_rate);
+                /*
                 let next_transforms = physics_2d::transform_system_calculate_intended_position(
                     &self.world,
                     self.physics_tick_rate,
@@ -217,14 +223,16 @@ impl Engine {
                     .call::<()>(collisions_table)
                     .expect("Error handling collisions");
                 physics_2d::transform_system_physics(&mut self.world, self.physics_tick_rate);
+                */
 
                 if self.camera_mode == CameraOption::Follow {
                     self.update_camera_follow_player();
                 }
             }
-            println!("One P Loop : {:?}", a.elapsed().as_secs_f64());
+            self.world.update_positions(self.physics.positions());
+            //println!("One P Loop : {:?}", a.elapsed().as_secs_f64());
         }
-        println!("All P Loops : {:?}", b.elapsed().as_secs_f64());
+        //println!("All P Loops : {:?}", b.elapsed().as_secs_f64());
 
         let c = Instant::now();
         let _ = self
@@ -233,7 +241,7 @@ impl Engine {
             .call::<()>(dt32);
 
         animation_system_update_frames(&mut self.world, dt32);
-        println!("After P Loops : {:?}", c.elapsed().as_secs_f64());
+        //println!("After P Loops : {:?}", c.elapsed().as_secs_f64());
         return Ok(());
     }
 
@@ -264,11 +272,8 @@ impl Engine {
     }
 
     fn set_velocity_2d(&mut self, id: u32, vx: f32, vy: f32) {
-        self.world
-            .physics_bodies_2d
-            .get_mut(&Entity(id))
-            .unwrap()
-            .velocity = Vector2::new(vx, vy);
+        self.physics
+            .set_velocity(&Entity(id), physics2d::Vector2D::new(vx, vy));
     }
 
     fn apply_masks_and_layers(&mut self, id: u32, masks: Table, layers: Table) {
@@ -284,16 +289,7 @@ impl Engine {
     }
 
     fn get_velocity_2d(&mut self, id: u32) -> [f32; 2] {
-        if self.dimensions == Dimensions::Two {
-            let velocity = self
-                .world
-                .physics_bodies_2d
-                .get(&Entity(id))
-                .unwrap()
-                .velocity;
-            return [velocity.x, velocity.y];
-        }
-        [0.0, 0.0]
+        self.physics.get_velocity(&Entity(id)).into()
     }
 
     fn get_position_2d(&mut self, id: u32) -> [f32; 2] {
@@ -305,6 +301,7 @@ impl Engine {
     }
 
     fn apply_move_2d(&mut self, id: u32, x: f32, y: f32) {
+        // TODO
         let t = self.world.transforms_2d.get_mut(&Entity(id)).unwrap();
         t.position += Vector2::new(x, y);
     }
@@ -406,7 +403,8 @@ impl Engine {
         }
 
         let current_frame = animations_map.get(&state).unwrap().frames[0].clone();
-        let mut collider: Entity = Entity(0);
+        // old
+        let collider: Entity = Entity(0);
 
         if self.dimensions == Dimensions::Two {
             self.world.animations.insert(
@@ -418,54 +416,18 @@ impl Engine {
                     frame_timer: 0.0,
                 },
             );
-
-            self.world.physics_bodies_2d.insert(
-                entity.clone(),
-                PhysicsBody2D {
-                    mass: 1.0,
-                    body_type: BodyType::from(lua_element.get("type").unwrap_or(0)),
-                    velocity: cgmath::Vector2 { x: 0.0, y: 0.0 },
-                    force_accumulator: cgmath::Vector2 { x: 0.0, y: 0.0 },
-                },
-            );
-
             self.world.transforms_2d.insert(
                 entity.clone(),
                 Transform2D {
                     position: Vector2::new(x, y),
                     scale: Vector2::new(width, height),
-                    shape: Shape::Rectangle {
+                    shape: Shape2D::Rectangle {
                         // hard coding for now
                         half_extents: Vector2 { x: 0.5, y: 0.5 },
                     },
                     rotation_radians: 0.0,
                 },
             );
-
-            if collision_box.get("enabled").unwrap_or(false) {
-                collider = self.world.insert_area_2d(
-                    AreaInfo {
-                        role: AreaRole::Physics,
-                        parent: entity.clone(),
-                    },
-                    Area2D {
-                        shape: Shape::Rectangle {
-                            half_extents: cgmath::Vector2 {
-                                x: 1.0 * 0.5 * collision_box_x_modifier, // assuming all entities are using the same tile size (1 world unit) for now
-                                y: 1.0 * 0.5 * collision_box_y_modifier,
-                            },
-                        },
-                        offset: Vector2 {
-                            x: collision_box.get("offset_x").unwrap_or(0.0),
-                            y: collision_box.get("offset_y").unwrap_or(0.0),
-                        },
-                        masks: vecbool_to_u8(masks),
-                        layers: vecbool_to_u8(layers),
-                        active: true,
-                    },
-                );
-            }
-
             self.world.health_bars.insert(
                 entity.clone(),
                 HealthComponent {
@@ -476,6 +438,34 @@ impl Engine {
             self.world
                 .action_states
                 .insert(entity.clone(), ActionStateComponent { state });
+
+            self.physics.add_body(
+                entity.clone(),
+                physics2d::Body2D::new(
+                    Point2D { x, y },
+                    physics2d::Vector2D { x: 0.0, y: 0.0 },
+                    physics2d::BodyType2D::from(lua_element.get("type").unwrap_or(0)),
+                    true,
+                ),
+            );
+            self.physics.add_collider(
+                &entity,
+                physics2d::Area2D {
+                    shape: physics2d::Shape2D::Rectangle {
+                        half_extents: cgmath::Vector2 {
+                            x: 0.5 * collision_box_x_modifier * width, // assuming all entities are using the same tile size (1 world unit) for now
+                            y: 0.5 * collision_box_y_modifier * height,
+                        },
+                    },
+                    offset: Vector2 {
+                        x: collision_box.get("offset_x").unwrap_or(0.0),
+                        y: collision_box.get("offset_y").unwrap_or(0.0),
+                    },
+                    masks: vecbool_to_u8(masks),
+                    layers: vecbool_to_u8(layers),
+                    active: true,
+                },
+            );
         }
         [entity.into(), collider.into()]
     }
@@ -645,7 +635,8 @@ impl ApplicationHandler<Graphics3D> for Engine {
         self.last_frame = now;
         let bp = Instant::now();
         let _ = self.update(dt);
-        println!("Physics: {:?}", bp.elapsed().as_secs_f64());
+
+        //println!("Physics: {:?}", bp.elapsed().as_secs_f64());
 
         let graphics = match &mut self.graphics {
             Some(canvas) => canvas,
@@ -653,8 +644,8 @@ impl ApplicationHandler<Graphics3D> for Engine {
         };
         let _ = graphics.update_camera();
         let bg = Instant::now();
-        let _ = graphics.render(&self.world);
-        println!("Render: {:?}", bg.elapsed().as_secs_f64());
+        let _ = graphics.render(&self.world, &self.physics);
+        //println!("Render: {:?}", bg.elapsed().as_secs_f64());
 
         self.count += 1;
         if self.count > SAFETY_MAX_FOR_DEV {
@@ -717,7 +708,7 @@ impl ApplicationHandler<Graphics3D> for Engine {
                 };
                 // this is the only place we want to call graphics.render()
                 // any other situation should use self.redraw();
-                let _ = graphics.render(&self.world);
+                let _ = graphics.render(&self.world, &self.physics);
             }
             WindowEvent::KeyboardInput {
                 event:

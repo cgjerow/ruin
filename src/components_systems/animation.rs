@@ -142,7 +142,7 @@ fn parse_hitboxes_from_table(
             let offset_y = y - frame_center_y;
 
             boxes.push(Area2D {
-                shape: super::physics_2d::Shape::Rectangle {
+                shape: super::physics_2d::Shape2D::Rectangle {
                     half_extents: Vector2::new(w * 0.5, h * 0.5),
                 },
                 offset: Vector2::new(offset_x, offset_y),

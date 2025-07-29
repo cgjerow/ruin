@@ -352,7 +352,7 @@ function ENGINE_load()
 
 	local build_skellys = true
 	if build_skellys then
-		for _ = 1, 100 do
+		for _ = 1, 500 do
 			local x = math.random(10, 20)
 			local y = math.random(10, 20)
 			local flip_x = math.random(0, 1)

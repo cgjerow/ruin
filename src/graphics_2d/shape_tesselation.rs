@@ -1,5 +1,5 @@
 use crate::{
-    components_systems::physics_2d::Shape,
+    components_systems::physics_2d::Shape2D,
     graphics_2d::vertex::{ColorVertex, TextureVertex},
 };
 use cgmath::Vector2;
@@ -10,17 +10,17 @@ pub struct TessellatedShape2D {
 }
 
 impl TessellatedShape2D {
-    pub fn from(shape: &Shape, segments: u32) -> TessellatedShape2D {
+    pub fn from(shape: &Shape2D, segments: u32) -> TessellatedShape2D {
         match shape {
-            Shape::Circle { radius } => Self::circle(*radius, segments),
-            Shape::Rectangle { half_extents } => Self::rect(half_extents.x, half_extents.y),
+            Shape2D::Circle { radius } => Self::circle(*radius, segments),
+            Shape2D::Rectangle { half_extents } => Self::rect(half_extents.x, half_extents.y),
         }
     }
 
-    pub fn outline_from(shape: &Shape, thickness: f32, segments: u32) -> TessellatedShape2D {
+    pub fn outline_from(shape: &Shape2D, thickness: f32, segments: u32) -> TessellatedShape2D {
         match shape {
-            Shape::Circle { radius } => Self::circle_outline(*radius, thickness, segments),
-            Shape::Rectangle { half_extents } => {
+            Shape2D::Circle { radius } => Self::circle_outline(*radius, thickness, segments),
+            Shape2D::Rectangle { half_extents } => {
                 Self::rect_outline(half_extents.x, half_extents.y, thickness)
             }
         }

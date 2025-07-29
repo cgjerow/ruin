@@ -1,7 +1,7 @@
 use cgmath::{InnerSpace, Vector2};
 
 #[derive(Debug, Clone)]
-pub enum Shape {
+pub enum Shape2D {
     Circle { radius: f32 },
     // half extents (width/2, height/2) common in physics
     Rectangle { half_extents: Vector2<f32> },
@@ -9,23 +9,26 @@ pub enum Shape {
     // could add Capsule, etc.
 }
 
-impl Shape {
-    pub fn half_extents(&self) -> [f32; 2] {
+impl Shape2D {
+    pub fn half_extents(&self) -> Vector2<f32> {
         match *self {
-            Shape::Rectangle { half_extents } => [half_extents.x, half_extents.y],
-            Shape::Circle { radius } => [radius, radius],
+            Shape2D::Rectangle { half_extents } => half_extents,
+            Shape2D::Circle { radius } => Vector2 {
+                x: radius,
+                y: radius,
+            },
         }
     }
 
     pub fn scale(&self, scale: Vector2<f32>) -> Self {
         match *self {
-            Shape::Rectangle { half_extents } => Shape::Rectangle {
+            Shape2D::Rectangle { half_extents } => Shape2D::Rectangle {
                 half_extents: Vector2 {
                     x: half_extents.x * scale.x,
                     y: half_extents.y * scale.y,
                 },
             },
-            Shape::Circle { radius } => Shape::Circle {
+            Shape2D::Circle { radius } => Shape2D::Circle {
                 radius: radius * scale.magnitude(),
             },
         }

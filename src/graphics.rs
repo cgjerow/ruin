@@ -1,6 +1,6 @@
 use winit::event::WindowEvent;
 
-use crate::{texture::Texture, world::World};
+use crate::{components_systems::physics2d::PhysicsWorld, texture::Texture, world::World};
 
 pub struct CameraInfo {
     pub zoom: f32,
@@ -8,7 +8,7 @@ pub struct CameraInfo {
 }
 
 pub trait Graphics {
-    fn render(&mut self, world: &World);
+    fn render(&mut self, world: &World, physics: &PhysicsWorld);
     fn resize(&mut self, width: u32, height: u32);
     fn process_camera_event(&mut self, event: &WindowEvent);
     fn set_background(&mut self, color: wgpu::Color);

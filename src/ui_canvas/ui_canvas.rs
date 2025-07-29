@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use cgmath::Vector2;
 
 use crate::{
-    components_systems::{physics_2d::Shape, Entity},
+    components_systems::{physics_2d::Shape2D, Entity},
     lua_scriptor,
     world::World,
 };
@@ -12,7 +12,7 @@ use crate::{
 pub struct CanvasElement {
     position: Vector2<f32>,
     scale: Vector2<f32>,
-    shape: Shape,
+    shape: Shape2D,
 }
 
 #[derive(Debug)]
@@ -103,7 +103,7 @@ fn parse_element_from_lua(table: mlua::Table) -> (CanvasElement, bool) {
                 x: table.get("scale_x").unwrap(),
                 y: table.get("scale_y").unwrap(),
             },
-            shape: Shape::Rectangle {
+            shape: Shape2D::Rectangle {
                 half_extents: Vector2 {
                     x: table.get("width").unwrap(),
                     y: table.get("height").unwrap(),

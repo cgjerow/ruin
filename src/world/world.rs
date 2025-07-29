@@ -4,6 +4,7 @@ use cgmath::Vector2;
 
 use crate::{
     components_systems::{
+        physics2d::Point2D,
         physics_2d::{Area2D, FlipComponent, PhysicsBody2D, Transform2D},
         ActionStateComponent, AnimationComponent, Entity, HealthComponent, SpriteSheetComponent,
     },
@@ -77,7 +78,9 @@ impl World {
             flips: HashMap::new(),
             parent_area_info: HashMap::new(),
             debug: WorldDebug {
-                enabled: true,
+                // this *insanely* lowers frame rate.
+                // use with minimal objs in scene
+                enabled: false,
                 show_hitboxes: true,
                 show_hurtboxes: true,
                 show_colliders: true,
@@ -227,6 +230,17 @@ impl World {
                 area.layers = layers;
             }
             self.update_parent_area_info(*info);
+        }
+    }
+
+    pub fn update_positions(&mut self, positions: HashMap<Entity, Point2D>) {
+        for (entity, point) in positions {
+            if let Some(transform) = self.transforms_2d.get_mut(&entity) {
+                transform.position = Vector2 {
+                    x: point.x,
+                    y: point.y,
+                };
+            }
         }
     }
 
