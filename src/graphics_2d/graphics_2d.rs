@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use cgmath::{ElementWise, Vector2};
 use image::DynamicImage;
@@ -8,12 +9,15 @@ use wgpu::*;
 use winit::window::Window;
 
 use crate::camera_2d::Camera2D;
-use crate::components_systems::physics2d::{self, PhysicsWorld};
+use crate::components_systems::physics2d::PhysicsWorld;
 use crate::components_systems::physics_2d::Shape2D;
 use crate::graphics::Graphics;
+use crate::graphics_2d::debug_render_batch::ShapeType;
 use crate::graphics_2d::shape_pipelines::create_2d_pipeline;
 use crate::graphics_2d::shape_tesselation::TessellatedShape2D;
 use crate::graphics_2d::space::Space;
+use crate::graphics_2d::vertex::{DebugInstanceVertex, Vertex};
+use crate::graphics_2d::DebugRenderBatch;
 use crate::graphics_2d::{CameraUniform2D, ColorVertex, TextureVertex};
 
 use crate::texture::Texture;
@@ -49,12 +53,14 @@ pub struct Graphics2D {
     static_camera_bind_group: BindGroup,
     vertex_buffer: Buffer,
     index_buffer: Buffer,
+    instance_buffer: Buffer,
     texture_bind_group_layout: BindGroupLayout,
     render_pipeline: RenderPipeline,
     depth_texture: Texture,
     texture_batch_context: TextureBatchContext,
     color_shapes_pipeline: RenderPipeline,
-    debug_shapes_batch: DebugShapesBatch,
+    test_pipe: RenderPipeline,
+    debug_render_batch: DebugRenderBatch,
 }
 
 #[derive(Debug, Clone)]
@@ -258,10 +264,13 @@ impl Graphics2D {
             device.create_shader_module(include_wgsl!("shaders/2d_camera_and_sprite.wgsl"));
         let debug_shader =
             device.create_shader_module(include_wgsl!("shaders/2d_camera_and_color.wgsl"));
+        let debug_shader_instanced = device
+            .create_shader_module(include_wgsl!("shaders/2d_camera_and_color_instanced.wgsl"));
 
         let depth_texture = Texture::create_depth_texture(&device, &config, "2d_depth_texture");
 
         let render_pipeline = create_2d_pipeline(
+            "Texture Pipeline",
             &device,
             config.format,
             &shader,
@@ -277,6 +286,17 @@ impl Graphics2D {
         );
 
         let color_shapes_pipeline = create_2d_pipeline(
+            "Debug Pipeline",
+            &device,
+            config.format,
+            &debug_shader_instanced,
+            &[Vertex::desc(), DebugInstanceVertex::desc()],
+            &Vec::from([&camera_bind_group_layout]),
+            None,
+        );
+
+        let test_pipe = create_2d_pipeline(
+            "Debug Pipeline",
             &device,
             config.format,
             &debug_shader,
@@ -335,6 +355,16 @@ impl Graphics2D {
             mapped_at_creation: false, // Don't map immediately
         });
 
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Instance Buffer"),
+            size: initial_vertex_capacity as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false, // Don't map immediately
+        });
+
+        let debug_render_batch =
+            DebugRenderBatch::new(&device, &camera_bind_group_layout, config.format);
+
         Ok(Self {
             surface,
             device,
@@ -354,12 +384,14 @@ impl Graphics2D {
             static_camera_bind_group,
             vertex_buffer,
             index_buffer,
+            instance_buffer,
             texture_bind_group_layout,
             depth_texture,
             render_pipeline,
+            test_pipe,
             texture_batch_context: TextureBatchContext::new(),
             color_shapes_pipeline,
-            debug_shapes_batch: DebugShapesBatch::new(),
+            debug_render_batch,
         })
     }
 
@@ -510,6 +542,7 @@ impl Graphics2D {
 
         for (entity, animation) in world.animations.iter() {
             if let Some(t) = world.transforms_2d.get(&entity) {
+                /*
                 let current_frame = &animation.current_frame;
 
                 // hitboxes
@@ -561,6 +594,7 @@ impl Graphics2D {
                         }
                     }
                 }
+                */
 
                 let mut count = 0;
                 if world.debug.show_colliders {
@@ -578,7 +612,6 @@ impl Graphics2D {
                         }
                     }
                 }
-                println!("Count colliders {:?}", count)
             }
         }
     }
@@ -591,18 +624,18 @@ impl Graphics2D {
         space: Space,
     ) {
         let thickness = match space {
-            Space::World => 0.05,
-            Space::Canvas => 2.0,
+            Space::World => 1,
+            Space::Canvas => 2,
         };
 
-        let mut quad = TessellatedShape2D::rect_outline(half_extents.x, half_extents.y, thickness);
-        quad.recenter(center);
-        let mut circle = TessellatedShape2D::circle_outline(half_extents.x, thickness, 200);
-        circle.recenter(center);
-
-        // Insert quad with solid color, e.g., no texture bound
-        self.debug_shapes_batch.push_tesselated_shape(quad, color);
-        //self.debug_shapes_batch.push_tesselated_shape(circle, color);
+        self.debug_render_batch.add_instance(
+            &ShapeType::RectangleOutline(thickness),
+            DebugInstanceVertex {
+                position: center.into(),
+                scale: half_extents.into(),
+                color,
+            },
+        );
     }
 
     pub fn draw_debug_batch(
@@ -612,29 +645,12 @@ impl Graphics2D {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
     ) {
+        let i = Instant::now();
         self.build_debug_assets(world, physics);
+        println!("BUILD {:?}", i.elapsed().as_secs_f64());
 
-        if self.debug_shapes_batch.vertices.is_empty() {
-            return;
-        }
-
+        let i = Instant::now();
         {
-            let vertex_buffer = self
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Debug Vertex Buffer"),
-                    contents: bytemuck::cast_slice(&self.debug_shapes_batch.vertices),
-                    usage: wgpu::BufferUsages::VERTEX,
-                });
-
-            let index_buffer = self
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Debug Index Buffer"),
-                    contents: bytemuck::cast_slice(&self.debug_shapes_batch.indices),
-                    usage: wgpu::BufferUsages::INDEX,
-                });
-
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("Debug Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -650,15 +666,15 @@ impl Graphics2D {
                 depth_stencil_attachment: None,
             });
 
-            render_pass.set_pipeline(&self.color_shapes_pipeline);
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-            render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.debug_shapes_batch.indices.len() as u32, 0, 0..1);
-
-            self.debug_shapes_batch.clear();
+            self.debug_render_batch.flush_batch(
+                &mut self.queue,
+                &mut render_pass,
+                &self.camera_bind_group,
+            );
         }
+        println!("Debug {:?}", i.elapsed().as_secs_f64());
 
+        /*
         {
             self.draw_debug_rect(
                 Vector2 { x: 0.0, y: 0.0 },
@@ -680,6 +696,13 @@ impl Graphics2D {
                     contents: bytemuck::cast_slice(&self.debug_shapes_batch.vertices),
                     usage: wgpu::BufferUsages::VERTEX,
                 });
+            let instance_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Debug Instance Buffer"),
+                        contents: bytemuck::cast_slice(&self.debug_shapes_batch.rect_instances),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
             let index_buffer = self
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -703,13 +726,14 @@ impl Graphics2D {
                 depth_stencil_attachment: None,
             });
 
-            static_pass.set_pipeline(&self.color_shapes_pipeline);
+            static_pass.set_pipeline(&self.test_pipe);
             static_pass.set_bind_group(0, &self.static_camera_bind_group, &[]);
             static_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
             static_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             static_pass.draw_indexed(0..self.debug_shapes_batch.indices.len() as u32, 0, 0..1);
             self.debug_shapes_batch.clear();
         }
+        */
     }
 }
 
@@ -770,43 +794,5 @@ impl Graphics for Graphics2D {
         _offset: [f32; 3],
     ) {
         self.update_camera(p[0..2].try_into().unwrap(), v[0..2].try_into().unwrap());
-    }
-}
-
-struct DebugShapesBatch {
-    pub vertices: Vec<ColorVertex>, // Includes position + color
-    pub indices: Vec<u16>,          // For indexed quads
-}
-
-impl DebugShapesBatch {
-    pub fn new() -> Self {
-        Self {
-            vertices: Vec::new(),
-            indices: Vec::new(),
-        }
-    }
-
-    pub fn clear(&mut self) {
-        self.vertices.clear();
-        self.indices.clear();
-    }
-
-    pub fn push_tesselated_shape(&mut self, shape: TessellatedShape2D, color: [f32; 4]) {
-        let base_index = self.vertices.len() as u16;
-
-        for &pos in shape.vertices.iter() {
-            self.vertices.push(ColorVertex {
-                position: [pos.x, pos.y],
-                color,
-            })
-        }
-        self.indices.extend_from_slice(
-            shape
-                .indices
-                .iter()
-                .map(|f| f + base_index)
-                .collect::<Vec<u16>>()
-                .as_slice(),
-        );
     }
 }

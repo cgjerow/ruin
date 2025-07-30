@@ -78,7 +78,7 @@ impl World {
             flips: HashMap::new(),
             parent_area_info: HashMap::new(),
             debug: WorldDebug {
-                // this *insanely* lowers frame rate.
+                // this lowers frame rate.
                 // use with minimal objs in scene
                 enabled: false,
                 show_hitboxes: true,

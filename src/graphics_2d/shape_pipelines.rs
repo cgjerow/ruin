@@ -1,6 +1,7 @@
 use wgpu::{FragmentState, RenderPipelineDescriptor, VertexState};
 
 pub fn create_2d_pipeline(
+    label: &str,
     device: &wgpu::Device,
     surface_format: wgpu::TextureFormat,
     shader: &wgpu::ShaderModule,
@@ -9,13 +10,13 @@ pub fn create_2d_pipeline(
     depth_stencil: Option<wgpu::DepthStencilState>,
 ) -> wgpu::RenderPipeline {
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("2D Texture Shape Pipeline Layout"),
+        label: Some(label),
         bind_group_layouts: bind_group_layouts,
         push_constant_ranges: &[],
     });
 
     device.create_render_pipeline(&RenderPipelineDescriptor {
-        label: Some("2D Texture Render Pipeline"),
+        label: Some(label),
         layout: Some(&layout),
         vertex: VertexState {
             module: &shader,
