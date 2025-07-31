@@ -511,10 +511,12 @@ impl PhysicsWorld {
                 grid.entry((x, y)).or_default().push(body_index);
             }
         }
+        /*
         let tiles_covered = (max_tile_x - min_tile_x + 1) * (max_tile_y - min_tile_y + 1);
         if tiles_covered > 9 {
             println!("Body {} touches {} tiles", body_index, tiles_covered);
         }
+        */
     }
 }
 

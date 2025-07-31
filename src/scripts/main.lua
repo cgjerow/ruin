@@ -208,9 +208,12 @@ function ENGINE_update(dt)
 	if flip_y == 1 then
 		x = x * -1
 	end
-	local s = skelly.new(x, y)
-	count = count + 1
-	s.id = ENGINE_HANDLES.create_body(s)
+	if (count < 300) then
+		local s = skelly.new(x, y)
+		s.is_skelly = true
+		count = count + 1
+		s.id = ENGINE_HANDLES.create_body(s)
+	end
 	-- FPS calculation
 	fps_debug.frame_count = fps_debug.frame_count + 1
 	fps_debug.time_accum = fps_debug.time_accum + dt
@@ -335,7 +338,7 @@ function ENGINE_load()
 	WORLD.player.id = ENGINE_HANDLES.create_body(death)
 
 	local build_walls = true
-	if not build_walls then
+	if build_walls then
 		local fence_thickness = 2
 		local fence_count_per_side = 25
 		local half_length = fence_thickness * fence_count_per_side / 2

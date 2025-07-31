@@ -80,7 +80,7 @@ impl World {
             debug: WorldDebug {
                 // this lowers frame rate.
                 // use with minimal objs in scene
-                enabled: false,
+                enabled: true,
                 show_hitboxes: true,
                 show_hurtboxes: true,
                 show_colliders: true,

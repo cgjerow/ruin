@@ -540,9 +540,9 @@ impl Graphics2D {
             return;
         }
 
+        /*
         for (entity, animation) in world.animations.iter() {
             if let Some(t) = world.transforms_2d.get(&entity) {
-                /*
                 let current_frame = &animation.current_frame;
 
                 // hitboxes
@@ -594,22 +594,20 @@ impl Graphics2D {
                         }
                     }
                 }
-                */
+            }
+        }
+        */
 
-                let mut count = 0;
-                if world.debug.show_colliders {
-                    for body in physics.bodies.iter() {
-                        for area in &body.colliders {
-                            if area.active {
-                                count += 1;
-                                self.draw_debug_rect(
-                                    body.position.add_element_wise(area.offset),
-                                    area.shape.half_extents(),
-                                    [0.0, 1.0, 1.0, 1.0],
-                                    Space::World,
-                                );
-                            }
-                        }
+        if world.debug.show_colliders {
+            for body in physics.bodies.iter() {
+                for area in &body.colliders {
+                    if area.active {
+                        self.draw_debug_rect(
+                            body.position.add_element_wise(area.offset),
+                            area.shape.half_extents(),
+                            [0.0, 1.0, 1.0, 1.0],
+                            Space::World,
+                        );
                     }
                 }
             }
