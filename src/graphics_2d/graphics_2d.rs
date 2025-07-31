@@ -540,7 +540,6 @@ impl Graphics2D {
             return;
         }
 
-        /*
         for (entity, animation) in world.animations.iter() {
             if let Some(t) = world.transforms_2d.get(&entity) {
                 let current_frame = &animation.current_frame;
@@ -596,7 +595,6 @@ impl Graphics2D {
                 }
             }
         }
-        */
 
         if world.debug.show_colliders {
             for body in physics.bodies.iter() {
