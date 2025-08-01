@@ -12,6 +12,9 @@ local skelly = require("characters.skelly")
 local new_fence = require("environment.fence")
 local new_brick_tile = require("environment.brick_ground")
 
+-- Canvas Elements
+local main_menu = require("canvas.main_menu")
+
 math.randomseed(os.time())
 
 CONFIG = {
@@ -317,6 +320,7 @@ function ENGINE_update(dt)
 end
 
 function ENGINE_load()
+	--[[
 	engine.create_ui_scene({
 		elements = {
 			{ position_x = 1, position_y = 2, scale_x = 3, scale_y = 4, width = 5, height = 6, initially_active = true },
@@ -329,6 +333,15 @@ function ENGINE_load()
 			},
 			scenes = {},
 		}
+		},
+	})
+	]]
+	engine.create_ui_scene({
+		initially_active = true,
+		elements = {
+			{ initially_active = true, position_x = 0, position_y = 0, scale_x = 1, scale_y = 1, width = 1, height = 1, animations = main_menu(1, 1).animations },
+		},
+		scenes = {
 		},
 	})
 

@@ -2,19 +2,25 @@ use std::collections::HashMap;
 
 use cgmath::Vector2;
 
-use crate::components_systems::{physics_2d::Shape2D, Entity};
+use crate::{
+    components_systems::{physics_2d::Shape2D, ActionState, Animation, AnimationComponent, Entity},
+    graphics_2d::{RenderElement2D, RenderQueue2D},
+    lua_scriptor::LuaExtendedExecutor,
+};
 
 #[derive(Debug)]
 pub struct CanvasElement {
     position: Vector2<f32>,
     scale: Vector2<f32>,
     shape: Shape2D,
+    pub sprite_sheet: String,
+    animation: AnimationComponent,
 }
 
 #[derive(Debug)]
 pub struct CanvasScene {
-    scenes: HashMap<Entity, CanvasScene>,
-    elements: HashMap<Entity, CanvasElement>,
+    pub scenes: HashMap<Entity, CanvasScene>,
+    pub elements: HashMap<Entity, CanvasElement>,
     active_scenes: Vec<Entity>,
     active_elements: Vec<Entity>,
 }
@@ -46,6 +52,30 @@ impl Canvas {
         if scene.1 {
             self.active_scenes.push(entity.clone());
         }
+    }
+
+    pub fn extract_render_queue_2d(&self) -> RenderQueue2D {
+        let mut queue = RenderQueue2D {
+            transparent: Vec::new(),
+            opaque: Vec::new(),
+        };
+
+        for entity in self.active_scenes.iter() {
+            for (_, element) in self.scenes.get(entity).unwrap().elements.iter() {
+                queue.transparent.push(RenderElement2D {
+                    shape: &Shape2D::Rectangle {
+                        half_extents: Vector2 { x: 1.0, y: 1.0 },
+                    },
+                    position: [0.0, 0.0],
+                    size: [1.0, 1.0],
+                    z_order: 0.0,
+                    texture_id: element.sprite_sheet.clone(),
+                    uv_coords: element.animation.current_frame.uv_coords,
+                });
+            }
+        }
+
+        queue
     }
 }
 
@@ -84,11 +114,17 @@ pub fn parse_scene_from_lua(table: mlua::Table, canvas: &mut Canvas) -> (CanvasS
             active_scenes,
             active_elements,
         },
-        table.get("active").unwrap_or(false),
+        table.get("initially_active").unwrap_or(false),
     )
 }
 
 fn parse_element_from_lua(table: mlua::Table) -> (CanvasElement, bool) {
+    println!("{:?}", LuaExtendedExecutor::pretty_print_table(&table, 0));
+    let first: mlua::Table = table.get("animations").unwrap();
+    println!("{:?}", LuaExtendedExecutor::pretty_print_table(&first, 0));
+    let animation = Animation::from_lua_table(first.get(0).unwrap());
+    let animations = HashMap::from([(ActionState::Custom(0), animation.0.clone())]);
+
     (
         CanvasElement {
             position: Vector2 {
@@ -104,6 +140,13 @@ fn parse_element_from_lua(table: mlua::Table) -> (CanvasElement, bool) {
                     x: table.get("width").unwrap(),
                     y: table.get("height").unwrap(),
                 },
+            },
+            sprite_sheet: animation.1,
+            animation: AnimationComponent {
+                animations,
+                current_frame: animation.0.frames[0].clone(),
+                current_frame_index: 1,
+                frame_timer: 0.0,
             },
         },
         table.get("initially_active").unwrap_or(false),

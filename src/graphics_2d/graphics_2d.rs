@@ -5,6 +5,7 @@ use std::time::Instant;
 use cgmath::{ElementWise, Vector2};
 use image::DynamicImage;
 use wgpu::util::DeviceExt;
+use wgpu::wgc::device;
 use wgpu::*;
 use winit::window::Window;
 
@@ -14,30 +15,17 @@ use crate::components_systems::physics_2d::Shape2D;
 use crate::graphics::Graphics;
 use crate::graphics_2d::debug_render_batch::ShapeType;
 use crate::graphics_2d::shape_pipelines::create_2d_pipeline;
-use crate::graphics_2d::shape_tesselation::TessellatedShape2D;
 use crate::graphics_2d::space::Space;
 use crate::graphics_2d::vertex::{DebugInstanceVertex, Vertex};
+use crate::graphics_2d::world_render_batch::WorldRenderBatch;
 use crate::graphics_2d::DebugRenderBatch;
 use crate::graphics_2d::{CameraUniform2D, ColorVertex, TextureVertex};
 
 use crate::texture::Texture;
+use crate::ui_canvas::Canvas;
 use crate::world::World;
 
-#[derive(Debug, Clone)]
-pub struct RenderElement2D<'a> {
-    pub shape: &'a Shape2D,
-    pub position: [f32; 2],
-    pub size: [f32; 2],
-    pub z_order: f32, // for Y-based sorting (e.g., lower y = drawn on top)
-    pub texture_id: String,
-    pub uv_coords: [[f32; 2]; 4],
-}
-
-#[derive(Debug, Clone)]
-pub struct RenderQueue2D<'a> {
-    pub transparent: Vec<RenderElement2D<'a>>,
-    pub opaque: Vec<RenderElement2D<'a>>,
-}
+pub type TextureId = u32;
 
 pub struct Graphics2D {
     surface: Surface<'static>,
@@ -56,141 +44,14 @@ pub struct Graphics2D {
     instance_buffer: Buffer,
     texture_bind_group_layout: BindGroupLayout,
     render_pipeline: RenderPipeline,
+    canvas_pipeline: RenderPipeline,
     depth_texture: Texture,
-    texture_batch_context: TextureBatchContext,
+    texture_batch_context: WorldRenderBatch,
     color_shapes_pipeline: RenderPipeline,
     test_pipe: RenderPipeline,
     debug_render_batch: DebugRenderBatch,
-}
-
-#[derive(Debug, Clone)]
-struct TextureBatchContext {
-    current_vertex_buffer_offset: u64,
-    current_index_buffer_offset: u64,
-    vertex_count_offset: u16,
-    batched_vertices: Vec<TextureVertex>,
-    batched_indices: Vec<u16>,
-    previous_texture: String,
-    bind_group_cache: HashMap<String, BindGroup>,
-}
-
-impl TextureBatchContext {
-    fn new() -> Self {
-        Self {
-            current_vertex_buffer_offset: 0,
-            current_index_buffer_offset: 0,
-            vertex_count_offset: 0,
-            batched_vertices: Vec::new(),
-            batched_indices: Vec::new(),
-            previous_texture: "".to_string(),
-            bind_group_cache: HashMap::new(),
-        }
-    }
-
-    fn enqueue_next_texture(
-        &mut self,
-        element: &RenderElement2D,
-        queue: &mut Queue,
-        pass: &mut RenderPass,
-        vertex_buffer: &mut Buffer,
-        index_buffer: &mut Buffer,
-    ) {
-        let should_flush_batch =
-            self.previous_texture != "" && self.previous_texture != element.texture_id;
-        if should_flush_batch {
-            self.flush_batch(queue, pass, vertex_buffer, index_buffer);
-        }
-
-        let mut shape = TessellatedShape2D::from(
-            &element.shape.scale(Vector2 {
-                x: element.size[0],
-                y: element.size[1],
-            }),
-            100,
-        );
-        shape.recenter(Vector2 {
-            x: element.position[0],
-            y: element.position[1],
-        });
-
-        let vertices = shape.into_tex(element.uv_coords);
-        let indices: Vec<u16> = shape
-            .indices
-            .iter()
-            .map(|i| i + self.vertex_count_offset)
-            .collect();
-        self.batched_vertices.extend(&vertices);
-        self.batched_indices.extend(indices);
-        self.vertex_count_offset += vertices.len() as u16;
-        self.previous_texture = element.texture_id.clone();
-    }
-
-    fn flush_batch(
-        &mut self,
-        queue: &mut Queue,
-        pass: &mut RenderPass,
-        vertex_buffer: &mut Buffer,
-        index_buffer: &mut Buffer,
-    ) {
-        if self.previous_texture == "" {
-            return;
-        }
-        pass.set_bind_group(
-            0,
-            &*self.bind_group_cache.get(&self.previous_texture).unwrap(),
-            &[],
-        );
-        queue.write_buffer(
-            &vertex_buffer,
-            self.current_vertex_buffer_offset as wgpu::BufferAddress,
-            bytemuck::cast_slice(&self.batched_vertices),
-        );
-
-        queue.write_buffer(
-            &index_buffer,
-            self.current_index_buffer_offset as wgpu::BufferAddress,
-            bytemuck::cast_slice(&self.batched_indices),
-        );
-
-        let vertex_slice_size = (self.batched_vertices.len() * std::mem::size_of::<TextureVertex>())
-            as wgpu::BufferAddress;
-        let index_slice_size =
-            (self.batched_indices.len() * std::mem::size_of::<u16>()) as wgpu::BufferAddress;
-
-        pass.set_vertex_buffer(
-            0,
-            vertex_buffer.slice(
-                self.current_vertex_buffer_offset as wgpu::BufferAddress
-                    ..(self.current_vertex_buffer_offset + vertex_slice_size)
-                        as wgpu::BufferAddress,
-            ),
-        );
-        pass.set_index_buffer(
-            index_buffer.slice(
-                self.current_index_buffer_offset as wgpu::BufferAddress
-                    ..(self.current_index_buffer_offset + index_slice_size) as wgpu::BufferAddress,
-            ),
-            wgpu::IndexFormat::Uint16,
-        );
-        pass.draw_indexed(0..self.batched_indices.len() as u32, 0, 0..1);
-
-        // Increment offsets for the next sprite
-        self.vertex_count_offset = 0;
-        self.current_vertex_buffer_offset += vertex_slice_size;
-        self.current_index_buffer_offset += index_slice_size;
-        self.batched_indices.clear();
-        self.batched_vertices.clear();
-        self.previous_texture = "".to_string();
-    }
-
-    fn reset_context(&mut self) {
-        self.current_index_buffer_offset = 0;
-        self.current_vertex_buffer_offset = 0;
-        self.vertex_count_offset = 0;
-        self.batched_vertices.clear();
-        self.batched_indices.clear();
-        self.previous_texture = "".to_string();
-    }
+    texture_lookup: HashMap<TextureId, String>,
+    next_texture_id: TextureId,
 }
 
 impl Graphics2D {
@@ -262,6 +123,8 @@ impl Graphics2D {
 
         let shader =
             device.create_shader_module(include_wgsl!("shaders/2d_camera_and_sprite.wgsl"));
+        let canvas_shader =
+            device.create_shader_module(include_wgsl!("shaders/2d_canvas_sprite.wgsl"));
         let debug_shader =
             device.create_shader_module(include_wgsl!("shaders/2d_camera_and_color.wgsl"));
         let debug_shader_instanced = device
@@ -283,6 +146,16 @@ impl Graphics2D {
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),
+        );
+
+        let canvas_pipeline = create_2d_pipeline(
+            "Canvas Pipeline",
+            &device,
+            config.format,
+            &canvas_shader,
+            &[TextureVertex::desc()],
+            &Vec::from([&texture_bind_group_layout]),
+            None,
         );
 
         let color_shapes_pipeline = create_2d_pipeline(
@@ -388,10 +261,13 @@ impl Graphics2D {
             texture_bind_group_layout,
             depth_texture,
             render_pipeline,
+            canvas_pipeline,
             test_pipe,
-            texture_batch_context: TextureBatchContext::new(),
+            texture_batch_context: WorldRenderBatch::new(),
+            texture_lookup: HashMap::new(),
             color_shapes_pipeline,
             debug_render_batch,
+            next_texture_id: 0,
         })
     }
 
@@ -426,7 +302,12 @@ impl Graphics2D {
         );
     }
 
-    pub fn render(&mut self, world: &World, physics: &PhysicsWorld) -> Result<(), SurfaceError> {
+    pub fn render(
+        &mut self,
+        world: &World,
+        canvas: &Canvas,
+        physics: &PhysicsWorld,
+    ) -> Result<(), SurfaceError> {
         if !self.is_surface_configured {
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
@@ -443,8 +324,10 @@ impl Graphics2D {
             });
 
         self.draw_game(world, &mut encoder, &view);
+        // self.draw_canvas(canvas, &mut encoder, &view);
         self.draw_debug_batch(world, physics, &mut encoder, &view);
         self.queue.submit(Some(encoder.finish()));
+        self.texture_batch_context.reset_context();
         output.present();
         Ok(())
     }
@@ -531,8 +414,57 @@ impl Graphics2D {
             &mut self.vertex_buffer,
             &mut self.index_buffer,
         );
+    }
 
-        self.texture_batch_context.reset_context();
+    fn draw_canvas(
+        &mut self,
+        canvas: &Canvas,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+    ) {
+        let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("Canvas Render Pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: view,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Load,
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+
+        pass.set_pipeline(&self.canvas_pipeline);
+
+        let render_queue = canvas.extract_render_queue_2d();
+
+        let mut transparent = render_queue.transparent.clone();
+        transparent.sort_by(|a, b| {
+            a.z_order
+                .partial_cmp(&b.z_order)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        for element in transparent.iter() {
+            {
+                self.texture_batch_context.enqueue_next_texture(
+                    element,
+                    &mut self.queue,
+                    &mut pass,
+                    &mut self.vertex_buffer,
+                    &mut self.index_buffer,
+                );
+            }
+        }
+
+        self.texture_batch_context.flush_batch(
+            &mut self.queue,
+            &mut pass,
+            &mut self.vertex_buffer,
+            &mut self.index_buffer,
+        );
     }
 
     pub fn build_debug_assets(&mut self, world: &World, physics: &PhysicsWorld) {
@@ -643,7 +575,7 @@ impl Graphics2D {
     ) {
         let i = Instant::now();
         self.build_debug_assets(world, physics);
-        println!("BUILD {:?}", i.elapsed().as_secs_f64());
+        //println!("BUILD {:?}", i.elapsed().as_secs_f64());
 
         let i = Instant::now();
         {
@@ -668,7 +600,7 @@ impl Graphics2D {
                 &self.camera_bind_group,
             );
         }
-        println!("Debug {:?}", i.elapsed().as_secs_f64());
+        //println!("Debug {:?}", i.elapsed().as_secs_f64());
 
         /*
         {
@@ -753,30 +685,22 @@ impl Graphics for Graphics2D {
         self.background_color = color;
     }
 
-    fn render(&mut self, world: &World, physics: &PhysicsWorld) {
-        let _ = self.render(world, physics);
+    fn render(&mut self, world: &World, canvas: &Canvas, physics: &PhysicsWorld) {
+        let _ = self.render(world, canvas, physics);
     }
 
     fn load_texture_from_path(&mut self, id: &str, path: &str) -> Texture {
         let image = image::open(path).unwrap().flipv();
         let texture = self.create_gpu_texture(id.to_string(), &image, path);
-        self.texture_batch_context.bind_group_cache.insert(
+        self.texture_batch_context.add_texture(
             id.to_string(),
-            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &self.texture_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&texture.view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&texture.sampler),
-                    },
-                ],
-                label: Some("Texture Bind Group"),
-            }),
+            texture.clone(),
+            &mut self.device,
+            &self.texture_bind_group_layout,
         );
+        let texture_id = self.next_texture_id;
+        self.next_texture_id += 1;
+        self.texture_lookup.insert(texture_id, id.to_string());
         return texture.clone();
     }
 
@@ -791,4 +715,20 @@ impl Graphics for Graphics2D {
     ) {
         self.update_camera(p[0..2].try_into().unwrap(), v[0..2].try_into().unwrap());
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct RenderElement2D<'a> {
+    pub shape: &'a Shape2D,
+    pub position: [f32; 2],
+    pub size: [f32; 2],
+    pub z_order: f32, // for Y-based sorting (e.g., lower y = drawn on top)
+    pub texture_id: String,
+    pub uv_coords: [[f32; 2]; 4],
+}
+
+#[derive(Debug, Clone)]
+pub struct RenderQueue2D<'a> {
+    pub transparent: Vec<RenderElement2D<'a>>,
+    pub opaque: Vec<RenderElement2D<'a>>,
 }

@@ -19,6 +19,7 @@ pub struct SpriteFrame {
 
 #[derive(Debug, Clone)]
 pub struct Animation {
+    // this should change to TextureId
     pub sprite_sheet_id: Entity,
     pub is_transparent: bool,
     pub frames: Vec<SpriteFrame>,
@@ -97,21 +98,6 @@ impl Animation {
             sprite_path,
         )
     }
-}
-
-// Converts sprite pixel rect to normalized UVs.
-fn calc_uv_coords(x: f32, y: f32, w: f32, h: f32, tex_w: f32, tex_h: f32) -> [[f32; 2]; 4] {
-    let u0 = x / tex_w;
-    let u1 = (x + w) / tex_w;
-    let v1 = 1.0 - (y / tex_h);
-    let v0 = 1.0 - ((y + h) / tex_h);
-
-    [
-        [u0, v1], // bottom-left
-        [u1, v1], // bottom-right
-        [u1, v0], // top-right
-        [u0, v0], // top-left
-    ]
 }
 
 fn parse_hitboxes_from_table(

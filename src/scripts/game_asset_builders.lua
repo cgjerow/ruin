@@ -183,3 +183,39 @@ function MaskAndLayerBuilder()
 
 	return builder
 end
+
+function CanvasSceneBuilder()
+	local body = {
+		x = -1000,
+		y = -1000,
+		height = 1,
+		width = 1,
+		state = "Idle",
+		animations = {},
+	}
+
+	local builder = {}
+
+	function builder:add_animation(action, animation)
+		body.animations[action] = animation
+		return builder
+	end
+
+	function builder:size(width, height)
+		body.width = width
+		body.height = height
+		return builder
+	end
+
+	function builder:position(x, y)
+		body.x = x
+		body.y = y
+		return builder
+	end
+
+	function builder:build()
+		return body
+	end
+
+	return builder
+end

@@ -3,9 +3,7 @@ use crate::camera_2d::camera_2d::Camera2DConfig;
 use crate::camera_2d::Camera2D;
 use crate::camera_3d::CameraAction;
 use crate::components_systems::physics2d::{self, PhysicsWorld, Point2D};
-use crate::components_systems::physics_2d::{
-    self, Area2D, BodyType, FlipComponent, PhysicsBody2D, Shape2D, Transform2D,
-};
+use crate::components_systems::physics_2d::{FlipComponent, Shape2D, Transform2D};
 use crate::components_systems::{
     animation_system_update_frames, damage, set_entity_state, ActionState, ActionStateComponent,
     Animation, AnimationComponent, Entity, HealthComponent, SpriteSheetComponent,
@@ -13,9 +11,10 @@ use crate::components_systems::{
 use crate::graphics::Graphics;
 use crate::inputs::{keycode_to_str, mousebutton_to_str};
 use crate::lua_scriptor::LuaExtendedExecutor;
+use crate::scene::{Element, Scene};
 use crate::texture::Texture;
 use crate::ui_canvas::{parse_scene_from_lua, Canvas};
-use crate::world::{AreaInfo, AreaRole, World};
+use crate::world::World;
 use crate::{debug, graphics_2d, graphics_3d};
 use cgmath::Vector2;
 use debug::Debug;
@@ -134,7 +133,7 @@ impl Engine {
         }
     }
 
-    fn get_texture(&mut self, id: &str) -> Texture {
+    fn get_texture(&mut self, id: String) -> Texture {
         let path = format!("./src/assets/{}", id);
         let texture = self.asset_cache.entry(id.to_string()).or_insert_with(|| {
             debug_log!(self.debugger, "Initialized asset: {}", path);
@@ -328,6 +327,9 @@ impl Engine {
     fn create_ui_scene(&mut self, lua_scene: mlua::Table) -> [u32; 1] {
         let entity = self.canvas.new_entity();
         let scene = parse_scene_from_lua(lua_scene, &mut self.canvas);
+        for (_, element) in scene.0.elements.iter() {
+            self.get_texture(element.sprite_sheet.clone());
+        }
         self.canvas.add_scene(entity.clone(), scene);
         [entity.into()]
     }
@@ -379,7 +381,7 @@ impl Engine {
                 let action_state = ActionState::from(numeric_key);
 
                 let sprite_id: Entity = self.world.new_entity();
-                let texture = self.get_texture(&sprite_path);
+                let texture = self.get_texture(sprite_path.clone());
                 animation.sprite_sheet_id = sprite_id;
 
                 self.world.sprite_sheets.insert(
@@ -572,7 +574,7 @@ impl Engine {
         for asset in assets.sequence_values::<String>() {
             let asset = asset.unwrap_or("".to_string());
             if asset != "" {
-                let _ = self.get_texture(&asset);
+                let _ = self.get_texture(asset.clone());
             };
         }
     }
@@ -633,7 +635,7 @@ impl ApplicationHandler<Graphics3D> for Engine {
         };
         let _ = graphics.update_camera();
         let bg = Instant::now();
-        let _ = graphics.render(&self.world, &self.physics);
+        let _ = graphics.render(&self.world, &self.canvas, &self.physics);
         //println!("Render: {:?}", bg.elapsed().as_secs_f64());
 
         self.count += 1;
