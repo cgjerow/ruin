@@ -1,11 +1,12 @@
 use cgmath::Vector2;
+use ruin_assets::{Handle, ImageTexture};
 use ruin_bitmaps::vecbool_to_u8;
 use std::collections::HashMap;
 
 use crate::{
     physics_2d::{Area2D, Shape2D},
     world::World,
-    ActionState, Entity,
+    ActionState,
 };
 
 #[derive(Debug, Clone)]
@@ -20,7 +21,7 @@ pub struct SpriteFrame {
 #[derive(Debug, Clone)]
 pub struct Animation {
     // this should change to TextureId
-    pub sprite_sheet_id: Entity,
+    pub sprite_sheet_id: Handle<ImageTexture>,
     pub is_transparent: bool,
     pub frames: Vec<SpriteFrame>,
     pub looped: bool,
@@ -35,7 +36,10 @@ pub struct AnimationComponent {
 }
 
 impl Animation {
-    pub fn from_lua_table(table: mlua::Table) -> (Self, String) {
+    pub fn from_lua_table(
+        table: mlua::Table,
+        texture_loader: &mut impl FnMut(String) -> Handle<ImageTexture>,
+    ) -> Self {
         let looped: bool = table.get("looped").unwrap_or(true);
         let is_transparent: bool = table.get("is_transparent").unwrap_or(false);
 
@@ -88,15 +92,12 @@ impl Animation {
                 });
             }
         }
-        (
-            Animation {
-                sprite_sheet_id: 0,
-                frames,
-                looped,
-                is_transparent,
-            },
-            sprite_path,
-        )
+        Animation {
+            sprite_sheet_id: texture_loader(sprite_path),
+            frames,
+            looped,
+            is_transparent,
+        }
     }
 }
 

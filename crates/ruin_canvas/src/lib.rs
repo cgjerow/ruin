@@ -80,6 +80,7 @@ impl Canvas {
     }
 }
 
+/*
 // Lua
 pub fn parse_scene_from_lua(table: mlua::Table, canvas: &mut Canvas) -> (CanvasScene, bool) {
     let elements_table: mlua::Table = table.get("elements").unwrap();
@@ -142,10 +143,9 @@ fn parse_element_from_lua(table: mlua::Table) -> (CanvasElement, bool) {
                     y: table.get("height").unwrap(),
                 },
             },
-            sprite_sheet: animation.1,
             animation: AnimationComponent {
                 animations,
-                current_frame: animation.0.frames[0].clone(),
+                current_frame: animation.frames[0].clone(),
                 current_frame_index: 1,
                 frame_timer: 0.0,
             },
@@ -153,3 +153,4 @@ fn parse_element_from_lua(table: mlua::Table) -> (CanvasElement, bool) {
         table.get("initially_active").unwrap_or(false),
     )
 }
+*/

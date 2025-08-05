@@ -1,9 +1,9 @@
 use cgmath::Vector2;
 use mlua::{Result, Table};
-use ruin_assets::{Handle, ImageTexture};
+use ruin_assets::{AssetPath, Handle, ImageTexture};
 use ruin_bitmaps::vecbool_to_u8;
 use ruin_camera::{Camera2D, Camera2DConfig, CameraAction};
-use ruin_canvas::{parse_scene_from_lua, Canvas};
+use ruin_canvas::Canvas;
 use ruin_debug::{debug_log, Debug};
 use ruin_ecs::physics_2d::{Area2D, Body2D, BodyType2D, PhysicsWorld, Point2D, Shape2D, Vector2D};
 use ruin_ecs::world::World;
@@ -277,11 +277,13 @@ impl Engine {
 
     fn create_ui_scene(&mut self, lua_scene: mlua::Table) -> [u32; 1] {
         let entity = self.canvas.new_entity();
+        /*
         let scene = parse_scene_from_lua(lua_scene, &mut self.canvas);
         for (_, element) in scene.0.elements.iter() {
             self.load_texture(element.sprite_sheet.clone());
         }
         self.canvas.add_scene(entity.clone(), scene);
+        */
         [entity.into()]
     }
 
@@ -328,19 +330,9 @@ impl Engine {
                 let numeric_key =
                     key.as_u32()
                         .expect("Numeric key required for Action States") as u8;
-                let (mut animation, sprite_path) = Animation::from_lua_table(tbl);
+                let animation =
+                    Animation::from_lua_table(tbl, &mut |path: String| self.load_texture(path));
                 let action_state = ActionState::from(numeric_key);
-
-                let sprite_id: Entity = self.world.new_entity();
-                let handle = self.load_texture(sprite_path.clone());
-                animation.sprite_sheet_id = sprite_id;
-
-                self.world.sprite_sheets.insert(
-                    sprite_id.clone(),
-                    SpriteSheetComponent {
-                        image_texture: handle,
-                    },
-                );
                 animations_map.insert(action_state, animation);
             }
         }

@@ -5,8 +5,7 @@ use ruin_assets::{Handle, ImageTexture};
 
 use crate::{
     physics_2d::{Area2D, Point2D, Shape2D},
-    ActionStateComponent, AnimationComponent, Entity, FlipComponent, HealthComponent,
-    SpriteSheetComponent, Transform2D,
+    ActionStateComponent, AnimationComponent, Entity, FlipComponent, HealthComponent, Transform2D,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -44,7 +43,6 @@ pub struct World {
     pub flips: HashMap<Entity, FlipComponent>,
     pub health_bars: HashMap<Entity, HealthComponent>,
     pub animations: HashMap<Entity, AnimationComponent>,
-    pub sprite_sheets: HashMap<Entity, SpriteSheetComponent>,
     pub transforms_2d: HashMap<Entity, Transform2D>,
     pub action_states: HashMap<Entity, ActionStateComponent>,
     pub physical_colliders_2d: HashMap<Entity, HashMap<Entity, Area2D>>,
@@ -66,7 +64,6 @@ impl World {
             transforms_2d: HashMap::new(),
             action_states: HashMap::new(),
             animations: HashMap::new(),
-            sprite_sheets: HashMap::new(),
             physical_colliders_2d: HashMap::new(),
             hitboxes_2d: HashMap::new(),
             hurtboxes_2d: HashMap::new(),
@@ -252,17 +249,13 @@ impl World {
                     .get(&entity)
                     .expect("Animation not found")
                     .state];
-                let sprite = self
-                    .sprite_sheets
-                    .get(&action_animation.sprite_sheet_id)
-                    .expect("Sprite Sheets not found");
 
                 let tmp = RenderElement2D {
                     shape: &transform.shape,
                     position: transform.position.into(),
                     size: transform.scale.into(),
                     z_order: -transform.position[1], // Sort top to bottom: lower y = drawn later
-                    image_texture: sprite.image_texture,
+                    image_texture: action_animation.sprite_sheet_id,
                     uv_coords,
                 };
 
