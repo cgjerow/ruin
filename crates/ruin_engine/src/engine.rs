@@ -2,7 +2,7 @@ use cgmath::Vector2;
 use mlua::{Result, Table};
 use ruin_assets::{Handle, ImageTexture};
 use ruin_bitmaps::vecbool_to_u8;
-use ruin_camera::{Camera2D, Camera2DConfig};
+use ruin_camera::{Camera2D, Camera2DConfig, CameraOption, Dimensions};
 use ruin_canvas::Canvas;
 use ruin_debug::{debug_log, Debug};
 use ruin_ecs::physics_2d::{Area2D, Body2D, BodyType2D, PhysicsWorld, Point2D, Shape2D, Vector2D};
@@ -68,29 +68,6 @@ pub struct EngineConfig {
     pub dimensions: Dimensions,
     pub camera: CameraOption,
     pub camera2d_config: Camera2DConfig,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Dimensions {
-    Two,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum CameraOption {
-    Follow,
-    Independent,
-}
-
-impl FromStr for CameraOption {
-    type Err = ();
-
-    fn from_str(s: &str) -> std::result::Result<CameraOption, ()> {
-        match s.to_lowercase().as_str() {
-            "follow" => Ok(CameraOption::Follow),
-            "independent" => Ok(CameraOption::Independent),
-            _ => Err(()),
-        }
-    }
 }
 
 impl Engine {

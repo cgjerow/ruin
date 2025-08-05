@@ -1,13 +1,9 @@
 #[macro_use]
-mod engine;
-
-use engine::{Engine, EngineConfig};
 use mlua::prelude::*;
-use ruin_camera::Camera2DConfig;
+use ruin_camera::{Camera2DConfig, CameraOption, Dimensions};
+use ruin_engine::{Engine, EngineConfig};
 use ruin_lua_runtime::{LuaExtendedExecutor, LuaScriptor};
 use winit::event_loop::EventLoop;
-
-use crate::engine::{CameraOption, Dimensions};
 
 fn load_engine_config() -> EngineConfig {
     let mut scriptor = LuaScriptor::new(Lua::new());

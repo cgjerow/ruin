@@ -1,5 +1,6 @@
-use cgmath::{ortho, InnerSpace, Matrix4, Vector2};
+use std::str::FromStr;
 
+use cgmath::{ortho, InnerSpace, Matrix4, Vector2};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CameraAction {
     MoveForward,
@@ -121,5 +122,28 @@ impl Camera2D {
         let top = half_h;
 
         ortho(left, right, bottom, top, -1.0, 1.0)
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Dimensions {
+    Two,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum CameraOption {
+    Follow,
+    Independent,
+}
+
+impl FromStr for CameraOption {
+    type Err = ();
+
+    fn from_str(s: &str) -> std::result::Result<CameraOption, ()> {
+        match s.to_lowercase().as_str() {
+            "follow" => Ok(CameraOption::Follow),
+            "independent" => Ok(CameraOption::Independent),
+            _ => Err(()),
+        }
     }
 }

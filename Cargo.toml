@@ -10,6 +10,7 @@ members = [
 
 
 [dependencies]
+ruin_engine = { path = "crates/ruin_engine" }
 ruin_assets = { path = "crates/ruin_assets" }
 ruin_lua_runtime = { path = "crates/ruin_lua_runtime" }
 ruin_bitmaps = { path = "crates/ruin_bitmaps" }

@@ -1,0 +1,21 @@
+[package]
+name = "ruin_engine"
+version = "0.1.0-dev"
+edition = "2021"
+
+[dependencies]
+ruin_assets = { path = "../ruin_assets" }
+ruin_lua_runtime = { path = "../ruin_lua_runtime" }
+ruin_bitmaps = { path = "../ruin_bitmaps" }
+ruin_camera = { path = "../ruin_camera" }
+ruin_canvas = { path = "../ruin_canvas" }
+ruin_debug = { path = "../ruin_debug" }
+ruin_ecs = { path = "../ruin_ecs" }
+ruin_graphics = { path = "../ruin_graphics" }
+ruin_player_controller = { path = "../ruin_player_controller" }
+anyhow = "1.0"
+winit = "0.30.11"
+wgpu = "25.0"
+cgmath = "0.18.0"
+pollster = "0.3"
+mlua = { version = "0.10.5", features = ["lua54", "vendored"] }

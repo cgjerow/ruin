@@ -1932,6 +1932,7 @@ dependencies = [
  "ruin_canvas",
  "ruin_debug",
  "ruin_ecs",
+ "ruin_engine",
  "ruin_graphics",
  "ruin_lua_runtime",
  "ruin_player_controller",
@@ -1982,6 +1983,27 @@ dependencies = [
  "mlua",
  "ruin_assets",
  "ruin_bitmaps",
+]
+
+[[package]]
+name = "ruin_engine"
+version = "0.1.0-dev"
+dependencies = [
+ "anyhow",
+ "cgmath",
+ "mlua",
+ "pollster",
+ "ruin_assets",
+ "ruin_bitmaps",
+ "ruin_camera",
+ "ruin_canvas",
+ "ruin_debug",
+ "ruin_ecs",
+ "ruin_graphics",
+ "ruin_lua_runtime",
+ "ruin_player_controller",
+ "wgpu",
+ "winit",
 ]
 
 [[package]]
