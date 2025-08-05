@@ -92,6 +92,7 @@ impl Animation {
                 });
             }
         }
+
         Animation {
             sprite_sheet_id: texture_loader(sprite_path),
             frames,
