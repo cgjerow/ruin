@@ -16,7 +16,6 @@ use ruin_graphics::Graphics;
 use ruin_lua_runtime::LuaExtendedExecutor;
 use ruin_player_controller::{keycode_to_str, mousebutton_to_str};
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use winit::application::ApplicationHandler;

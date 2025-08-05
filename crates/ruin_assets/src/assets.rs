@@ -9,8 +9,6 @@ pub struct AssetCache<T: Asset> {
     next_index: Index,
 }
 
-impl<T: Asset> AssetCache<T> {}
-
 impl<T: Asset> AssetCache<T> {
     pub fn new() -> Self {
         Self {
@@ -20,7 +18,6 @@ impl<T: Asset> AssetCache<T> {
         }
     }
 
-    /// Insert an asset into the cache, optionally associating it with a path.
     pub fn insert(&mut self, asset: T, path: Option<AssetPath>) -> Handle<T> {
         if let Some(p) = &path {
             if let Some(existing) = self.path_lookup.get(p) {
