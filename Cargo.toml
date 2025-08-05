@@ -11,20 +11,8 @@ members = [
 
 [dependencies]
 ruin_engine = { path = "crates/ruin_engine" }
-ruin_assets = { path = "crates/ruin_assets" }
 ruin_lua_runtime = { path = "crates/ruin_lua_runtime" }
-ruin_bitmaps = { path = "crates/ruin_bitmaps" }
 ruin_camera = { path = "crates/ruin_camera" }
-ruin_canvas = { path = "crates/ruin_canvas" }
-ruin_debug = { path = "crates/ruin_debug" }
-ruin_ecs = { path = "crates/ruin_ecs" }
-ruin_graphics = { path = "crates/ruin_graphics" }
-ruin_player_controller = { path = "crates/ruin_player_controller" }
 anyhow = "1.0"
 mlua = { version = "0.10.5", features = ["lua54", "vendored"] }
-wgpu = "25.0"
 winit = "0.30.11"
-pollster = "0.3"
-rand = "0.9.1"
-image = { version = "0.25.6", features = ["png", "jpeg"] }
-cgmath = "0.18.0"
