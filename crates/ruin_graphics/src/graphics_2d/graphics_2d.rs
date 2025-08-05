@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use cgmath::{ElementWise, Vector2};
-use ruin_assets::{AssetCache, AssetPath, Handle, ImageTexture, Texture};
+use ruin_assets::{AssetCache, AssetPath, Handle, ImageTexture};
 use ruin_camera::Camera2D;
 use ruin_canvas::Canvas;
 use ruin_ecs::physics_2d::PhysicsWorld;
@@ -18,6 +18,7 @@ use crate::graphics_2d::space::Space;
 use crate::graphics_2d::vertex::{DebugInstanceVertex, Vertex};
 use crate::graphics_2d::world_render_batch::WorldRenderBatch;
 use crate::graphics_2d::DebugRenderBatch;
+use crate::graphics_2d::DepthTexture;
 use crate::graphics_2d::{CameraUniform2D, ColorVertex, TextureVertex};
 use crate::Graphics;
 
@@ -42,7 +43,7 @@ pub struct Graphics2D {
     texture_bind_group_layout: BindGroupLayout,
     render_pipeline: RenderPipeline,
     canvas_pipeline: RenderPipeline,
-    depth_texture: Texture,
+    depth_texture: DepthTexture,
     texture_batch_context: WorldRenderBatch,
     color_shapes_pipeline: RenderPipeline,
     test_pipe: RenderPipeline,
@@ -127,7 +128,7 @@ impl Graphics2D {
         let debug_shader_instanced = device
             .create_shader_module(include_wgsl!("shaders/2d_camera_and_color_instanced.wgsl"));
 
-        let depth_texture = Texture::create_depth_texture(&device, &config, "2d_depth_texture");
+        let depth_texture = DepthTexture::new(&device, &config, "2d_depth_texture");
 
         let render_pipeline = create_2d_pipeline(
             "Texture Pipeline",
@@ -137,7 +138,7 @@ impl Graphics2D {
             &[TextureVertex::desc()],
             &Vec::from([&texture_bind_group_layout, &camera_bind_group_layout]),
             Some(wgpu::DepthStencilState {
-                format: Texture::DEPTH_FORMAT,
+                format: DepthTexture::DEPTH_FORMAT,
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::LessEqual, // only draw if closer
                 stencil: wgpu::StencilState::default(),
@@ -273,8 +274,7 @@ impl Graphics2D {
         self.config.width = width;
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
-        self.depth_texture =
-            Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
+        self.depth_texture = DepthTexture::new(&self.device, &self.config, "depth_texture");
         self.camera.update_aspect_ratio(width, height);
     }
 
