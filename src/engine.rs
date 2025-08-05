@@ -1,15 +1,15 @@
 use cgmath::Vector2;
 use mlua::{Result, Table};
-use ruin_assets::{AssetPath, Handle, ImageTexture};
+use ruin_assets::{Handle, ImageTexture};
 use ruin_bitmaps::vecbool_to_u8;
-use ruin_camera::{Camera2D, Camera2DConfig, CameraAction};
+use ruin_camera::{Camera2D, Camera2DConfig};
 use ruin_canvas::Canvas;
 use ruin_debug::{debug_log, Debug};
 use ruin_ecs::physics_2d::{Area2D, Body2D, BodyType2D, PhysicsWorld, Point2D, Shape2D, Vector2D};
 use ruin_ecs::world::World;
 use ruin_ecs::{
     animation_system_update_frames, set_entity_state, ActionState, ActionStateComponent, Animation,
-    AnimationComponent, Entity, FlipComponent, HealthComponent, SpriteSheetComponent, Transform2D,
+    AnimationComponent, Entity, FlipComponent, HealthComponent, Transform2D,
 };
 use ruin_graphics::graphics_2d::Graphics2D;
 use ruin_graphics::Graphics;
@@ -27,6 +27,12 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::Window;
 
 static SAFETY_MAX_FOR_DEV: u64 = 10000;
+
+#[derive(Debug)]
+struct FPS {
+    pub frame_count: u32,
+    pub time_accum: f32,
+}
 
 pub struct Engine {
     player: Entity,
@@ -161,16 +167,6 @@ impl Engine {
 
     fn is_targetting_fps(&self) -> bool {
         return self.fps_specified;
-    }
-
-    // this may not be necessary, as we don't force redraws, changes just get picked up next cycle
-    fn redraw(&self) {
-        if self.is_targetting_fps() {
-            self.window
-                .as_ref()
-                .expect("Window does not exist")
-                .request_redraw();
-        }
     }
 
     fn update(&mut self, dt: Duration) -> anyhow::Result<()> {
@@ -542,10 +538,8 @@ impl Engine {
                 self.screen_to_world(self.mouse_pos),
             ));
     }
-}
 
-impl ApplicationHandler<Graphics2D> for Engine {
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+    fn tick_game(&mut self, event_loop: &ActiveEventLoop) {
         let now = Instant::now();
         let dt = self.last_frame.elapsed();
 
@@ -588,7 +582,7 @@ impl ApplicationHandler<Graphics2D> for Engine {
         event_loop.set_control_flow(ControlFlow::Poll);
     }
 
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+    fn initialize(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes =
             Window::default_attributes().with_inner_size(LogicalSize::new(self.width, self.height));
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
@@ -603,7 +597,20 @@ impl ApplicationHandler<Graphics2D> for Engine {
         self.window = Some(window);
 
         self.setup();
-        return;
+    }
+}
+
+impl ApplicationHandler<Graphics2D> for Engine {
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        self.tick_game(event_loop);
+    }
+
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        self.initialize(event_loop);
+    }
+
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        self.cleanup()
     }
 
     fn window_event(
@@ -634,15 +641,6 @@ impl ApplicationHandler<Graphics2D> for Engine {
                 // Update mouse position
                 self.mouse_pos = [position.x as f32, position.y as f32];
             }
-            WindowEvent::RedrawRequested => {
-                let graphics = match &mut self.graphics {
-                    Some(canvas) => canvas,
-                    None => return,
-                };
-                // this is the only place we want to call graphics.render()
-                // any other situation should use self.redraw();
-                //let _ = graphics.render(&self.world, &self.physics);
-            }
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
@@ -669,93 +667,4 @@ impl ApplicationHandler<Graphics2D> for Engine {
             graphics.process_camera_event(&event);
         }
     }
-
-    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
-        self.cleanup()
-    }
-}
-
-#[derive(Debug)]
-struct LuaCameraKeyBinding {
-    key: String,
-    action: String,
-}
-
-#[derive(Debug)]
-struct LuaCameraConfig {
-    mode: CameraOption,
-    speed: f32,
-    keys: Vec<LuaCameraKeyBinding>,
-}
-
-impl LuaCameraConfig {
-    fn from_lua_table(table: Table) -> Result<Self> {
-        let mode = table.get("mode").unwrap_or("Follow".to_string());
-        let speed: f32 = table.get("speed")?;
-
-        let keys_table: Table = table.get("keys")?;
-        let mut keys = Vec::new();
-
-        for pair in keys_table.sequence_values::<Table>() {
-            let key_binding_table = pair?;
-            let key: String = key_binding_table.get("key")?;
-            let action: String = key_binding_table.get("action")?;
-
-            keys.push(LuaCameraKeyBinding { key, action });
-        }
-
-        Ok(LuaCameraConfig {
-            mode: CameraOption::from_str(&mode).unwrap_or(CameraOption::Follow),
-            speed,
-            keys,
-        })
-    }
-
-    fn parse_keycode(s: &str) -> Result<KeyCode> {
-        use KeyCode::*;
-        let code = match s {
-            "W" => KeyW,
-            "A" => KeyA,
-            "S" => KeyS,
-            "D" => KeyD,
-            "Q" => KeyQ,
-            "E" => KeyE,
-            "Up" => ArrowUp,
-            "Down" => ArrowDown,
-            "Left" => ArrowLeft,
-            "Right" => ArrowRight,
-            other => return Err(mlua::Error::RuntimeError(format!("Unknown key: {}", other))),
-        };
-        Ok(code)
-    }
-
-    fn parse_camera_action(s: &str) -> Result<CameraAction> {
-        use CameraAction::*;
-        let action = match s {
-            "MoveForward" => MoveForward,
-            "MoveBackward" => MoveBackward,
-            "MoveLeft" => MoveLeft,
-            "MoveRight" => MoveRight,
-            "MoveUp" => MoveUp,
-            "MoveDown" => MoveDown,
-            "YawLeft" => YawLeft,
-            "YawRight" => YawRight,
-            "PitchUp" => PitchUp,
-            "PitchDown" => PitchDown,
-            "RollLeft" => RollLeft,
-            "RollRight" => RollRight,
-            other => {
-                return Err(mlua::Error::RuntimeError(format!(
-                    "Unknown camera action: {}",
-                    other
-                )))
-            }
-        };
-        Ok(action)
-    }
-}
-
-struct FPS {
-    pub frame_count: u32,
-    pub time_accum: f32,
 }
