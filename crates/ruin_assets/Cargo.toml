@@ -1,0 +1,9 @@
+[package]
+name = "ruin_assets"
+version = "0.1.0-dev"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+wgpu = "25.0"
+image = { version = "0.25.6", features = ["png", "jpeg"] }

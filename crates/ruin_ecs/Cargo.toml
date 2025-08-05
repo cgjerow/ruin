@@ -1,0 +1,11 @@
+[package]
+name = "ruin_ecs"
+version = "0.1.0-dev"
+edition = "2021"
+
+[dependencies]
+ruin_assets = { path = "../ruin_assets" }
+ruin_bitmaps = { path = "../ruin_bitmaps" }
+mlua = { version = "0.10.5", features = ["lua54"] }
+cgmath = "0.18.0"
+glam = { version = "0.30.5" }

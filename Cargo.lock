@@ -690,6 +690,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "glam"
+version = "0.30.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2d1aab06663bdce00d6ca5e5ed586ec8d18033a771906c993a1e3755b368d85"
+
+[[package]]
 name = "glow"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1911,17 +1917,101 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a457e416a0f90d246a4c3288bd7a25b2304ca727f253f95be383dd17af56be8f"
 
 [[package]]
-name = "rust-game-engine"
-version = "0.1.0"
+name = "ruin-game-engine"
+version = "0.1.0-dev"
 dependencies = [
  "anyhow",
- "bytemuck",
  "cgmath",
  "image",
  "mlua",
  "pollster",
  "rand 0.9.1",
+ "ruin_assets",
+ "ruin_bitmaps",
+ "ruin_camera",
+ "ruin_canvas",
+ "ruin_debug",
+ "ruin_ecs",
+ "ruin_graphics",
+ "ruin_lua_runtime",
+ "ruin_player_controller",
  "wgpu",
+ "winit",
+]
+
+[[package]]
+name = "ruin_assets"
+version = "0.1.0-dev"
+dependencies = [
+ "anyhow",
+ "image",
+ "wgpu",
+]
+
+[[package]]
+name = "ruin_bitmaps"
+version = "0.1.0-dev"
+
+[[package]]
+name = "ruin_camera"
+version = "0.1.0-dev"
+dependencies = [
+ "cgmath",
+]
+
+[[package]]
+name = "ruin_canvas"
+version = "0.1.0-dev"
+dependencies = [
+ "cgmath",
+ "mlua",
+ "ruin_ecs",
+ "ruin_lua_runtime",
+]
+
+[[package]]
+name = "ruin_debug"
+version = "0.1.0-dev"
+
+[[package]]
+name = "ruin_ecs"
+version = "0.1.0-dev"
+dependencies = [
+ "cgmath",
+ "glam",
+ "mlua",
+ "ruin_assets",
+ "ruin_bitmaps",
+]
+
+[[package]]
+name = "ruin_graphics"
+version = "0.1.0-dev"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "cgmath",
+ "image",
+ "ruin_assets",
+ "ruin_camera",
+ "ruin_canvas",
+ "ruin_ecs",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
+name = "ruin_lua_runtime"
+version = "0.1.0-dev"
+dependencies = [
+ "mlua",
+ "ruin_ecs",
+]
+
+[[package]]
+name = "ruin_player_controller"
+version = "0.1.0-dev"
+dependencies = [
  "winit",
 ]
 

@@ -1,0 +1,8 @@
+[package]
+name = "ruin_lua_runtime"
+version = "0.1.0-dev"
+edition = "2021"
+
+[dependencies]
+ruin_ecs = { path = "../ruin_ecs" }
+mlua = { version = "0.10.5", features = ["lua54", "vendored"] }

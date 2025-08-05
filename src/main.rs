@@ -1,28 +1,13 @@
 #[macro_use]
-mod debug;
-mod bitmaps;
-mod camera_2d;
-mod camera_3d;
-mod components_systems;
 mod engine;
-mod graphics;
-mod graphics_2d;
-mod graphics_3d;
-mod inputs;
-mod lua_scriptor;
-mod scene;
-mod texture;
-mod ui_canvas;
-mod world;
 
 use engine::{Engine, EngineConfig};
 use mlua::prelude::*;
+use ruin_camera::Camera2DConfig;
+use ruin_lua_runtime::{LuaExtendedExecutor, LuaScriptor};
 use winit::event_loop::EventLoop;
 
-use crate::{
-    engine::{CameraOption, Dimensions},
-    lua_scriptor::LuaScriptor,
-};
+use crate::engine::{CameraOption, Dimensions};
 
 fn load_engine_config() -> EngineConfig {
     let mut scriptor = LuaScriptor::new(Lua::new());
@@ -41,7 +26,7 @@ fn load_engine_config() -> EngineConfig {
         height,
         dimensions: Dimensions::Two,
         camera: CameraOption::Follow,
-        camera2d_config: camera_2d::camera_2d::Camera2DConfig {
+        camera2d_config: Camera2DConfig {
             zoom: camera2d_config.get("zoom").unwrap_or(15.0),
             initial_position: [
                 camera2d_config.get("initial_pos_x").unwrap_or(0.0),
@@ -60,7 +45,7 @@ fn load_engine_config() -> EngineConfig {
 
 fn main() -> anyhow::Result<()> {
     let event_loop = EventLoop::with_user_event().build()?;
-    let lua = lua_scriptor::LuaExtendedExecutor::new("main");
+    let lua = LuaExtendedExecutor::new("main");
     let mut app = Engine::new(load_engine_config(), lua);
     event_loop.run_app(&mut app)?;
 

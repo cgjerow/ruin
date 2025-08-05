@@ -1,0 +1,10 @@
+[package]
+name = "ruin_canvas"
+version = "0.1.0-dev"
+edition = "2021"
+
+[dependencies]
+ruin_ecs = { path = "../ruin_ecs" }
+ruin_lua_runtime = { path = "../ruin_lua_runtime" }
+cgmath = "0.18.0"
+mlua = { version = "0.10.5", features = ["lua54"] }

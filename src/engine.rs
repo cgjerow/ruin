@@ -1,26 +1,20 @@
-use crate::bitmaps::vecbool_to_u8;
-use crate::camera_2d::camera_2d::Camera2DConfig;
-use crate::camera_2d::Camera2D;
-use crate::camera_3d::CameraAction;
-use crate::components_systems::physics2d::{self, PhysicsWorld, Point2D};
-use crate::components_systems::physics_2d::{FlipComponent, Shape2D, Transform2D};
-use crate::components_systems::{
-    animation_system_update_frames, damage, set_entity_state, ActionState, ActionStateComponent,
-    Animation, AnimationComponent, Entity, HealthComponent, SpriteSheetComponent,
-};
-use crate::graphics::Graphics;
-use crate::inputs::{keycode_to_str, mousebutton_to_str};
-use crate::lua_scriptor::LuaExtendedExecutor;
-use crate::scene::{Element, Scene};
-use crate::texture::Texture;
-use crate::ui_canvas::{parse_scene_from_lua, Canvas};
-use crate::world::World;
-use crate::{debug, graphics_2d, graphics_3d};
 use cgmath::Vector2;
-use debug::Debug;
-use graphics_2d::Graphics2D;
-use graphics_3d::Graphics3D;
 use mlua::{Result, Table};
+use ruin_assets::{Handle, ImageTexture};
+use ruin_bitmaps::vecbool_to_u8;
+use ruin_camera::{Camera2D, Camera2DConfig, CameraAction};
+use ruin_canvas::{parse_scene_from_lua, Canvas};
+use ruin_debug::{debug_log, Debug};
+use ruin_ecs::physics_2d::{Area2D, Body2D, BodyType2D, PhysicsWorld, Point2D, Shape2D, Vector2D};
+use ruin_ecs::world::World;
+use ruin_ecs::{
+    animation_system_update_frames, set_entity_state, ActionState, ActionStateComponent, Animation,
+    AnimationComponent, Entity, FlipComponent, HealthComponent, SpriteSheetComponent, Transform2D,
+};
+use ruin_graphics::graphics_2d::Graphics2D;
+use ruin_graphics::Graphics;
+use ruin_lua_runtime::LuaExtendedExecutor;
+use ruin_player_controller::{keycode_to_str, mousebutton_to_str};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -50,7 +44,6 @@ pub struct Engine {
     target_rate: Option<Duration>,
     last_frame: Instant,
     debugger: Debug,
-    asset_cache: HashMap<String, Texture>,
     lua_context: LuaExtendedExecutor,
     world: World,
     physics: PhysicsWorld,
@@ -119,7 +112,6 @@ impl Engine {
             fps_specified: fps_opt != None,
             target_rate: target_rate,
             last_frame: Instant::now() - target_rate.unwrap_or_default(),
-            asset_cache: HashMap::new(),
             width: config.width,
             height: config.height,
             world: World::new(),
@@ -133,17 +125,12 @@ impl Engine {
         }
     }
 
-    fn get_texture(&mut self, id: String) -> Texture {
+    fn load_texture(&mut self, id: String) -> Handle<ImageTexture> {
         let path = format!("./src/assets/{}", id);
-        let texture = self.asset_cache.entry(id.to_string()).or_insert_with(|| {
-            debug_log!(self.debugger, "Initialized asset: {}", path);
-            self.graphics
-                .as_mut()
-                .expect("Graphics not initialized")
-                .load_texture_from_path(&id, &path)
-        });
-
-        texture.clone()
+        self.graphics
+            .as_mut()
+            .expect("Graphics not initialized")
+            .load_texture_from_path(&id, &path)
     }
 
     fn flip(&mut self, entity: u32, x: bool, y: bool) {
@@ -193,50 +180,25 @@ impl Engine {
         self.physics_accumulator += dt32;
 
         let _ = update.call::<()>(dt32);
-        let b = Instant::now();
+
         while self.physics_accumulator >= self.physics_tick_rate {
             self.physics_accumulator -= self.physics_tick_rate;
 
-            let a = Instant::now();
             if self.dimensions == Dimensions::Two {
                 self.physics.step(self.physics_tick_rate);
-                /*
-                let next_transforms = physics_2d::transform_system_calculate_intended_position(
-                    &self.world,
-                    self.physics_tick_rate,
-                );
-                let bp = Instant::now();
-                let collisions = physics_2d::collision_system(&self.world, &next_transforms);
-                physics_2d::resolve_collisions(&mut self.world, collisions.clone());
-                println!("Collisions : {:?}", bp.elapsed().as_secs_f64());
-                let collisions_table = self
-                    .lua_context
-                    .rust_collisions_to_lua_2d(collisions)
-                    .unwrap();
-                self.lua_context
-                    .get_function("ENGINE_on_collision")
-                    .call::<()>(collisions_table)
-                    .expect("Error handling collisions");
-                physics_2d::transform_system_physics(&mut self.world, self.physics_tick_rate);
-                */
-
                 if self.camera_mode == CameraOption::Follow {
                     self.update_camera_follow_player();
                 }
             }
             self.world.update_positions(self.physics.positions());
-            //println!("One P Loop : {:?}", a.elapsed().as_secs_f64());
         }
-        //println!("All P Loops : {:?}", b.elapsed().as_secs_f64());
 
-        let c = Instant::now();
         let _ = self
             .lua_context
             .get_function("ENGINE_after_physics")
             .call::<()>(dt32);
 
         animation_system_update_frames(&mut self.world, dt32);
-        //println!("After P Loops : {:?}", c.elapsed().as_secs_f64());
         return Ok(());
     }
 
@@ -249,26 +211,15 @@ impl Engine {
     }
 
     fn apply_force_2d(&mut self, id: Entity, fx: f32, fy: f32) {
-        if self.dimensions == Dimensions::Two {
-            self.world
-                .physics_bodies_2d
-                .get_mut(&id)
-                .unwrap()
-                .apply_force(cgmath::Vector2 { x: fx, y: fy });
-        }
+        // TODO
     }
 
     fn apply_impulse_2d(&mut self, id: Entity, fx: f32, fy: f32) {
-        self.world
-            .physics_bodies_2d
-            .get_mut(&id)
-            .unwrap()
-            .apply_impulse(cgmath::Vector2 { x: fx, y: fy });
+        // TODO
     }
 
     fn set_velocity_2d(&mut self, id: Entity, vx: f32, vy: f32) {
-        self.physics
-            .set_velocity(&id, physics2d::Vector2D::new(vx, vy));
+        self.physics.set_velocity(&id, Vector2D::new(vx, vy));
     }
 
     fn apply_masks_and_layers(&mut self, id: Entity, masks: Table, layers: Table) {
@@ -301,7 +252,7 @@ impl Engine {
     }
 
     fn damage(&mut self, id: Entity, amount: u16) -> bool {
-        damage(&mut self.world, &id, amount)
+        ruin_ecs::damage(&mut self.world, &id, amount)
     }
 
     fn get_health_table(&self, id: Entity) -> Table {
@@ -328,7 +279,7 @@ impl Engine {
         let entity = self.canvas.new_entity();
         let scene = parse_scene_from_lua(lua_scene, &mut self.canvas);
         for (_, element) in scene.0.elements.iter() {
-            self.get_texture(element.sprite_sheet.clone());
+            self.load_texture(element.sprite_sheet.clone());
         }
         self.canvas.add_scene(entity.clone(), scene);
         [entity.into()]
@@ -381,14 +332,13 @@ impl Engine {
                 let action_state = ActionState::from(numeric_key);
 
                 let sprite_id: Entity = self.world.new_entity();
-                let texture = self.get_texture(sprite_path.clone());
+                let handle = self.load_texture(sprite_path.clone());
                 animation.sprite_sheet_id = sprite_id;
 
                 self.world.sprite_sheets.insert(
                     sprite_id.clone(),
                     SpriteSheetComponent {
-                        texture_id: sprite_path,
-                        texture,
+                        image_texture: handle,
                     },
                 );
                 animations_map.insert(action_state, animation);
@@ -432,17 +382,17 @@ impl Engine {
 
             self.physics.add_body(
                 entity.clone(),
-                physics2d::Body2D::new(
+                Body2D::new(
                     Point2D { x, y },
-                    physics2d::Vector2D { x: 0.0, y: 0.0 },
-                    physics2d::BodyType2D::from(lua_element.get("type").unwrap_or(0)),
+                    Vector2D { x: 0.0, y: 0.0 },
+                    BodyType2D::from(lua_element.get("type").unwrap_or(0)),
                     true,
                 ),
             );
             self.physics.add_collider(
                 &entity,
-                physics2d::Area2D {
-                    shape: physics2d::Shape2D::Rectangle {
+                Area2D {
+                    shape: Shape2D::Rectangle {
                         half_extents: cgmath::Vector2 {
                             x: 0.5 * collision_box_x_modifier * width, // assuming all entities are using the same tile size (1 world unit) for now
                             y: 0.5 * collision_box_y_modifier * height,
@@ -574,7 +524,7 @@ impl Engine {
         for asset in assets.sequence_values::<String>() {
             let asset = asset.unwrap_or("".to_string());
             if asset != "" {
-                let _ = self.get_texture(asset.clone());
+                self.load_texture(asset.clone());
             };
         }
     }
@@ -602,7 +552,7 @@ impl Engine {
     }
 }
 
-impl ApplicationHandler<Graphics3D> for Engine {
+impl ApplicationHandler<Graphics2D> for Engine {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         let now = Instant::now();
         let dt = self.last_frame.elapsed();

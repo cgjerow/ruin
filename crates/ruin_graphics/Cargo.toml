@@ -1,0 +1,16 @@
+[package]
+name = "ruin_graphics"
+version = "0.1.0-dev"
+edition = "2021"
+
+[dependencies]
+ruin_ecs = { path = "../ruin_ecs" }
+ruin_assets = { path = "../ruin_assets" }
+ruin_canvas = { path = "../ruin_canvas" }
+ruin_camera = { path = "../ruin_camera" }
+anyhow = "1.0"
+winit = "0.30.11"
+wgpu = "25.0"
+bytemuck = "1.23.1"
+image = { version = "0.25.6", features = ["png", "jpeg"] }
+cgmath = "0.18.0"
