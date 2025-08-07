@@ -14,7 +14,7 @@ impl LuaScriptor {
 
     pub fn execute(&mut self, script: &str) -> LuaTable {
         // by convention all lua scripts will be in src/scripts/
-        let lua_code = fs::read_to_string(format!("src/lua_runtime/scripts/{}.lua", script))
+        let lua_code = fs::read_to_string(format!("lua_runtime/scripts/{}.lua", script))
             .expect(&format!("Failed to read {}.lua", script));
         self.lua
             .load(&lua_code)
@@ -40,7 +40,7 @@ pub struct LuaExtendedExecutor {
 impl LuaExtendedExecutor {
     pub fn new(script: &str) -> Self {
         let lua = Lua::new();
-        let lua_path = "./src/lua_runtime/scripts/?.lua";
+        let lua_path = "./lua_runtime/scripts/?.lua";
         let code = format!(
             r#"
             package.path = package.path .. ";{}"
@@ -48,7 +48,7 @@ impl LuaExtendedExecutor {
             lua_path
         );
         let _ = lua.load(&code).exec();
-        let path = format!("./src/lua_runtime/scripts/{}.lua", script);
+        let path = format!("./lua_runtime/scripts/{}.lua", script);
         let contents = fs::read_to_string(&path).expect("Unable to read Lua script file");
         lua.load(&contents)
             .exec()

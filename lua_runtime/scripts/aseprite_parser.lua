@@ -67,7 +67,7 @@ local function AnimationBuilder()
 end
 
 local function load_aseprite_animation(animation_name, path, json_file, with_transparency)
-	local json_path = "src/assets/" .. path .. json_file
+	local json_path = "assets/" .. path .. json_file
 	local file, io_err = io.open(json_path, "r")
 	if not file then
 		return nil, ("cannot open “%s”: %s"):format(json_path, io_err)

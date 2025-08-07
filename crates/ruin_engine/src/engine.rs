@@ -108,7 +108,7 @@ impl Engine {
     }
 
     fn load_texture(&mut self, id: String) -> Handle<ImageTexture> {
-        let path = format!("./src/assets/{}", id);
+        let path = format!("./assets/{}", id);
         self.graphics
             .as_mut()
             .expect("Graphics not initialized")
