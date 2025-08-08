@@ -40,19 +40,17 @@ pub struct LuaExtendedExecutor {
 impl LuaExtendedExecutor {
     pub fn new(script: &str) -> Self {
         let lua = Lua::new();
-        let lua_path = "./lua_runtime/scripts/?.lua";
-        let code = format!(
-            r#"
-            package.path = package.path .. ";{}"
-            "#,
-            lua_path
-        );
-        let _ = lua.load(&code).exec();
-        let path = format!("./lua_runtime/scripts/{}.lua", script);
+        let code = r#"
+            package.path = package.path .. ";./lua_runtime/?.lua"
+            package.path = package.path .. ";./lua_runtime/scripts/?.lua"
+            "#;
+        let _ = lua.load(code).exec();
+        let path = format!("./lua_runtime/{}.lua", script);
+        println!("path: {:?}", path);
         let contents = fs::read_to_string(&path).expect("Unable to read Lua script file");
         lua.load(&contents)
             .exec()
-            .expect("Unable to execute main.lua");
+            .expect("Unable to execute lua file.");
         Self { lua }
     }
 
@@ -65,7 +63,7 @@ impl LuaExtendedExecutor {
             .lua
             .globals()
             .get(method)
-            .expect("function does not exist");
+            .expect(&format!("function does not exist: {:?}", method));
         return lua_func;
     }
 

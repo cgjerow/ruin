@@ -5,7 +5,7 @@ use ruin_assets::{Handle, ImageTexture};
 use ruin_ecs::{
     physics_2d::Shape2D,
     world::{RenderElement2D, RenderQueue2D},
-    ActionState, Animation, AnimationComponent, Entity,
+    ActionState, ActionStateComponent, Animation, AnimationComponent, Entity,
 };
 use ruin_lua_runtime::LuaExtendedExecutor;
 
@@ -32,6 +32,7 @@ pub struct Canvas {
     next_id: u32,
     scenes: HashMap<Entity, CanvasScene>,
     active_scenes: Vec<Entity>,
+    action_states: HashMap<Entity, ActionStateComponent>,
 }
 
 impl Canvas {
@@ -40,6 +41,7 @@ impl Canvas {
             next_id: 0,
             scenes: HashMap::new(),
             active_scenes: Vec::new(),
+            action_states: HashMap::new(),
         }
     }
 
@@ -153,4 +155,3 @@ fn parse_element_from_lua(
         table.get("initially_active").unwrap_or(false),
     )
 }
-

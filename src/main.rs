@@ -41,7 +41,7 @@ fn load_engine_config() -> EngineConfig {
 
 fn main() -> anyhow::Result<()> {
     let event_loop = EventLoop::with_user_event().build()?;
-    let lua = LuaExtendedExecutor::new("main");
+    let lua = LuaExtendedExecutor::new("ruin");
     let mut app = Engine::new(load_engine_config(), lua);
     event_loop.run_app(&mut app)?;
 

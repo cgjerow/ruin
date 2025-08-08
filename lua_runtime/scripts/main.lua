@@ -179,14 +179,12 @@ ENGINE_HANDLES = {
 --
 
 -- Called once per frame, after all physics substeps have run
-function ENGINE_after_physics(dt)
-end
 
-function ENGINE_input_event(input, is_pressed, mouse_position)
+function ruin.handle_input(input, is_pressed, mouse_position)
 	CONFIG.controller:update(string.upper(input), is_pressed, mouse_position, engine.now_ns())
 end
 
-function ENGINE_on_collision(cols)
+function ruin.on_collision(cols)
 	for _, col in ipairs(cols) do
 		collisions.on_each_collision(col)
 	end
@@ -199,7 +197,7 @@ local fps_debug = {
 }
 
 local count = 0;
-function ENGINE_update(dt)
+function ruin.update(dt)
 	local x = math.random(0, 100)
 	local y = math.random(0, 100)
 	local flip_x = math.random(0, 1)
@@ -319,7 +317,7 @@ function ENGINE_update(dt)
 	end
 end
 
-function ENGINE_load()
+function ruin.load()
 	--[[
 	engine.create_ui_scene({
 		elements = {
