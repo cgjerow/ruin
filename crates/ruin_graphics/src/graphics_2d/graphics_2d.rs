@@ -318,7 +318,7 @@ impl Graphics2D {
             });
 
         self.draw_game(world, &mut encoder, &view);
-        // self.draw_canvas(canvas, &mut encoder, &view);
+        self.draw_canvas(canvas, &mut encoder, &view);
         self.draw_debug_batch(world, physics, &mut encoder, &view);
         self.queue.submit(Some(encoder.finish()));
         self.texture_batch_context.reset_context();

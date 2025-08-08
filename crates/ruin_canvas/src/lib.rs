@@ -13,13 +13,13 @@ pub struct CanvasElement {
     shape: Shape2D,
     pub sprite_sheet: String,
     animation: AnimationComponent,
+    pub elements: HashMap<Entity, CanvasElements>,
+    active_elements: Vec<Entity>,
 }
 
 #[derive(Debug)]
 pub struct CanvasScene {
-    pub scenes: HashMap<Entity, CanvasScene>,
     pub elements: HashMap<Entity, CanvasElement>,
-    active_scenes: Vec<Entity>,
     active_elements: Vec<Entity>,
 }
 
@@ -80,7 +80,6 @@ impl Canvas {
     }
 }
 
-/*
 // Lua
 pub fn parse_scene_from_lua(table: mlua::Table, canvas: &mut Canvas) -> (CanvasScene, bool) {
     let elements_table: mlua::Table = table.get("elements").unwrap();
@@ -100,14 +99,6 @@ pub fn parse_scene_from_lua(table: mlua::Table, canvas: &mut Canvas) -> (CanvasS
         elements.insert(id, e_tup.0);
     }
 
-    for val in scenes_table.sequence_values() {
-        let id = canvas.new_entity();
-        let s_tup = parse_scene_from_lua(val.unwrap(), canvas);
-        if s_tup.1 {
-            active_scenes.push(id.clone());
-        }
-        scenes.insert(id, s_tup.0);
-    }
 
     (
         CanvasScene {
@@ -127,6 +118,14 @@ fn parse_element_from_lua(table: mlua::Table) -> (CanvasElement, bool) {
     let animation = Animation::from_lua_table(first.get(0).unwrap());
     let animations = HashMap::from([(ActionState::Custom(0), animation.0.clone())]);
 
+    for val in scenes_table.sequence_values() {
+        let id = canvas.new_entity();
+        let s_tup = parse_scene_from_lua(val.unwrap(), canvas);
+        if s_tup.1 {
+            active_scenes.push(id.clone());
+        }
+        scenes.insert(id, s_tup.0);
+    }
     (
         CanvasElement {
             position: Vector2 {
@@ -153,4 +152,3 @@ fn parse_element_from_lua(table: mlua::Table) -> (CanvasElement, bool) {
         table.get("initially_active").unwrap_or(false),
     )
 }
-*/

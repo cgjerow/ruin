@@ -3,7 +3,7 @@ use mlua::{Result, Table};
 use ruin_assets::{Handle, ImageTexture};
 use ruin_bitmaps::vecbool_to_u8;
 use ruin_camera::{Camera2D, Camera2DConfig, CameraOption, Dimensions};
-use ruin_canvas::Canvas;
+use ruin_canvas::{parse_scene_from_lua, Canvas};
 use ruin_debug::{debug_log, Debug};
 use ruin_ecs::physics_2d::{Area2D, Body2D, BodyType2D, PhysicsWorld, Point2D, Shape2D, Vector2D};
 use ruin_ecs::world::World;
@@ -249,13 +249,11 @@ impl Engine {
 
     fn create_ui_scene(&mut self, lua_scene: mlua::Table) -> [u32; 1] {
         let entity = self.canvas.new_entity();
-        /*
         let scene = parse_scene_from_lua(lua_scene, &mut self.canvas);
         for (_, element) in scene.0.elements.iter() {
             self.load_texture(element.sprite_sheet.clone());
         }
         self.canvas.add_scene(entity.clone(), scene);
-        */
         [entity.into()]
     }
 
