@@ -1925,6 +1925,7 @@ version = "0.1.0-dev"
 dependencies = [
  "cgmath",
  "mlua",
+ "ruin_assets",
  "ruin_ecs",
  "ruin_lua_runtime",
 ]

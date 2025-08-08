@@ -1,26 +1,30 @@
 use std::collections::HashMap;
 
 use cgmath::Vector2;
+use ruin_assets::{Handle, ImageTexture};
 use ruin_ecs::{
-    physics_2d::Shape2D, world::RenderQueue2D, ActionState, Animation, AnimationComponent, Entity,
+    physics_2d::Shape2D,
+    world::{RenderElement2D, RenderQueue2D},
+    ActionState, Animation, AnimationComponent, Entity,
 };
 use ruin_lua_runtime::LuaExtendedExecutor;
+
+pub type Index = u32;
 
 #[derive(Debug)]
 pub struct CanvasElement {
     position: Vector2<f32>,
     scale: Vector2<f32>,
     shape: Shape2D,
-    pub sprite_sheet: String,
     animation: AnimationComponent,
-    pub elements: HashMap<Entity, CanvasElements>,
-    active_elements: Vec<Entity>,
+    pub elements: Vec<CanvasElement>,
+    active_elements: Vec<Index>,
 }
 
 #[derive(Debug)]
 pub struct CanvasScene {
-    pub elements: HashMap<Entity, CanvasElement>,
-    active_elements: Vec<Entity>,
+    pub elements: Vec<CanvasElement>,
+    active_elements: Vec<Index>,
 }
 
 #[derive(Debug)]
@@ -58,9 +62,8 @@ impl Canvas {
             opaque: Vec::new(),
         };
 
-        /*
         for entity in self.active_scenes.iter() {
-            for (_, element) in self.scenes.get(entity).unwrap().elements.iter() {
+            for element in self.scenes.get(entity).unwrap().elements.iter() {
                 queue.transparent.push(RenderElement2D {
                     shape: &Shape2D::Rectangle {
                         half_extents: Vector2 { x: 1.0, y: 1.0 },
@@ -68,64 +71,60 @@ impl Canvas {
                     position: [0.0, 0.0],
                     size: [1.0, 1.0],
                     z_order: 0.0,
-                    texture_id: element.sprite_sheet.clone(),
+                    image_texture: element
+                        .animation
+                        .animations
+                        .get(&ActionState::Custom(0))
+                        .unwrap()
+                        .sprite_sheet_id,
                     uv_coords: element.animation.current_frame.uv_coords,
                 });
             }
         }
-        TODO
-        */
 
         queue
     }
 }
 
 // Lua
-pub fn parse_scene_from_lua(table: mlua::Table, canvas: &mut Canvas) -> (CanvasScene, bool) {
+pub fn parse_scene_from_lua(
+    table: mlua::Table,
+    texture_loader: &mut impl FnMut(String) -> Handle<ImageTexture>,
+) -> (CanvasScene, bool) {
     let elements_table: mlua::Table = table.get("elements").unwrap();
-    let scenes_table: mlua::Table = table.get("scenes").unwrap();
 
-    let mut scenes = HashMap::new();
-    let mut elements = HashMap::new();
+    let mut elements = Vec::new();
     let mut active_elements = Vec::<Entity>::new();
-    let mut active_scenes = Vec::<Entity>::new();
 
+    let mut index = 0;
     for val in elements_table.sequence_values() {
-        let id = canvas.new_entity();
-        let e_tup = parse_element_from_lua(val.unwrap());
+        let e_tup = parse_element_from_lua(val.unwrap(), texture_loader);
         if e_tup.1 {
-            active_elements.push(id.clone());
+            active_elements.push(index);
         }
-        elements.insert(id, e_tup.0);
+        elements.push(e_tup.0);
+        index += 1;
     }
-
 
     (
         CanvasScene {
-            scenes,
             elements,
-            active_scenes,
             active_elements,
         },
         table.get("initially_active").unwrap_or(false),
     )
 }
 
-fn parse_element_from_lua(table: mlua::Table) -> (CanvasElement, bool) {
+fn parse_element_from_lua(
+    table: mlua::Table,
+    texture_loader: &mut impl FnMut(String) -> Handle<ImageTexture>,
+) -> (CanvasElement, bool) {
     println!("{:?}", LuaExtendedExecutor::pretty_print_table(&table, 0));
     let first: mlua::Table = table.get("animations").unwrap();
     println!("{:?}", LuaExtendedExecutor::pretty_print_table(&first, 0));
-    let animation = Animation::from_lua_table(first.get(0).unwrap());
-    let animations = HashMap::from([(ActionState::Custom(0), animation.0.clone())]);
-
-    for val in scenes_table.sequence_values() {
-        let id = canvas.new_entity();
-        let s_tup = parse_scene_from_lua(val.unwrap(), canvas);
-        if s_tup.1 {
-            active_scenes.push(id.clone());
-        }
-        scenes.insert(id, s_tup.0);
-    }
+    let animation = Animation::from_lua_table(first.get(0).unwrap(), texture_loader);
+    let current_frame = animation.frames[0].clone();
+    let animations = HashMap::from([(ActionState::Custom(0), animation)]);
     (
         CanvasElement {
             position: Vector2 {
@@ -144,11 +143,14 @@ fn parse_element_from_lua(table: mlua::Table) -> (CanvasElement, bool) {
             },
             animation: AnimationComponent {
                 animations,
-                current_frame: animation.frames[0].clone(),
+                current_frame,
                 current_frame_index: 1,
                 frame_timer: 0.0,
             },
+            elements: Vec::new(),
+            active_elements: Vec::new(),
         },
         table.get("initially_active").unwrap_or(false),
     )
 }
+

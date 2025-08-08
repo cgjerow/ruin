@@ -6,5 +6,6 @@ edition = "2021"
 [dependencies]
 ruin_ecs = { path = "../ruin_ecs" }
 ruin_lua_runtime = { path = "../ruin_lua_runtime" }
+ruin_assets = { path = "../ruin_assets" }
 cgmath = "0.18.0"
 mlua = { version = "0.10.5", features = ["lua54"] }

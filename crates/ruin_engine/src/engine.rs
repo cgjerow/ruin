@@ -249,10 +249,8 @@ impl Engine {
 
     fn create_ui_scene(&mut self, lua_scene: mlua::Table) -> [u32; 1] {
         let entity = self.canvas.new_entity();
-        let scene = parse_scene_from_lua(lua_scene, &mut self.canvas);
-        for (_, element) in scene.0.elements.iter() {
-            self.load_texture(element.sprite_sheet.clone());
-        }
+        let mut loader = |path: String| self.load_texture(path);
+        let scene = parse_scene_from_lua(lua_scene, &mut loader);
         self.canvas.add_scene(entity.clone(), scene);
         [entity.into()]
     }

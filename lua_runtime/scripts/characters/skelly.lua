@@ -20,7 +20,7 @@ local function new_skelly(x, y)
 			:build()
 end
 
-local function move_skellies(dt)
+local function update(dt)
 	local speed = 10
 	local lunge = 30
 	local player_p = engine.get_position_2d(WORLD.player_id())
@@ -91,4 +91,4 @@ local function move_skellies(dt)
 	end
 end
 
-return { new = new_skelly, move = move_skellies }
+return { new = new_skelly, update = update }

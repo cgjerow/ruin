@@ -122,7 +122,6 @@ ENGINE_HANDLES = {
 
 	set_state = function(id, state)
 		if not id == WORLD.player_id() or not WORLD.is_game_over() then
-			;
 			engine.set_state(id, state)
 		end
 	end,
@@ -211,6 +210,7 @@ function ENGINE_update(dt)
 	if flip_y == 1 then
 		x = x * -1
 	end
+
 	if (count < 300) then
 		local s = skelly.new(x, y)
 		s.is_skelly = true
@@ -260,7 +260,7 @@ function ENGINE_update(dt)
 	end
 	]]
 
-	skelly.move(dt)
+	skelly.update(dt)
 
 	--[[ PROCESS INPUT ]]
 	--everything after this will only run while input is enabled
