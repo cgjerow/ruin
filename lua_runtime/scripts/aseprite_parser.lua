@@ -1,5 +1,40 @@
 local json = require("json") -- adapt to your preferred JSON library
 
+local function StatefulUiBuilder()
+	local ui = {
+		sprite = "",
+		tile_height = 16,
+		tile_width = 16,
+		looped = false,
+		is_transparent = true,
+		frames = {},
+	}
+
+	local builder = {}
+
+	function builder:set_sprite(s)
+		ui.sprite = s
+		return builder
+	end
+
+	function builder:add_frame(x, y, w, h, duration)
+		table.insert(ui.frames, { x = x, y = y, w = w, h = h, duration = duration })
+		return builder
+	end
+
+	function builder:set_layout(w, h)
+		ui.rows = w // ui.tile_width
+		ui.columns = h // ui.tile_height
+		return builder
+	end
+
+	function builder:build()
+		return ui
+	end
+
+	return builder
+end
+
 local function AnimationBuilder()
 	local anim = {
 		sprite = "",
@@ -64,6 +99,68 @@ local function AnimationBuilder()
 	end
 
 	return builder
+end
+
+local function load_image_data(path, file_name)
+	local json_path = "assets/" .. path .. file_name .. ".json"
+	local file, io_err = io.open(json_path, "r")
+	if not file then
+		return nil, ("cannot open “%s”: %s"):format(json_path, io_err)
+	end
+	local raw = file:read("*a")
+	file:close()
+	local data, pos, decode_err = json.decode(raw)
+	if not data then
+		return nil, ("JSON error in “%s” at byte %d: %s"):format(json_path, pos or 0, decode_err)
+	end
+
+	local frames = data.frames
+	if not frames then
+		return nil, ("no frames found in “%s”"):format(json_path)
+	end
+
+	return {
+		frames = frames,
+		slices = data.meta.slices,
+		size = data.meta.size,
+		image = data.meta.image, -- TODO: This will need to change for texture atlas when we map to that for UVs instead
+	}
+end
+
+local function load_aseprite_ui_texture_atlas(path, file_name, animations)
+	local data, error = load_image_data(path, file_name)
+	if data == nil then return nil, error end
+
+	local frames = data.frames
+	animations = {
+		states = { "default", "hovered", "pressed" }
+	}
+
+	local results = {}
+	for i, a in ipairs(animations.states) do
+		local frame_index = 0
+		local id = a .. "." .. frame_index
+		local frame = frames[id]
+
+		if frame == nil then goto continue end
+
+		local builder = StatefulUiBuilder()
+				:set_sprite(path .. file_name)
+
+		print(id)
+		while not (frame == nil) do
+			builder:add_frame(frame.frame.x, frame.frame.y, frame.frame.w, frame.frame.h, frame.duration)
+
+			frame_index = frame_index + 1
+			id = a .. "." .. frame_index
+			frame = frames[id]
+		end
+		results[a] = builder:build()
+
+		::continue::
+	end
+
+	return results
 end
 
 local function load_aseprite_animation(animation_name, path, json_file, with_transparency)
@@ -134,4 +231,8 @@ local function load_aseprite_animation(animation_name, path, json_file, with_tra
 	return builder:build()
 end
 
-return load_aseprite_animation
+return {
+	load_aseprite_animation = load_aseprite_animation,
+	load_aseprite_stateful_ui =
+			load_aseprite_ui_texture_atlas
+}

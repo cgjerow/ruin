@@ -1,12 +1,16 @@
-local load_aseprite_animation = require("aseprite_parser")
+local aseprite_parser = require("aseprite_parser")
 require("game_asset_builders")
 require("globals")
 
+local blah = aseprite_parser.load_aseprite_stateful_ui("canvas/", "canvas_theme")
+PRETTY_PRINT(blah)
+
 local is_transparent = true
-local idle = load_aseprite_animation("death_idle", "death/", "death_idle.json", is_transparent)
-local running = load_aseprite_animation("death_running", "death/", "death_running.json", is_transparent)
-local dying = load_aseprite_animation("death_dying", "death/", "death_dying.json", is_transparent)
-local dashing = load_aseprite_animation("death_blinking", "death/", "death_blinking.json", is_transparent)
+local idle = aseprite_parser.load_aseprite_animation("death_idle", "death/", "death_idle.json", is_transparent)
+local running = aseprite_parser.load_aseprite_animation("death_running", "death/", "death_running.json", is_transparent)
+local dying = aseprite_parser.load_aseprite_animation("death_dying", "death/", "death_dying.json", is_transparent)
+local dashing = aseprite_parser.load_aseprite_animation("death_blinking", "death/", "death_blinking.json", is_transparent)
+
 
 local function summon_death(x, y)
 	return PhysicsBodyBuilder()

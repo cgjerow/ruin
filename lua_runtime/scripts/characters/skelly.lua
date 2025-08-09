@@ -1,10 +1,11 @@
-local load_aseprite_animation = require("aseprite_parser")
+local aseprite_parser = require("aseprite_parser")
 require("game_asset_builders")
 require("globals")
 
 local is_transparent = true
-local idle = load_aseprite_animation("skelly_idle", "skelly/", "skelly_idle.json", is_transparent)
-local dashing = load_aseprite_animation("skelly_lunging", "skelly/", "skelly_leaping.json", is_transparent)
+local idle = aseprite_parser.load_aseprite_animation("skelly_idle", "skelly/", "skelly_idle.json", is_transparent)
+local dashing = aseprite_parser.load_aseprite_animation("skelly_lunging", "skelly/", "skelly_leaping.json",
+	is_transparent)
 
 local function new_skelly(x, y)
 	return PhysicsBodyBuilder()
