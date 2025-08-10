@@ -13,24 +13,24 @@ pub type Index = u32;
 pub type Resolution = Vector2<u32>;
 
 #[derive(Debug)]
-pub struct CanvasElement {
+pub struct CanvasNode {
     position: Vector2<f32>,
     scale: Vector2<f32>,
     animation: AnimationComponent,
-    pub elements: Vec<CanvasElement>,
+    pub elements: Vec<CanvasNode>,
     active_elements: Vec<Index>,
 }
 
 #[derive(Debug)]
-pub struct CanvasScene {
-    pub elements: Vec<CanvasElement>,
+pub struct CanvasView {
+    pub elements: Vec<CanvasNode>,
     active_elements: Vec<Index>,
 }
 
 #[derive(Debug)]
 pub struct Canvas {
     next_id: u32,
-    scenes: HashMap<Entity, CanvasScene>,
+    scenes: HashMap<Entity, CanvasView>,
     active_scenes: Vec<Entity>,
     action_states: HashMap<Entity, ActionStateComponent>,
     virtual_resolution: Resolution,
@@ -56,7 +56,7 @@ impl Canvas {
         return e;
     }
 
-    pub fn add_scene(&mut self, entity: Entity, scene: (CanvasScene, bool)) {
+    pub fn add_scene(&mut self, entity: Entity, scene: (CanvasView, bool)) {
         self.scenes.insert(entity.clone(), scene.0);
         if scene.1 {
             self.active_scenes.push(entity.clone());
@@ -103,7 +103,7 @@ impl Canvas {
 pub fn parse_scene_from_lua(
     table: mlua::Table,
     texture_loader: &mut impl FnMut(String) -> Handle<ImageTexture>,
-) -> (CanvasScene, bool) {
+) -> (CanvasView, bool) {
     let elements_table: mlua::Table = table.get("elements").unwrap();
 
     let mut elements = Vec::new();
@@ -120,7 +120,7 @@ pub fn parse_scene_from_lua(
     }
 
     (
-        CanvasScene {
+        CanvasView {
             elements,
             active_elements,
         },
@@ -131,7 +131,7 @@ pub fn parse_scene_from_lua(
 fn parse_element_from_lua(
     table: mlua::Table,
     texture_loader: &mut impl FnMut(String) -> Handle<ImageTexture>,
-) -> (CanvasElement, bool) {
+) -> (CanvasNode, bool) {
     println!("{:?}", LuaExtendedExecutor::pretty_print_table(&table, 0));
     let first: mlua::Table = table.get("animations").unwrap();
     let x: f32 = table.get("tex_width").unwrap();
@@ -144,7 +144,7 @@ fn parse_element_from_lua(
     let current_frame = animation.frames[0].clone();
     let animations = HashMap::from([(ActionState::Custom(0), animation)]);
     (
-        CanvasElement {
+        CanvasNode {
             position: Vector2 {
                 x: table.get("position_x").unwrap(),
                 y: table.get("position_y").unwrap(),
