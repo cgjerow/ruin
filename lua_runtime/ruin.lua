@@ -7,7 +7,7 @@ local function handle_input(input, is_pressed, mouse_position)
 end
 
 ---@diagnostic disable-next-line: unused-local
-function ruin.after_physics(dt)
+local function after_physics(dt)
 end
 
 ---@diagnostic disable-next-line: unused-local
@@ -20,6 +20,7 @@ end
 local ruin = {
   on_collision = on_collision,
   handle_input = handle_input,
+  after_physics = after_physics,
   update = update,
   load = load,
 }
