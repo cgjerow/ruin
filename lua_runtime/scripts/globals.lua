@@ -12,6 +12,11 @@ GLOBALS = {
 		Dying = 2,
 		Dashing = 3,
 	},
+	UI_STATE = {
+		Default = 0,
+		Hovered = 1,
+		Pressed = 2,
+	},
 	MASKS_AND_LAYERS = {
 		Enemy = 0,
 		Env = 1,

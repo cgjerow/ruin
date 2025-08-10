@@ -2,8 +2,6 @@ local aseprite_parser = require("aseprite_parser")
 require("game_asset_builders")
 require("globals")
 
-local blah = aseprite_parser.load_aseprite_stateful_ui("canvas/", "canvas_theme")
-PRETTY_PRINT(blah)
 
 local is_transparent = true
 local idle = aseprite_parser.load_aseprite_animation("death_idle", "death/", "death_idle.json", is_transparent)

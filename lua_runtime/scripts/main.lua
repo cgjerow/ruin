@@ -14,6 +14,7 @@ local new_brick_tile = require("environment.brick_ground")
 
 -- Canvas Elements
 local main_menu = require("canvas.main_menu")
+local descend_button = require("canvas.descend_button")
 
 math.randomseed(os.time())
 
@@ -334,6 +335,7 @@ function ruin.load()
 		},
 	})
 	]]
+	--[[
 	engine.create_ui_scene({
 		initially_active = true,
 		elements = {
@@ -342,6 +344,28 @@ function ruin.load()
 		scenes = {
 		},
 	})
+	]]
+	local b = descend_button()
+	PRETTY_PRINT(b)
+	local new_scene = {
+		initially_active = true,
+		elements = {
+			{
+				initially_active = true,
+				position_x = 0,
+				position_y = 0,
+				scale_x = 1,
+				scale_y = 1,
+				tex_width = b.width,
+				tex_height = b.height,
+				animations = b.animations
+			},
+		},
+		scenes = {
+		},
+	}
+	PRETTY_PRINT(new_scene)
+	engine.create_ui_scene(new_scene)
 
 	local death = summon_death(0, 0)
 	death.on_collision = "bounce"

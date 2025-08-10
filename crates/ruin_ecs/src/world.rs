@@ -251,7 +251,7 @@ impl World {
                     .state];
 
                 let tmp = RenderElement2D {
-                    shape: &transform.shape,
+                    shape: transform.shape,
                     position: transform.position.into(),
                     size: transform.scale.into(),
                     z_order: -transform.position[1], // Sort top to bottom: lower y = drawn later
@@ -275,8 +275,8 @@ impl World {
 }
 
 #[derive(Debug, Clone)]
-pub struct RenderElement2D<'a> {
-    pub shape: &'a Shape2D,
+pub struct RenderElement2D {
+    pub shape: Shape2D,
     pub position: [f32; 2],
     pub size: [f32; 2],
     pub z_order: f32, // for Y-based sorting (e.g., lower y = drawn on top)
@@ -285,7 +285,7 @@ pub struct RenderElement2D<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub struct RenderQueue2D<'a> {
-    pub transparent: Vec<RenderElement2D<'a>>,
-    pub opaque: Vec<RenderElement2D<'a>>,
+pub struct RenderQueue2D {
+    pub transparent: Vec<RenderElement2D>,
+    pub opaque: Vec<RenderElement2D>,
 }

@@ -13,18 +13,12 @@ local function StatefulUiBuilder()
 	local builder = {}
 
 	function builder:set_sprite(s)
-		ui.sprite = s
+		ui.sprite = s .. ".png"
 		return builder
 	end
 
 	function builder:add_frame(x, y, w, h, duration)
 		table.insert(ui.frames, { x = x, y = y, w = w, h = h, duration = duration })
-		return builder
-	end
-
-	function builder:set_layout(w, h)
-		ui.rows = w // ui.tile_width
-		ui.columns = h // ui.tile_height
 		return builder
 	end
 
@@ -160,7 +154,7 @@ local function load_aseprite_ui_texture_atlas(path, file_name, animations)
 		::continue::
 	end
 
-	return results
+	return { animations = results, texture_w = data.size.w, texture_h = data.size.h }
 end
 
 local function load_aseprite_animation(animation_name, path, json_file, with_transparency)
@@ -233,6 +227,6 @@ end
 
 return {
 	load_aseprite_animation = load_aseprite_animation,
-	load_aseprite_stateful_ui =
+	load_stateful_ui =
 			load_aseprite_ui_texture_atlas
 }

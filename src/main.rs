@@ -9,8 +9,11 @@ fn load_engine_config() -> EngineConfig {
     let mut scriptor = LuaScriptor::new(Lua::new());
     let config_table = scriptor.execute("setup");
     let fps: String = config_table.get("fps").unwrap_or("auto".to_string());
-    let width: u32 = config_table.get("width").unwrap_or(1000);
-    let height: u32 = config_table.get("height").unwrap_or(1000);
+    let virtual_resolution_width: u32 = config_table.get("virtual_resolution_width").unwrap_or(320);
+    let virtual_resolution_height: u32 =
+        config_table.get("virtual_resolution_height").unwrap_or(180);
+    let window_width: u32 = config_table.get("window_width").unwrap_or(1000);
+    let window_height: u32 = config_table.get("window_height").unwrap_or(1000);
     let camera2d_config: mlua::Table = config_table
         .get("camera_config")
         .unwrap_or(scriptor.lua.create_table().unwrap());
@@ -18,8 +21,10 @@ fn load_engine_config() -> EngineConfig {
     return EngineConfig {
         fps,
         debug_enabled,
-        width,
-        height,
+        window_width,
+        window_height,
+        virtual_resolution_width,
+        virtual_resolution_height,
         dimensions: Dimensions::Two,
         camera: CameraOption::Follow,
         camera2d_config: Camera2DConfig {
@@ -33,8 +38,8 @@ fn load_engine_config() -> EngineConfig {
                 .unwrap_or(0.3),
             look_ahead_distance: camera2d_config.get("look_ahead_distance").unwrap_or(3.0),
             look_ahead_lerp_speed: camera2d_config.get("look_ahead_lerp_speed").unwrap_or(0.1),
-            screen_width: width as f32,
-            screen_height: height as f32,
+            screen_width: window_width as f32,
+            screen_height: window_height as f32,
         },
     };
 }

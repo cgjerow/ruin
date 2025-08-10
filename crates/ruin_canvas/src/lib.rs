@@ -1,21 +1,21 @@
 use std::collections::HashMap;
 
-use cgmath::Vector2;
+use cgmath::{InnerSpace, Vector2};
 use ruin_assets::{Handle, ImageTexture};
 use ruin_ecs::{
-    physics_2d::Shape2D,
+    physics_2d::{HalfExtents, Shape2D},
     world::{RenderElement2D, RenderQueue2D},
     ActionState, ActionStateComponent, Animation, AnimationComponent, Entity,
 };
 use ruin_lua_runtime::LuaExtendedExecutor;
 
 pub type Index = u32;
+pub type Resolution = Vector2<u32>;
 
 #[derive(Debug)]
 pub struct CanvasElement {
     position: Vector2<f32>,
     scale: Vector2<f32>,
-    shape: Shape2D,
     animation: AnimationComponent,
     pub elements: Vec<CanvasElement>,
     active_elements: Vec<Index>,
@@ -33,15 +33,20 @@ pub struct Canvas {
     scenes: HashMap<Entity, CanvasScene>,
     active_scenes: Vec<Entity>,
     action_states: HashMap<Entity, ActionStateComponent>,
+    virtual_resolution: Resolution,
 }
 
 impl Canvas {
-    pub fn new() -> Self {
+    pub fn new(virtual_width: u32, virtual_height: u32) -> Self {
         Self {
             next_id: 0,
             scenes: HashMap::new(),
             active_scenes: Vec::new(),
             action_states: HashMap::new(),
+            virtual_resolution: Vector2 {
+                x: virtual_width,
+                y: virtual_height,
+            },
         }
     }
 
@@ -66,12 +71,18 @@ impl Canvas {
 
         for entity in self.active_scenes.iter() {
             for element in self.scenes.get(entity).unwrap().elements.iter() {
-                queue.transparent.push(RenderElement2D {
-                    shape: &Shape2D::Rectangle {
-                        half_extents: Vector2 { x: 1.0, y: 1.0 },
+                let shape = Shape2D::Rectangle {
+                    half_extents: HalfExtents {
+                        x: element.animation.current_frame.shape.half_extents().x
+                            / (self.virtual_resolution.x as f32),
+                        y: element.animation.current_frame.shape.half_extents().y
+                            / (self.virtual_resolution.y as f32),
                     },
-                    position: [0.0, 0.0],
-                    size: [1.0, 1.0],
+                };
+                queue.transparent.push(RenderElement2D {
+                    shape: shape,
+                    position: element.position.into(),
+                    size: element.scale.into(),
                     z_order: 0.0,
                     image_texture: element
                         .animation
@@ -123,8 +134,13 @@ fn parse_element_from_lua(
 ) -> (CanvasElement, bool) {
     println!("{:?}", LuaExtendedExecutor::pretty_print_table(&table, 0));
     let first: mlua::Table = table.get("animations").unwrap();
+    let x: f32 = table.get("tex_width").unwrap();
+    let y: f32 = table.get("tex_height").unwrap();
+
     println!("{:?}", LuaExtendedExecutor::pretty_print_table(&first, 0));
-    let animation = Animation::from_lua_table(first.get(0).unwrap(), texture_loader);
+    println!("{:?}", Vector2 { x, y });
+    println!("{:?}", Vector2 { x, y }.normalize());
+    let animation = Animation::raw_from_lua_table(first.get(0).unwrap(), texture_loader);
     let current_frame = animation.frames[0].clone();
     let animations = HashMap::from([(ActionState::Custom(0), animation)]);
     (
@@ -136,12 +152,6 @@ fn parse_element_from_lua(
             scale: Vector2 {
                 x: table.get("scale_x").unwrap(),
                 y: table.get("scale_y").unwrap(),
-            },
-            shape: Shape2D::Rectangle {
-                half_extents: Vector2 {
-                    x: table.get("width").unwrap(),
-                    y: table.get("height").unwrap(),
-                },
             },
             animation: AnimationComponent {
                 animations,

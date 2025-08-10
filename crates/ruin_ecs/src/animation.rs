@@ -4,13 +4,14 @@ use ruin_bitmaps::vecbool_to_u8;
 use std::collections::HashMap;
 
 use crate::{
-    physics_2d::{Area2D, Shape2D},
+    physics_2d::{Area2D, HalfExtents, Shape2D},
     world::World,
     ActionState,
 };
 
 #[derive(Debug, Clone)]
 pub struct SpriteFrame {
+    pub shape: Shape2D,
     pub uv_coords: [[f32; 2]; 4], // bottom-left, bottom-right, top-right, top-left
     pub duration: f32,
     pub hitboxes: Vec<Area2D>,
@@ -36,6 +37,72 @@ pub struct AnimationComponent {
 }
 
 impl Animation {
+    pub fn raw_from_lua_table(
+        table: mlua::Table,
+        texture_loader: &mut impl FnMut(String) -> Handle<ImageTexture>,
+    ) -> Self {
+        let looped: bool = table.get("looped").unwrap_or(true);
+        let is_transparent: bool = table.get("is_transparent").unwrap_or(false);
+
+        let frames_table: mlua::Table = table
+            .get("frames")
+            .expect("Missing 'frames' table in animation");
+
+        println!("SPRITE");
+        let sprite_path: String = table
+            .get("sprite")
+            .expect("Sprite Sheet is required for animation.");
+        println!("SPRITE {:?}", sprite_path);
+
+        //let tex_w: f32 = table.get("tex_width").unwrap();
+        //let tex_h: f32 = table.get("tex_height").unwrap();
+        let tex_w = 384.0;
+        let tex_h = 32.0;
+
+        let mut frames = Vec::new();
+        for (i, pair) in frames_table.sequence_values::<mlua::Table>().enumerate() {
+            if let Ok(frame_data) = pair {
+                let x: f32 = frame_data.get("x").unwrap();
+                let y: f32 = frame_data.get("y").unwrap();
+                let w: f32 = frame_data.get("w").unwrap_or(1.0);
+                let h: f32 = frame_data.get("h").unwrap_or(1.0);
+
+                let duration: f32 = frame_data.get("duration").unwrap_or(1.0);
+
+                let u0 = x / tex_w;
+                let u1 = (x + w) / tex_w;
+                let v1 = 1.0 - (y / tex_h);
+                let v0 = 1.0 - ((y + h) / tex_h);
+
+                // WGPU uses origin at top-left by default. Flip Y if needed.
+                let uv_coords = [[u0, v1], [u1, v1], [u1, v0], [u0, v0]];
+
+                // Lets base shape off of half extents for now
+                let shape = Shape2D::Rectangle {
+                    half_extents: HalfExtents { x: w, y: h },
+                };
+
+                let frame_pixel_dims = [16.0, 16.0]; // I really don't know why I need this right
+                                                     // now
+                frames.push(SpriteFrame {
+                    shape,
+                    uv_coords,
+                    duration,
+                    hitboxes: Vec::new(),
+                    hurtboxes: Vec::new(),
+                    frame_pixel_dims,
+                });
+            }
+        }
+
+        Animation {
+            sprite_sheet_id: texture_loader(sprite_path),
+            frames,
+            looped,
+            is_transparent,
+        }
+    }
+
     pub fn from_lua_table(
         table: mlua::Table,
         texture_loader: &mut impl FnMut(String) -> Handle<ImageTexture>,
@@ -81,9 +148,14 @@ impl Animation {
                     [u1, v0], // top-right
                     [u0, v0], // top-left
                 ];
+                // Lets base shape off of half extents for now
+                let shape = Shape2D::Rectangle {
+                    half_extents: HalfExtents { x: w, y: h },
+                };
 
                 let frame_pixel_dims = [tile_w, tile_h];
                 frames.push(SpriteFrame {
+                    shape,
                     uv_coords,
                     duration,
                     hitboxes: parse_hitboxes_from_table(&hitboxes, i, frame_pixel_dims),

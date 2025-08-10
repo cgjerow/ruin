@@ -3,7 +3,9 @@ function main()
 	return {
 		debug_enabled = true,
 		fps = "auto", -- Default auto, set as auto or a number for specific frame rate target
-		height = 800,
-		width = 1000,
+		window_width = 1280,
+		window_height = 720,
+		virtual_resolution_width = 320,
+		virtual_resolution_height = 160,
 	}
 end
