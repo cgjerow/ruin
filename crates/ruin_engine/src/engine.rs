@@ -53,6 +53,7 @@ pub struct Engine {
     world: World,
     physics: PhysicsWorld,
     canvas: Canvas,
+    physics_paused: bool,
     width: u32,
     height: u32,
     fps: FPS,
@@ -100,6 +101,7 @@ impl Engine {
             height: config.window_height,
             world: World::new(),
             physics: PhysicsWorld::new(),
+            physics_paused: true, // assume starting in "paused"
             canvas: Canvas::new(
                 config.virtual_resolution_width,
                 config.virtual_resolution_height,
@@ -185,6 +187,14 @@ impl Engine {
 
     fn get_window_size(&self) -> [u32; 2] {
         [self.width, self.height]
+    }
+
+    fn pause_physics(&mut self) {
+        self.physics_paused = true
+    }
+
+    fn unpause_physics(&mut self) {
+        self.physics_paused = false
     }
 
     fn apply_force_2d(&mut self, id: Entity, fx: f32, fy: f32) {
@@ -455,6 +465,20 @@ impl Engine {
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, create_body, (data: Table) -> [u32; 2]);
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, create_ui_scene, (data: Table) -> [u32; 1]);
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, configure_camera, (data: Table) -> Result<()>);
+        expose_fn!(
+            self.lua_context.lua,
+            self_ptr,
+            lua_engine,
+            pause_physics,
+            ()
+        );
+        expose_fn!(
+            self.lua_context.lua,
+            self_ptr,
+            lua_engine,
+            unpause_physics,
+            ()
+        );
 
         let now_ns = self
             .lua_context
@@ -538,7 +562,10 @@ impl Engine {
 
         self.last_frame = now;
         let bp = Instant::now();
-        let _ = self.update(dt);
+
+        if !self.physics_paused {
+            let _ = self.update(dt);
+        }
 
         //println!("Physics: {:?}", bp.elapsed().as_secs_f64());
 
