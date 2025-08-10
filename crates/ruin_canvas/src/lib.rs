@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cgmath::{InnerSpace, Vector2};
+use cgmath::{Array, InnerSpace, Vector2};
 use ruin_assets::{Handle, ImageTexture};
 use ruin_ecs::{
     physics_2d::{HalfExtents, Shape2D},
@@ -30,8 +30,8 @@ pub struct CanvasView {
 #[derive(Debug)]
 pub struct Canvas {
     next_id: u32,
-    scenes: HashMap<Entity, CanvasView>,
-    active_scenes: Vec<Entity>,
+    views: HashMap<Entity, CanvasView>,
+    active_views: Vec<Entity>,
     action_states: HashMap<Entity, ActionStateComponent>,
     virtual_resolution: Resolution,
 }
@@ -40,8 +40,8 @@ impl Canvas {
     pub fn new(virtual_width: u32, virtual_height: u32) -> Self {
         Self {
             next_id: 0,
-            scenes: HashMap::new(),
-            active_scenes: Vec::new(),
+            views: HashMap::new(),
+            active_views: Vec::new(),
             action_states: HashMap::new(),
             virtual_resolution: Vector2 {
                 x: virtual_width,
@@ -56,10 +56,10 @@ impl Canvas {
         return e;
     }
 
-    pub fn add_scene(&mut self, entity: Entity, scene: (CanvasView, bool)) {
-        self.scenes.insert(entity.clone(), scene.0);
+    pub fn add_view(&mut self, entity: Entity, scene: (CanvasView, bool)) {
+        self.views.insert(entity.clone(), scene.0);
         if scene.1 {
-            self.active_scenes.push(entity.clone());
+            self.active_views.push(entity.clone());
         }
     }
 
@@ -69,8 +69,8 @@ impl Canvas {
             opaque: Vec::new(),
         };
 
-        for entity in self.active_scenes.iter() {
-            for element in self.scenes.get(entity).unwrap().elements.iter() {
+        for entity in self.active_views.iter() {
+            for element in self.views.get(entity).unwrap().elements.iter() {
                 let shape = Shape2D::Rectangle {
                     half_extents: HalfExtents {
                         x: element.animation.current_frame.shape.half_extents().x
@@ -100,7 +100,7 @@ impl Canvas {
 }
 
 // Lua
-pub fn parse_scene_from_lua(
+pub fn parse_canvas_view_from_lua(
     table: mlua::Table,
     texture_loader: &mut impl FnMut(String) -> Handle<ImageTexture>,
 ) -> (CanvasView, bool) {
