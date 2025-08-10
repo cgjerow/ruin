@@ -113,7 +113,7 @@ impl ShapeSystem {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct AABBMasksAndLayers {
+pub struct AABBMasksAndLayers {
     aabb: AABB,
     masks: MaskLayerBitmap,
     layers: MaskLayerBitmap,
