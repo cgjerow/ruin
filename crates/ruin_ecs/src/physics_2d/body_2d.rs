@@ -267,7 +267,7 @@ impl PhysicsWorld {
                 dynamic_tiles: HashMap::new(),
                 static_tiles: HashMap::new(),
                 tile_size: 3.0,
-                grid_radius: 50,
+                grid_radius: 100,
             },
             player_pos: Point2D { x: 0.0, y: 0.0 },
             slop: 0.0,
@@ -285,13 +285,13 @@ impl PhysicsWorld {
     }
 
     pub fn step(&mut self, dt: TimeUnit) {
-        //let i = Instant::now();
+        let i = Instant::now();
         self.integrate(dt); // Move bodies based on velocity
                             //println!("Integrate {:?}", i.elapsed().as_secs_f64());
-                            //let i = Instant::now();
+        let i = Instant::now();
         let overlaps = self.broad_phase(); // Basic AABB overlap test
                                            //println!("overlaps {:?}", i.elapsed().as_secs_f64());
-                                           //let i = Instant::now();
+        let i = Instant::now();
         self.resolve_collisions(&overlaps); // Push back overlapping bodies
                                             //println!("Resolves {:?}", i.elapsed().as_secs_f64());
     }
@@ -429,13 +429,11 @@ impl PhysicsWorld {
 
         let mut visited = std::collections::HashSet::new();
         static EMPTY_VEC: Vec<usize> = Vec::new();
-        //println!("Static {:?}", self.grid.static_tiles);
-        //println!("Dynamic {:?}", self.grid.dynamic_tiles);
 
-        for dx in -radius..=radius {
-            for dy in -radius..=radius {
-                let tile = (center_tile_x + dx, center_tile_y + dy);
-                let dynamic = self.grid.dynamic_tiles.get(&tile).unwrap_or(&EMPTY_VEC);
+        // Process dynamic tiles
+        for (&tile, dynamic) in &self.grid.dynamic_tiles {
+            if (tile.0 - center_tile_x).abs() <= radius && (tile.1 - center_tile_y).abs() <= radius
+            {
                 let static_ = self.grid.static_tiles.get(&tile).unwrap_or(&EMPTY_VEC);
 
                 // Dynamic vs dynamic within the tile
@@ -443,7 +441,6 @@ impl PhysicsWorld {
                     for j in (i + 1)..dynamic.len() {
                         let a = dynamic[i];
                         let b = dynamic[j];
-                        // Check superset AABB overlap before pushing pair
                         if visited.insert((a.min(b), a.max(b))) {
                             if (Self::masks_overlap_layers(
                                 self.bodies[a].masks_superset,
@@ -476,19 +473,8 @@ impl PhysicsWorld {
                 }
             }
         }
-        //println!("Visits {:?}", i.elapsed().as_secs_f64());
 
-        //println!("Pairs {:?}", pairs.len());
-        /*
-        println!(
-            "Pairs-0 {:?} {:?} {:?}",
-            self.bodies[pairs[0].a]
-                .aabb_superset
-                .overlaps(&self.bodies[pairs[0].b].aabb_superset),
-            self.bodies[pairs[0].a].aabb_superset,
-            self.bodies[pairs[0].b].aabb_superset
-        );
-        */
+        //println!("Visits {:?}", i.elapsed().as_secs_f64());
         pairs
     }
 

@@ -36,6 +36,7 @@ CONFIG = {
 
 WORLD = {
 	game_over = false,
+	paused = true,
 	player = { id = -1 },
 	skellies = {},
 	-- this state is more nuanced then the action state which is used for animations by the engine
@@ -48,6 +49,17 @@ WORLD = {
 	time = 0,
 }
 WORLD.player_id = function() return WORLD.player.id end
+WORLD.pause = function()
+	engine.pause_physics()
+	WORLD.paused = true
+end
+WORLD.unpause = function()
+	engine.unpause_physics()
+	WORLD.paused = false
+end
+WORLD.is_paused = function()
+	return WORLD.paused
+end
 WORLD.is_game_over = function()
 	if WORLD.game_over then
 		engine.set_velocity_2d(WORLD.player_id(), 0, 0)
@@ -179,10 +191,15 @@ ENGINE_HANDLES = {
 --[[ ENGINE CALBACKS ]]
 --
 
--- Called once per frame, after all physics substeps have run
-
+local function handle_ui_input(input, is_pressed, mouse_position)
+	WORLD.unpause()
+end
 function ruin.handle_input(input, is_pressed, mouse_position)
-	CONFIG.controller:update(string.upper(input), is_pressed, mouse_position, engine.now_ns())
+	if WORLD.is_paused() then
+		handle_ui_input(input, is_pressed, mouse_position)
+	else
+		CONFIG.controller:update(string.upper(input), is_pressed, mouse_position, engine.now_ns())
+	end
 end
 
 function ruin.on_collision(cols)
@@ -210,7 +227,8 @@ function ruin.update(dt)
 		x = x * -1
 	end
 
-	if (count < 300) then
+
+	if (count < 50) then
 		local s = skelly.new(x, y)
 		s.is_skelly = true
 		count = count + 1
@@ -346,7 +364,6 @@ function ruin.load()
 	})
 	]]
 	local b = descend_button()
-	PRETTY_PRINT(b)
 	local new_scene = {
 		initially_active = true,
 		elements = {
@@ -364,8 +381,7 @@ function ruin.load()
 		scenes = {
 		},
 	}
-	PRETTY_PRINT(new_scene)
-	engine.create_ui_scene(new_scene)
+	-- engine.create_ui_scene(new_scene)
 
 	local death = summon_death(0, 0)
 	death.on_collision = "bounce"

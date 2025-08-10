@@ -1,7 +1,6 @@
 local aseprite_parser = require("aseprite_parser")
 
 local button = aseprite_parser.load_stateful_ui("canvas/", "canvas_theme")
-PRETTY_PRINT(button)
 
 local function descend_button()
 	return CanvasSceneBuilder()
