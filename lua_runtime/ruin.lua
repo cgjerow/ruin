@@ -1,4 +1,28 @@
-local ruin = {}
+---@diagnostic disable-next-line: unused-local
+local function on_collision(cols)
+end
+
+---@diagnostic disable-next-line: unused-local
+local function handle_input(input, is_pressed, mouse_position)
+end
+
+---@diagnostic disable-next-line: unused-local
+function ruin.after_physics(dt)
+end
+
+---@diagnostic disable-next-line: unused-local
+local function update(dt)
+end
+
+local function load()
+end
+
+local ruin = {
+  on_collision = on_collision,
+  handle_input = handle_input,
+  update = update,
+  load = load,
+}
 
 --[[
 -- ENGINE_ functions are invoked by the rust engine.
@@ -29,20 +53,6 @@ end
 -- ruin table functions are designed to be overriden by Lua scripts.
 --]]
 
-function ruin.on_collision(cols)
-end
-
-function ruin.handle_input(input, is_pressed, mouse_position)
-end
-
-function ruin.after_physics(dt)
-end
-
-function ruin.update(dt)
-end
-
-function ruin.load()
-end
 
 -- scripts may override any function defined in ruin global
 _G.ruin = ruin
