@@ -262,6 +262,14 @@ impl Engine {
         set_entity_state(&mut self.world, id, ActionState::from(state.clone()));
     }
 
+    fn deactivate_canvas_view(&mut self, id: Entity) {
+        self.canvas.deactivate(&id);
+    }
+
+    fn activate_canvas_view(&mut self, id: Entity) {
+        self.canvas.activate(id);
+    }
+
     fn create_ui_scene(&mut self, lua_scene: mlua::Table) -> [u32; 1] {
         let entity = self.canvas.new_entity();
         let mut loader = |path: String| self.load_texture(path);
@@ -455,6 +463,8 @@ impl Engine {
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, apply_move_2d, (id: u32, x: f32, y: f32));
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, apply_masks_and_layers, (id: u32, masks: Table, layers: Table));
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, toggle_area, (id: u32, b: bool));
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, activate_canvas_view, (id: u32));
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, deactivate_canvas_view, (id: u32));
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, set_velocity_2d, (id: u32, x: f32, y: f32));
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, set_state, (id: u32, state: u8));
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, get_window_size, () -> [u32; 2]);

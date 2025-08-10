@@ -55,6 +55,7 @@ WORLD.pause = function()
 end
 WORLD.unpause = function()
 	engine.unpause_physics()
+	engine.deactivate_canvas_view(0)
 	WORLD.paused = false
 end
 WORLD.is_paused = function()
@@ -381,7 +382,7 @@ function ruin.load()
 		scenes = {
 		},
 	}
-	-- engine.create_ui_scene(new_scene)
+	engine.create_ui_scene(new_scene)
 
 	local death = summon_death(0, 0)
 	death.on_collision = "bounce"

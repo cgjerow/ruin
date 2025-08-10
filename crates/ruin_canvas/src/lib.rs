@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use cgmath::{Array, InnerSpace, Vector2};
 use ruin_assets::{Handle, ImageTexture};
@@ -31,7 +31,7 @@ pub struct CanvasView {
 pub struct Canvas {
     next_id: u32,
     views: HashMap<Entity, CanvasView>,
-    active_views: Vec<Entity>,
+    active_views: HashSet<Entity>,
     action_states: HashMap<Entity, ActionStateComponent>,
     virtual_resolution: Resolution,
 }
@@ -41,7 +41,7 @@ impl Canvas {
         Self {
             next_id: 0,
             views: HashMap::new(),
-            active_views: Vec::new(),
+            active_views: HashSet::new(),
             action_states: HashMap::new(),
             virtual_resolution: Vector2 {
                 x: virtual_width,
@@ -56,10 +56,18 @@ impl Canvas {
         return e;
     }
 
+    pub fn deactivate(&mut self, index: &Entity) {
+        self.active_views.remove(index);
+    }
+
+    pub fn activate(&mut self, index: Entity) {
+        self.active_views.insert(index);
+    }
+
     pub fn add_view(&mut self, entity: Entity, scene: (CanvasView, bool)) {
         self.views.insert(entity.clone(), scene.0);
         if scene.1 {
-            self.active_views.push(entity.clone());
+            self.active_views.insert(entity.clone());
         }
     }
 
