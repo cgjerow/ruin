@@ -58,6 +58,7 @@ pub struct Engine {
     height: u32,
     fps: FPS,
     camera2d_config: Camera2DConfig,
+    unload: bool,
 }
 
 pub struct EngineConfig {
@@ -111,6 +112,7 @@ impl Engine {
                 time_accum: 0.0,
             },
             camera2d_config: config.camera2d_config,
+            unload: false,
         }
     }
 
@@ -270,12 +272,23 @@ impl Engine {
         self.canvas.activate(id);
     }
 
-    fn create_ui_scene(&mut self, lua_scene: mlua::Table) -> [u32; 1] {
+    fn create_canvas_view(&mut self, lua_scene: mlua::Table) -> [u32; 1] {
         let entity = self.canvas.new_entity();
         let mut loader = |path: String| self.load_texture(path);
         let scene = parse_canvas_view_from_lua(lua_scene, &mut loader);
         self.canvas.add_view(entity.clone(), scene);
         [entity.into()]
+    }
+
+    fn unload_scene(&mut self) {
+        self.unload = true;
+    }
+
+    fn unload(&mut self) {
+        self.canvas.unload();
+        self.world.unload();
+        self.physics.unload();
+        self.unload = false;
     }
 
     fn create_body(&mut self, lua_element: mlua::Table) -> [u32; 2] {
@@ -457,6 +470,7 @@ impl Engine {
 
         let self_ptr = self as *mut Self;
         let lua_engine = self.lua_context.create_table();
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, unload_scene, ());
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, flip, (id: u32, x: bool, y: bool));
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, apply_force_2d, (id: u32, x: f32, y: f32));
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, apply_impulse_2d, (id: u32, x: f32, y: f32));
@@ -473,7 +487,7 @@ impl Engine {
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, damage, (id: u32, amount: u16) -> bool);
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, get_health_table, (id: u32) -> Table);
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, create_body, (data: Table) -> [u32; 2]);
-        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, create_ui_scene, (data: Table) -> [u32; 1]);
+        expose_fn!(self.lua_context.lua, self_ptr, lua_engine, create_canvas_view, (data: Table) -> [u32; 1]);
         expose_fn!(self.lua_context.lua, self_ptr, lua_engine, configure_camera, (data: Table) -> Result<()>);
         expose_fn!(
             self.lua_context.lua,
@@ -511,21 +525,10 @@ impl Engine {
             .set("engine", lua_engine)
             .expect("Could not define global engine");
 
-        let config: mlua::Table = self
-            .lua_context
+        self.lua_context
             .get_function("ENGINE_load")
-            .call::<mlua::Table>({})
+            .call::<()>(())
             .expect("Unable to load initial assets.");
-
-        let assets = config
-            .get::<mlua::Table>("assets")
-            .unwrap_or_else(|_| self.lua_context.create_table());
-        for asset in assets.sequence_values::<String>() {
-            let asset = asset.unwrap_or("".to_string());
-            if asset != "" {
-                self.load_texture(asset.clone());
-            };
-        }
     }
 
     fn call_lua_keyboard_input(&self, key: KeyCode, is_pressed: bool) {
@@ -591,6 +594,10 @@ impl Engine {
         self.count += 1;
         if self.count > SAFETY_MAX_FOR_DEV {
             event_loop.exit()
+        }
+
+        if self.unload {
+            self.unload();
         }
 
         event_loop.set_control_flow(ControlFlow::Poll);

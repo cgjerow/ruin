@@ -50,6 +50,13 @@ impl Canvas {
         }
     }
 
+    pub fn unload(&mut self) {
+        self.next_id = 0;
+        self.views.clear();
+        self.active_views.clear();
+        self.action_states.clear();
+    }
+
     pub fn new_entity(&mut self) -> Entity {
         let e = self.next_id;
         self.next_id += 1;

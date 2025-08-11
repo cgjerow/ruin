@@ -188,18 +188,117 @@ ENGINE_HANDLES = {
 }
 
 
+local function load_game_world()
+	local death = summon_death(0, 0)
+	death.on_collision = "bounce"
+	CONFIG.player = death
+	WORLD.player.id = ENGINE_HANDLES.create_body(death)
+
+	local build_walls = true
+	if build_walls then
+		local fence_thickness = 2
+		local fence_count_per_side = 25
+		local half_length = fence_thickness * fence_count_per_side / 2
+
+		-- Bottom wall: centered on y = -half_length, full width
+		local bottom_wall = new_fence(0, -half_length, fence_thickness * fence_count_per_side, fence_thickness)
+		bottom_wall.on_player_collision = "block"
+		bottom_wall.on_collision = ""
+		bottom_wall.id = ENGINE_HANDLES.create_body(bottom_wall)
+
+		-- Top wall: centered on y = half_length, full width
+		local top_wall = new_fence(0, half_length, fence_thickness * fence_count_per_side, fence_thickness)
+		top_wall.on_player_collision = "block"
+		top_wall.on_collision = ""
+		top_wall.id = ENGINE_HANDLES.create_body(top_wall)
+
+		-- Left wall: centered on x = -half_length, full height
+		local left_wall = new_fence(-half_length, 0, fence_thickness, fence_thickness * fence_count_per_side)
+		left_wall.on_player_collision = "block"
+		left_wall.on_collision = ""
+		left_wall.id = ENGINE_HANDLES.create_body(left_wall)
+
+		-- Right wall: centered on x = half_length, full height
+		local right_wall = new_fence(half_length, 0, fence_thickness, fence_thickness * fence_count_per_side)
+		right_wall.on_player_collision = "block"
+		right_wall.on_collision = ""
+		right_wall.id = ENGINE_HANDLES.create_body(right_wall)
+	end
+
+	local build_skellys = true
+	if not build_skellys then
+		for _ = 1, 500 do
+			local x = math.random(10, 20)
+			local y = math.random(10, 20)
+			local flip_x = math.random(0, 1)
+			local flip_y = math.random(0, 1)
+			if flip_x == 1 then
+				y = y * -1
+			end
+			if flip_y == 1 then
+				x = x * -1
+			end
+			local s = skelly.new(x, y)
+			s.on_player_collision = "bounce"
+			s.on_collision = "bounce"
+			s.is_skelly = true
+			s.id = ENGINE_HANDLES.create_body(s)
+		end
+	end
+end
+
+local function load_pre_game_screen()
+	local b = descend_button()
+	local new_scene = {
+		initially_active = true,
+		elements = {
+			{
+				initially_active = true,
+				position_x = 0,
+				position_y = 0,
+				scale_x = 1,
+				scale_y = 1,
+				tex_width = b.width,
+				tex_height = b.height,
+				animations = b.animations
+			},
+		},
+		scenes = {
+		},
+	}
+	engine.create_canvas_view(new_scene)
+end
+
+
+
+
 --
 --[[ ENGINE CALBACKS ]]
 --
 
+local count = 0;
 local function handle_ui_input(input, is_pressed, mouse_position)
 	WORLD.unpause()
+	count = 0
+	load_game_world()
 end
+
 function ruin.handle_input(input, is_pressed, mouse_position)
 	if WORLD.is_paused() then
-		handle_ui_input(input, is_pressed, mouse_position)
+		if string.upper(input) ~= "P" then
+			handle_ui_input(input, is_pressed, mouse_position)
+		else
+			load_pre_game_screen()
+		end
 	else
-		CONFIG.controller:update(string.upper(input), is_pressed, mouse_position, engine.now_ns())
+		if (string.upper(input) == "P") then
+			WORLD.pause()
+			engine.unload_scene()
+			CONFIG.entities = {}
+			load_pre_game_screen()
+		else
+			CONFIG.controller:update(string.upper(input), is_pressed, mouse_position, engine.now_ns())
+		end
 	end
 end
 
@@ -215,8 +314,9 @@ local fps_debug = {
 	fps = 0,
 }
 
-local count = 0;
 function ruin.update(dt)
+	if WORLD.is_paused() then return end
+
 	local x = math.random(0, 100)
 	local y = math.random(0, 100)
 	local flip_x = math.random(0, 1)
@@ -338,6 +438,8 @@ function ruin.update(dt)
 end
 
 function ruin.load()
+	load_pre_game_screen()
+	-- function ruin.load()
 	--[[
 	engine.create_ui_scene({
 		elements = {
@@ -364,86 +466,4 @@ function ruin.load()
 		},
 	})
 	]]
-	local b = descend_button()
-	local new_scene = {
-		initially_active = true,
-		elements = {
-			{
-				initially_active = true,
-				position_x = 0,
-				position_y = 0,
-				scale_x = 1,
-				scale_y = 1,
-				tex_width = b.width,
-				tex_height = b.height,
-				animations = b.animations
-			},
-		},
-		scenes = {
-		},
-	}
-	engine.create_ui_scene(new_scene)
-
-	local death = summon_death(0, 0)
-	death.on_collision = "bounce"
-	CONFIG.player = death
-	WORLD.player.id = ENGINE_HANDLES.create_body(death)
-
-	local build_walls = true
-	if build_walls then
-		local fence_thickness = 2
-		local fence_count_per_side = 25
-		local half_length = fence_thickness * fence_count_per_side / 2
-
-		-- Bottom wall: centered on y = -half_length, full width
-		local bottom_wall = new_fence(0, -half_length, fence_thickness * fence_count_per_side, fence_thickness)
-		bottom_wall.on_player_collision = "block"
-		bottom_wall.on_collision = ""
-		bottom_wall.id = ENGINE_HANDLES.create_body(bottom_wall)
-
-		-- Top wall: centered on y = half_length, full width
-		local top_wall = new_fence(0, half_length, fence_thickness * fence_count_per_side, fence_thickness)
-		top_wall.on_player_collision = "block"
-		top_wall.on_collision = ""
-		top_wall.id = ENGINE_HANDLES.create_body(top_wall)
-
-		-- Left wall: centered on x = -half_length, full height
-		local left_wall = new_fence(-half_length, 0, fence_thickness, fence_thickness * fence_count_per_side)
-		left_wall.on_player_collision = "block"
-		left_wall.on_collision = ""
-		left_wall.id = ENGINE_HANDLES.create_body(left_wall)
-
-		-- Right wall: centered on x = half_length, full height
-		local right_wall = new_fence(half_length, 0, fence_thickness, fence_thickness * fence_count_per_side)
-		right_wall.on_player_collision = "block"
-		right_wall.on_collision = ""
-		right_wall.id = ENGINE_HANDLES.create_body(right_wall)
-	end
-
-	local build_skellys = true
-	if not build_skellys then
-		for _ = 1, 500 do
-			local x = math.random(10, 20)
-			local y = math.random(10, 20)
-			local flip_x = math.random(0, 1)
-			local flip_y = math.random(0, 1)
-			if flip_x == 1 then
-				y = y * -1
-			end
-			if flip_y == 1 then
-				x = x * -1
-			end
-			local s = skelly.new(x, y)
-			-- s.is_pc = true
-			s.on_player_collision = "bounce"
-			s.on_collision = "bounce"
-			s.is_skelly = true
-			s.id = ENGINE_HANDLES.create_body(s)
-			-- STATE.player = new_id
-		end
-	end
-
-	return {
-		assets = {},
-	}
 end

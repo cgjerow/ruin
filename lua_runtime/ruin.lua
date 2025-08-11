@@ -15,6 +15,9 @@ local function update(dt)
 end
 
 local function load()
+  return {
+    assets = {},
+  }
 end
 
 local ruin = {

@@ -274,6 +274,11 @@ impl PhysicsWorld {
         }
     }
 
+    pub fn unload(&mut self) {
+        self.bodies.clear();
+        self.entity_map.clear();
+    }
+
     pub fn get_velocity(&self, entity: &Entity) -> Vector2D {
         self.bodies[*self.entity_map.get(entity).unwrap()].velocity
     }

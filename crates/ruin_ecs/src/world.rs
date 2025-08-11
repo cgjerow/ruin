@@ -81,6 +81,20 @@ impl World {
         }
     }
 
+    pub fn unload(&mut self) {
+        self.next_id = 0;
+        self.flips.clear();
+        self.health_bars.clear();
+        self.animations.clear();
+        self.transforms_2d.clear();
+        self.action_states.clear();
+        self.physical_colliders_2d.clear();
+        self.hitboxes_2d.clear();
+        self.hurtboxes_2d.clear();
+        self.area_roles.clear();
+        self.parent_area_info.clear();
+    }
+
     pub fn new_entity(&mut self) -> Entity {
         let entity = self.next_id;
         self.next_id += 1;
