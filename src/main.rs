@@ -35,9 +35,9 @@ fn load_engine_config() -> EngineConfig {
             ],
             look_ahead_smooth_factor: camera2d_config
                 .get("look_ahead_smooth_factor")
-                .unwrap_or(0.3),
-            look_ahead_distance: camera2d_config.get("look_ahead_distance").unwrap_or(3.0),
-            look_ahead_lerp_speed: camera2d_config.get("look_ahead_lerp_speed").unwrap_or(0.1),
+                .unwrap_or(10.0),
+            look_ahead_distance: camera2d_config.get("look_ahead_distance").unwrap_or(10.0),
+            look_ahead_lerp_speed: camera2d_config.get("look_ahead_lerp_speed").unwrap_or(2.0),
             screen_width: window_width as f32,
             screen_height: window_height as f32,
         },

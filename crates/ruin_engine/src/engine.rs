@@ -85,7 +85,7 @@ impl Engine {
         Self {
             mouse_pos: [0.0, 0.0],
             player: 0,
-            physics_tick_rate: 1.0 / 60.0,
+            physics_tick_rate: 1.0 / 300.0,
             physics_accumulator: 0.0,
             lua_context: lua_executor,
             window: None,
@@ -130,7 +130,7 @@ impl Engine {
         }
     }
 
-    pub fn update_camera_follow_player(&mut self) {
+    pub fn update_camera_follow_player(&mut self, dt: f32) {
         if self.dimensions == Dimensions::Two {
             if let Some(transform) = self.world.transforms_2d.get(&self.player) {
                 let velocity = self.physics.get_velocity(&self.player);
@@ -139,6 +139,7 @@ impl Engine {
                     None => return,
                 };
                 graphics.move_camera_for_follow(
+                    dt,
                     [transform.position[0], transform.position[1], 0.0],
                     [velocity.x, velocity.y, 0.0],
                     [0.0, 0.0, 0.0],
@@ -169,7 +170,7 @@ impl Engine {
             if self.dimensions == Dimensions::Two {
                 self.physics.step(self.physics_tick_rate);
                 if self.camera_mode == CameraOption::Follow {
-                    self.update_camera_follow_player();
+                    self.update_camera_follow_player(self.physics_tick_rate);
                 }
             }
             self.world.update_positions(self.physics.positions());

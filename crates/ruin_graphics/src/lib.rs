@@ -21,6 +21,7 @@ pub trait Graphics {
     fn get_camera_info(&self) -> CameraInfo;
     fn move_camera_for_follow(
         &mut self,
+        dt: f32,
         position: [f32; 3],
         velocity: [f32; 3],
         acceleration: [f32; 3],

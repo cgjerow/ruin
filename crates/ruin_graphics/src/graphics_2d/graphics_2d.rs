@@ -278,8 +278,9 @@ impl Graphics2D {
         self.camera.update_aspect_ratio(width, height);
     }
 
-    pub fn update_camera(&mut self, target: [f32; 2], velocity: [f32; 2]) {
+    pub fn update_camera(&mut self, dt: f32, target: [f32; 2], velocity: [f32; 2]) {
         self.camera.update_follow(
+            dt,
             cgmath::vec2(target[0], target[1]),
             cgmath::vec2(velocity[0], velocity[1]),
         );
@@ -716,11 +717,12 @@ impl Graphics for Graphics2D {
 
     fn move_camera_for_follow(
         &mut self,
+        dt: f32,
         p: [f32; 3],
         v: [f32; 3],
         _acceleration: [f32; 3],
         _offset: [f32; 3],
     ) {
-        self.update_camera(p[0..2].try_into().unwrap(), v[0..2].try_into().unwrap());
+        self.update_camera(dt, p[0..2].try_into().unwrap(), v[0..2].try_into().unwrap());
     }
 }

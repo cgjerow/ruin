@@ -56,18 +56,21 @@ impl Camera2D {
         }
     }
 
-    pub fn update_follow(&mut self, target: Vector2<f32>, velocity: Vector2<f32>) {
+    pub fn update_follow(&mut self, dt: f32, target: Vector2<f32>, velocity: Vector2<f32>) {
         let speed = velocity.magnitude();
 
         let dir_changed = (velocity.normalize().dot(self.previous_velocity.normalize())).is_nan()
             || velocity.normalize().dot(self.previous_velocity.normalize()) < 0.95;
 
-        if speed > 0.1 && !dir_changed {
+        // Convert per-second rates to per-frame interpolation factors
+        let look_ahead_t = 1.0 - (-self.look_ahead_lerp_speed * dt).exp();
+        let smooth_t = 1.0 - (-self.smooth_factor * dt).exp();
+
+        if speed > 0.0001 && !dir_changed {
             let target_offset = velocity.normalize_to(self.look_ahead);
-            self.look_ahead_offset +=
-                (target_offset - self.look_ahead_offset) * self.look_ahead_lerp_speed;
+            self.look_ahead_offset += (target_offset - self.look_ahead_offset) * look_ahead_t;
         } else {
-            self.look_ahead_offset *= 1.0 - self.look_ahead_lerp_speed;
+            self.look_ahead_offset *= 1.0 - look_ahead_t;
         }
 
         if self.look_ahead_offset.magnitude() > self.look_ahead {
@@ -77,14 +80,14 @@ impl Camera2D {
         let predicted = target + self.look_ahead_offset;
 
         let to_predicted = predicted - self.position;
-        self.position += to_predicted * self.smooth_factor;
+        self.position += to_predicted * smooth_t;
 
         let after_move_to_predicted = predicted - self.position;
         if to_predicted.dot(after_move_to_predicted) < 0.0 {
             self.position = predicted;
         }
 
-        if speed < 0.01 && (self.position - target).magnitude() < 0.1 {
+        if speed < 0.0001 && (self.position - target).magnitude() < 0.1 {
             self.position = target;
         }
 
