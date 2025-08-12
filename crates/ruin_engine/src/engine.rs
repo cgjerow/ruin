@@ -58,7 +58,6 @@ pub struct Engine {
     height: u32,
     fps: FPS,
     camera2d_config: Camera2DConfig,
-    unload: bool,
 }
 
 pub struct EngineConfig {
@@ -112,7 +111,6 @@ impl Engine {
                 time_accum: 0.0,
             },
             camera2d_config: config.camera2d_config,
-            unload: false,
         }
     }
 
@@ -160,9 +158,12 @@ impl Engine {
 
         self.physics_accumulator += dt32;
 
-        let _ = update.call::<()>(dt32);
-
         while self.physics_accumulator >= self.physics_tick_rate {
+            let _ = update.call::<()>(self.physics_tick_rate);
+            if self.physics_paused {
+                return Ok(());
+            }
+
             self.physics_accumulator -= self.physics_tick_rate;
 
             if self.dimensions == Dimensions::Two {
@@ -281,14 +282,13 @@ impl Engine {
     }
 
     fn unload_scene(&mut self) {
-        self.unload = true;
+        self.unload_all_caches();
     }
 
-    fn unload(&mut self) {
+    fn unload_all_caches(&mut self) {
         self.canvas.unload();
         self.world.unload();
         self.physics.unload();
-        self.unload = false;
     }
 
     fn create_body(&mut self, lua_element: mlua::Table) -> [u32; 2] {
@@ -594,10 +594,6 @@ impl Engine {
         self.count += 1;
         if self.count > SAFETY_MAX_FOR_DEV {
             event_loop.exit()
-        }
-
-        if self.unload {
-            self.unload();
         }
 
         event_loop.set_control_flow(ControlFlow::Poll);

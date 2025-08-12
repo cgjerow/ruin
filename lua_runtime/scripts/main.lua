@@ -31,6 +31,7 @@ CONFIG = {
 			:key("S", "Down")
 			:key("A", "MoveLeft")
 			:key("D", "MoveRight")
+			:key("P", "Pause")
 			:build(),
 }
 
@@ -284,21 +285,11 @@ local function handle_ui_input(input, is_pressed, mouse_position)
 end
 
 function ruin.handle_input(input, is_pressed, mouse_position)
-	if WORLD.is_paused() then
-		if string.upper(input) ~= "P" then
-			handle_ui_input(input, is_pressed, mouse_position)
-		else
-			load_pre_game_screen()
-		end
+	if WORLD.is_paused() and is_pressed then
+		print("HELLO?", input, is_pressed)
+		handle_ui_input(input, is_pressed, mouse_position)
 	else
-		if (string.upper(input) == "P") then
-			WORLD.pause()
-			engine.unload_scene()
-			CONFIG.entities = {}
-			load_pre_game_screen()
-		else
-			CONFIG.controller:update(string.upper(input), is_pressed, mouse_position, engine.now_ns())
-		end
+		CONFIG.controller:update(string.upper(input), is_pressed, mouse_position, engine.now_ns())
 	end
 end
 
@@ -315,7 +306,16 @@ local fps_debug = {
 }
 
 function ruin.update(dt)
+	if CONFIG.controller:is_pressed("Pause") then
+		print(WORLD.is_paused())
+		WORLD.pause()
+		engine.unload_scene()
+		CONFIG.entities = {}
+		load_pre_game_screen()
+		CONTROLLER.start_input_reenable_timer(0.2)
+	end
 	if WORLD.is_paused() then return end
+
 
 	local x = math.random(0, 100)
 	local y = math.random(0, 100)
