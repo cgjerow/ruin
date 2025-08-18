@@ -329,7 +329,7 @@ function ruin.update(dt)
 	end
 
 
-	if (count < 50) then
+	if (count < 1000) then
 		local s = skelly.new(x, y)
 		s.is_skelly = true
 		count = count + 1
@@ -378,7 +378,7 @@ function ruin.update(dt)
 	end
 	]]
 
-	skelly.update(dt)
+	-- skelly.update(dt)
 
 	--[[ PROCESS INPUT ]]
 	--everything after this will only run while input is enabled
