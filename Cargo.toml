@@ -16,3 +16,11 @@ ruin_camera = { path = "crates/ruin_camera" }
 anyhow = "1.0"
 mlua = { version = "0.10.5", features = ["lua54", "vendored"] }
 winit = "0.30.11"
+criterion = "0.7.0"
+
+[dev-dependences]
+criterion = { version = "0.7", feature = ["html_reports"] }
+
+[[bench]]
+name = "test_benchmark"
+harness = false
