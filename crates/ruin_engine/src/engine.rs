@@ -11,6 +11,9 @@ use ruin_ecs::{
     animation_system_update_frames, set_entity_state, ActionState, ActionStateComponent, Animation,
     AnimationComponent, Entity, FlipComponent, HealthComponent, Transform2D,
 };
+use ruin_ecs_plugins::{
+    BvhCollisionDetector, GridSpaceCollisionDetector, SimpleCollideAndSlideCollisionResolver,
+};
 use ruin_graphics::graphics_2d::Graphics2D;
 use ruin_graphics::Graphics;
 use ruin_lua_runtime::LuaExtendedExecutor;
@@ -100,7 +103,11 @@ impl Engine {
             width: config.window_width,
             height: config.window_height,
             world: World::new(),
-            physics: PhysicsWorld::new(),
+            physics: PhysicsWorld::new(
+                Box::new(GridSpaceCollisionDetector::new(3.0, 100)),
+                // Box::new(BvhCollisionDetector::new()),
+                Box::new(SimpleCollideAndSlideCollisionResolver::new(0.0)),
+            ),
             physics_paused: true, // assume starting in "paused"
             canvas: Canvas::new(
                 config.virtual_resolution_width,

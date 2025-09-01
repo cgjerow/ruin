@@ -11,6 +11,7 @@ ruin_camera = { path = "../ruin_camera" }
 ruin_canvas = { path = "../ruin_canvas" }
 ruin_debug = { path = "../ruin_debug" }
 ruin_ecs = { path = "../ruin_ecs" }
+ruin_ecs_plugins = { path = "../ruin_ecs_plugins" }
 ruin_graphics = { path = "../ruin_graphics" }
 ruin_player_controller = { path = "../ruin_player_controller" }
 anyhow = "1.0"

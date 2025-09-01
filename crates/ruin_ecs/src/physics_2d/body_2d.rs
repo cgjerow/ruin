@@ -4,11 +4,7 @@ use cgmath::{InnerSpace, Vector2};
 use ruin_bitmaps::MaskLayerBitmap;
 
 use crate::{
-    physics_2d::{
-        grid_space_collision_handler::GridSpaceCollisionHandler,
-        simple_collide_and_slide_collision_resolver::SimpleCollideAndSlideCollisionResolver,
-        CollisionDetector, CollisionResolver,
-    },
+    physics_2d::{CollisionDetector, CollisionResolver},
     Entity,
 };
 
@@ -133,6 +129,32 @@ pub struct AABB {
 }
 
 impl AABB {
+    #[inline]
+    pub fn new(min: Point2D, max: Point2D) -> Self {
+        Self { min, max }
+    }
+
+    #[inline]
+    pub fn union(self, other: &AABB) -> AABB {
+        AABB::new(
+            Point2D {
+                x: self.min.x.min(other.min.x),
+                y: self.min.y.min(other.min.y),
+            },
+            Point2D {
+                x: self.max.x.max(other.max.x),
+                y: self.max.y.max(other.max.y),
+            },
+        )
+    }
+
+    #[inline]
+    pub fn area(&self) -> Unit {
+        let w = (self.max.x - self.min.x).max(0.0);
+        let h = (self.max.y - self.min.y).max(0.0);
+        w * h
+    }
+
     pub fn merge(&mut self, other: &AABB) {
         self.min.x = self.min.x.min(other.min.x);
         self.min.y = self.min.y.min(other.min.y);
@@ -140,11 +162,34 @@ impl AABB {
         self.max.y = self.max.y.max(other.max.y);
     }
 
+    #[inline]
     pub fn overlaps(&self, other: &AABB) -> bool {
         self.min.x < other.max.x
             && self.max.x > other.min.x
             && self.min.y < other.max.y
             && self.max.y > other.min.y
+    }
+
+    #[inline]
+    pub fn center(&self) -> Point2D {
+        Point2D {
+            x: (self.min.x + self.max.x) * 0.5,
+            y: (self.min.y + self.max.y) * 0.5,
+        }
+    }
+
+    #[inline]
+    pub fn longest_axis(&self) -> usize {
+        let extents = Point2D {
+            x: self.max.x - self.min.x,
+            y: self.max.y - self.min.y,
+        };
+
+        if extents.x > extents.y {
+            0 // X axis
+        } else {
+            1 // Y axis
+        }
     }
 }
 
@@ -278,13 +323,16 @@ pub struct PhysicsWorld {
 }
 
 impl PhysicsWorld {
-    pub fn new() -> Self {
+    pub fn new(
+        collision_detector: Box<dyn CollisionDetector>,
+        collision_resolver: Box<dyn CollisionResolver>,
+    ) -> Self {
         PhysicsWorld {
             bodies: Vec::new(),
             entity_map: HashMap::new(),
             player_pos: Point2D { x: 0.0, y: 0.0 },
-            collision_detector: Box::new(GridSpaceCollisionHandler::new(3.0, 100)),
-            collision_resolver: Box::new(SimpleCollideAndSlideCollisionResolver::new(0.0)),
+            collision_detector,
+            collision_resolver,
         }
     }
 
@@ -309,6 +357,8 @@ impl PhysicsWorld {
         //println!("Integrate {:?}", i.elapsed().as_secs_f64());
         //
         let _i = Instant::now();
+        self.collision_detector
+            .update_player_position(self.player_pos);
         let overlaps = self.collision_detector.broad_phase(&self.bodies);
         let overlaps = self.collision_detector.narrow_phase(&overlaps);
         //println!("overlaps {:?}", i.elapsed().as_secs_f64());

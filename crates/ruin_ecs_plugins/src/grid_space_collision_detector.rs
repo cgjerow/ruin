@@ -1,11 +1,8 @@
 use std::{collections::HashMap, time::Instant};
 
 use ruin_bitmaps::masks_overlap_layers;
-
-use crate::physics_2d::{
-    body_2d::{Index, Unit},
-    collision_handler::CollisionPair,
-    Body2D, BodyType2D, CollisionDetector, Point2D,
+use ruin_ecs::physics_2d::{
+    Body2D, BodyType2D, CollisionDetector, CollisionPair, Index, Point2D, Unit, AABB,
 };
 
 type GridCoord = (i32, i32);
@@ -29,14 +26,14 @@ impl SpatialGrid {
     }
 }
 
-pub struct GridSpaceCollisionHandler {
+pub struct GridSpaceCollisionDetector {
     grid: SpatialGrid,
     player_position: Point2D,
 }
 
-impl GridSpaceCollisionHandler {
-    pub fn new(tile_size: Unit, grid_radius: i32) -> GridSpaceCollisionHandler {
-        GridSpaceCollisionHandler {
+impl GridSpaceCollisionDetector {
+    pub fn new(tile_size: Unit, grid_radius: i32) -> GridSpaceCollisionDetector {
+        GridSpaceCollisionDetector {
             grid: SpatialGrid::new(tile_size, grid_radius),
             player_position: Point2D { x: 0.0, y: 0.0 },
         }
@@ -71,11 +68,12 @@ impl GridSpaceCollisionHandler {
     }
 }
 
-impl CollisionDetector for GridSpaceCollisionHandler {
-    fn broad_phase(
-        &mut self,
-        bodies: &Vec<super::Body2D>,
-    ) -> Vec<super::collision_handler::CollisionPair> {
+impl CollisionDetector for GridSpaceCollisionDetector {
+    fn update_player_position(&mut self, position: Point2D) {
+        self.player_position = position;
+    }
+
+    fn broad_phase(&mut self, bodies: &Vec<Body2D>) -> Vec<CollisionPair> {
         let _i = Instant::now();
         self.grid.dynamic_tiles.clear();
         self.grid.static_tiles.clear();
@@ -148,10 +146,7 @@ impl CollisionDetector for GridSpaceCollisionHandler {
         pairs
     }
 
-    fn narrow_phase(
-        &mut self,
-        broad_phase_results: &Vec<super::collision_handler::CollisionPair>,
-    ) -> Vec<super::collision_handler::CollisionPair> {
+    fn narrow_phase(&mut self, broad_phase_results: &Vec<CollisionPair>) -> Vec<CollisionPair> {
         return broad_phase_results.clone();
     }
 }

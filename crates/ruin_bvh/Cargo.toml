@@ -1,0 +1,7 @@
+[package]
+name = "ruin_bvh"
+version = "0.1.0-dev"
+edition = "2021"
+
+[dependencies]
+ruin_ecs = { path = "../ruin_ecs" }

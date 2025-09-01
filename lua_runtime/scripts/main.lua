@@ -378,7 +378,7 @@ function ruin.update(dt)
 	end
 	]]
 
-	-- skelly.update(dt)
+	skelly.update(dt)
 
 	--[[ PROCESS INPUT ]]
 	--everything after this will only run while input is enabled

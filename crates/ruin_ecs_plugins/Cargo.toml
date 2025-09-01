@@ -1,0 +1,11 @@
+[package]
+name = "ruin_ecs_plugins"
+version = "0.1.0-dev"
+edition = "2021"
+
+[dependencies]
+ruin_bitmaps = { path = "../ruin_bitmaps" }
+ruin_bvh = { path = "../ruin_bvh" }
+ruin_ecs = { path = "../ruin_ecs" }
+bitflags = "2.9.3"
+cgmath = "0.18.0"
