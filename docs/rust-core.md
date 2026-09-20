@@ -21,7 +21,7 @@ The central orchestrator. Implements `winit::ApplicationHandler` and drives the 
 | `canvas: Canvas` | UI/canvas scene management |
 | `camera2d_config: Camera2DConfig` | Camera follow settings (zoom, look-ahead, smoothing) |
 | `lua_context: LuaExtendedExecutor` | Lua runtime bridge |
-| `physics_accumulator` | Fixed-timestep accumulator (300 Hz) |
+| `physics_accumulator` | Fixed-timestep accumulator (60 Hz) |
 | `fps` | FPS counter for telemetry |
 
 **Key Methods:**
@@ -57,11 +57,16 @@ A flat HashMap-based ECS. Entities are `u32` IDs; components are stored in per-t
 
 **Physics pipeline per `step(dt)`:**
 ```
-1. Integrate: velocity → position for all bodies
-2. Broad Phase: GridSpaceCollisionDetector finds potential pairs
+1. Integrate: velocity → position for ALL bodies (in-range and out-of-range)
+2. Broad Phase: GridSpaceCollisionDetector finds potential pairs with tier filtering
 3. Narrow Phase: AABB overlap test + layer/mask filtering
-4. Resolution: SimpleCollideAndSlideCollisionResolver applies MTV
+4. Resolution: SimpleCollideAndSlideCollisionResolver applies MTV + per-moved-body static re-test
 ```
+
+**Tier filtering:**
+- Tier 1 (both in-range): full detection + resolution
+- Tier 2 (one in-range, one out): full detection + resolution
+- Tier 3 (both out-of-range): entity-entity SKIPPED; entity-terrain still resolved
 
 **`collision_handler.rs`** — Traits:
 - `CollisionDetector` — `broad_phase()` + `narrow_phase()`
@@ -162,19 +167,19 @@ Two executors:
 - Two-pass: static collisions first, then dynamic-dynamic
 - Velocity clamping along collision normal
 
-#### `BvhCollisionDetector` (unused)
-- BVH tree construction from AABBs
-- Broad phase only (narrow phase returns empty)
-- Currently a placeholder — not wired into the engine
+#### `BvhCollisionDetector` (placeholder)
+- BVH tree construction from AABBs (currently commented out)
+- Broad phase falls back to O(n²) brute-force with tier filtering
+- Narrow phase clones broad phase results (no-op)
+- TODO: Implement BVH query to replace brute-force loop
 
-### 9. `ruin_bvh` — Bounding Volume Hierarchy
+### 9. `ruin_bvh` — Bounding Volume Hierarchy (placeholder, not yet used in active pipeline)
 
 **Path:** `crates/ruin_bvh/src/lib.rs`
 
 Basic BVH implementation:
 - Recursive median-split on longest axis
 - Leaf nodes store user data
-- Not currently used in the active collision pipeline
 
 ### 10. `ruin_bitmaps` — Bit Utilities
 
@@ -218,7 +223,7 @@ Per frame:
   │     ├─ Set velocity via engine.set_velocity_2d()
   │     └─ Change state via engine.set_state()
   │
-  ├─ Physics step (300 Hz):
+  ├─ Physics step (60 Hz):
   │     ├─ Integrate velocities
   │     ├─ Collision detection (grid broad + AABB narrow)
   │     └─ Collision resolution (MTV + slide)

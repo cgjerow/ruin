@@ -8,11 +8,6 @@ pub fn body_in_range(body: &Body2D, center: Point2D, range: f32) -> bool {
     dx <= range && dy <= range
 }
 
-/// Check if a body is terrain (static or kinematic).
-pub fn is_terrain(body: &Body2D) -> bool {
-    matches!(body.body_type(), BodyType2D::Static | BodyType2D::Kinematic)
-}
-
 #[derive(Debug, Clone)]
 pub struct CollisionPair {
     pub a: Index,

@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use ruin_bitmaps::masks_overlap_layers;
 use ruin_ecs::physics_2d::{
-    body_in_range, is_terrain, Body2D, BodyType2D, CollisionDetector, CollisionPair, Index,
-    Point2D, Unit,
+    body_in_range, Body2D, BodyType2D, CollisionDetector, CollisionPair, Index, Point2D, Unit,
 };
 
 type GridCoord = (i32, i32);
@@ -91,7 +90,9 @@ impl CollisionDetector for GridSpaceCollisionDetector {
 
             let dx = body.position.x - center.x;
             let dy = body.position.y - center.y;
-            if !is_terrain(body) && dx * dx + dy * dy > range_sq {
+            if !matches!(body.body_type(), BodyType2D::Static)
+                && dx * dx + dy * dy > range_sq
+            {
                 bodies_out_of_range += 1;
             }
             bodies_inserted += 1;

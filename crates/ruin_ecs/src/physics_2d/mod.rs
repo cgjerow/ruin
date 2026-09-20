@@ -6,5 +6,5 @@ pub use body_2d::{
     Unit, Vector2D, AABB,
 };
 pub use collision_handler::{
-    body_in_range, is_terrain, CollisionDetector, CollisionPair, CollisionResolver,
+    body_in_range, CollisionDetector, CollisionPair, CollisionResolver,
 };

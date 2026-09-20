@@ -1,7 +1,7 @@
 # Design: Tiered Collision System
 
 > **Status**: ✅ Implemented (as of 2025-07-04). All core changes from this design are in place.
-> **Profiling**: 505 bodies at 60 Hz → 6.5 ms total physics (92% broad phase). Stable ~120 FPS. See `docs/requirements.md` for details.
+> **Profiling**: 1500 bodies at 60 Hz → ~5.5 ms total physics (85% broad phase). Stable ~120 FPS. See `docs/requirements.md` for details.
 
 ## Problem
 
@@ -67,7 +67,7 @@ impl PhysicsWorld {
         let overlaps = self.collision_detector
             .broad_phase(&self.bodies, self.player_pos, self.physics_range);
         let overlaps = self.collision_detector.narrow_phase(&overlaps);
-        self.collision_resolver.resolve(&mut self.bodies, &overloads);
+        self.collision_resolver.resolve(&mut self.bodies, &overlaps);
     }
 }
 ```
@@ -130,16 +130,24 @@ Runtime-adjustable for effects like fog-of-war or zoom-based culling.
 
 ## Performance Impact
 
-With 1000 entities, physics_range = 30.0, player in center of 50×50 arena:
+With 1500 entities, physics_range = 30.0, player in center of 50×50 arena:
 
-| Metric | Before | After |
-|--------|--------|-------|
-| Bodies integrated | 1000 | 1000 (unchanged) |
-| Bodies in grid | 1000 | 1000 (unchanged) |
+| Metric | Before (300 Hz) | After (60 Hz + tiered) |
+|--------|----------------|------------------------|
+| Physics steps/frame | 5 (at 60 FPS) | 1 |
+| Bodies integrated | 1500 | 1500 (unchanged) |
+| Bodies in grid | 1500 | 1500 (unchanged) |
 | Tiles queried | ~289 (all) | ~400 (range-based) |
-| Pairs generated | ~500K | ~500 (entity-entity off-screen skipped) |
-| Pairs resolved | ~500K | ~500 |
-| Step time | >3.33ms | <1ms |
+| Pairs generated | ~1.1M (300 Hz) | ~4K (tier 3 filtered) |
+| Pairs resolved | ~1.1M (300 Hz) | ~4K |
+| Step time | ~20ms (5×4ms) | ~5.5ms |
+| Physics budget utilization | 120% (over budget) | 33% (at 120 FPS render) |
+
+### Key Savings Breakdown
+
+1. **300 Hz → 60 Hz**: 80% reduction in physics steps (5→1 per frame)
+2. **Tier 3 filtering**: ~90% reduction in collision pairs (skips entity-entity for both-out-of-range)
+3. **Combined**: ~95% reduction in total physics work
 
 ## Acceptance
 
@@ -147,3 +155,24 @@ With 1000 entities, physics_range = 30.0, player in center of 50×50 arena:
 - Enemies off-screen can overlap each other (no visible effect)
 - When camera moves toward off-screen enemies, they start colliding immediately
 - `physics_range` configurable via `setup.lua` and runtime via Lua API
+
+## Follow-on: REG-001 Tunneling Fix
+
+The tiered collision system exposed a secondary issue: **dense-crowd terrain tunneling**. When ~200+ entities were pushed against walls (e.g., arena fence), bodies would clip through static colliders despite the tier filtering keeping entity-terrain pairs global.
+
+### Root Causes
+
+1. **Stale AABBs during resolve** — Multi-pass resolution moved bodies but never updated AABBs, so subsequent iterations applied the same overlaps.
+2. **Inverted wall velocity clamp** — Velocity was clamped along the MTV direction instead of the separation direction, keeping bodies driving into walls.
+3. **Precomputed static pairs only** — Resolution only checked static pairs from broadphase; a body pushed through a wall mid-solve had no new static pair to catch it.
+4. **Incomplete MTV transfer** — When anchored against a wall, the free body didn't receive the full MTV, leaving residual stack pressure.
+
+### Fix Summary
+
+- `Body2D::sync_aabbs()` called after every position change in the resolver
+- Per-moved-body static re-test (`separate_from_all_statics`) after each dynamic resolution
+- Velocity clamped along **separation** direction (out of wall), not MTV direction
+- Full MTV transferred to free body when one axis is wall-anchored
+- Bidirectional mask/layer checks
+
+See `docs/regressions.md` (REG-001) for full details and regression tests.

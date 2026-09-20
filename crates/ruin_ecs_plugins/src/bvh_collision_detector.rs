@@ -3,7 +3,7 @@ use std::time::Instant;
 use ruin_bitmaps::masks_overlap_layers;
 use ruin_bvh::BVH;
 use ruin_ecs::physics_2d::{
-    body_in_range, is_terrain, AABB, Body2D, CollisionDetector, CollisionPair, Point2D,
+    body_in_range, AABB, Body2D, BodyType2D, CollisionDetector, CollisionPair, Point2D,
 };
 
 pub struct BvhCollisionDetector {
@@ -59,7 +59,9 @@ impl CollisionDetector for BvhCollisionDetector {
 
                 // Tier 3: both out-of-range, entity-entity → skip
                 if !a_in_range && !b_in_range {
-                    if !is_terrain(&bodies[i]) && !is_terrain(&bodies[j]) {
+                    if !matches!(bodies[i].body_type(), BodyType2D::Static)
+                        && !matches!(bodies[j].body_type(), BodyType2D::Static)
+                    {
                         continue;
                     }
                 }

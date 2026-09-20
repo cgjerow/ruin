@@ -88,11 +88,11 @@ tick_game(dt)
     ├── FPS measurement & frame pacing
     │
     ├── update(dt)                    ← Lua: ENGINE_update(dt)
-    │     ├── Physics stepping (300 Hz fixed tick)
+    │     ├── Physics stepping (60 Hz fixed tick)
     │     │   ├── Integrate (velocity → position)
-    │     │   ├── Collision broad phase (spatial grid)
-    │     │   ├── Collision narrow phase (AABB overlap)
-    │     │   └── Collision resolution (MTV + velocity clamp)
+    │     │   ├── Collision broad phase (tiered spatial grid)
+    │     │   ├── Collision narrow phase (AABB overlap + layer/mask)
+    │     │   └── Collision resolution (MTV + velocity clamp + static re-test)
     │     ├── Lua collision callbacks
     │     └── Animation frame advancement
     │
@@ -106,9 +106,9 @@ tick_game(dt)
 
 ## Key Design Decisions
 
-1. **Fixed timestep physics** — Physics runs at a fixed 300 Hz rate (3.33ms per step), independent of frame rate. The accumulator ensures deterministic physics regardless of rendering speed.
+1. **Fixed timestep physics** — Physics runs at a fixed 60 Hz rate (16.67ms per step), independent of frame rate. The accumulator ensures deterministic physics regardless of rendering speed. (Previously 300 Hz; reduced to 60 Hz to match frame rate and cut physics work by 80%.)
 
-2. **Spatial hash grid for collision** — `GridSpaceCollisionDetector` uses a tile-based spatial hash with configurable tile size and radius. Only bodies within the player's vicinity are checked, avoiding O(n²) pairwise checks.
+2. **Tiered spatial hash grid for collision** — `GridSpaceCollisionDetector` uses a tile-based spatial hash with configurable tile size and physics range. Entities are classified into tiers: both-in-range (full collision), one-in-range (full collision), both-out-of-range (entity-entity skipped, entity-terrain still resolved). This avoids O(n²) pairwise checks for off-screen entities while keeping terrain solid everywhere.
 
 3. **Component-based world** — The `World` struct holds flat `HashMap<Entity, Component>` mappings. This is a sparse ECS without query systems; components are accessed directly by entity ID.
 
@@ -131,7 +131,7 @@ ruin_engine (central)
 ├── ruin_lua_runtime      ← Lua bridge (mlua)
 ├── ruin_player_controller← Input key/button mapping
 ├── ruin_ecs_plugins      ← Collision detectors & resolver
-│   ├── ruin_bvh          ← BVH spatial structure (unused)
+│   ├── ruin_bvh          ← BVH spatial structure (placeholder, not yet implemented)
 │   └── ruin_bitmaps
 └── ruin_debug            ← Debug logging macro
 ```

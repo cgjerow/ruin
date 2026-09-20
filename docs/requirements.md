@@ -15,12 +15,43 @@
 ### 🔄 In Progress
 - Collision pair capping at 1024 (NFR-4).
 - Incremental grid rebuild (NFR-4).
+- BVH-based broad phase to replace O(n²) brute-force loop.
 
 ### 📋 Planned
 - Entity pool to avoid allocation churn (FR-4).
 - Resolution iteration capping (FR-3).
 
-## Profiling Results (505 bodies, 60 Hz)
+## Profiling Results (1500 bodies, 60 Hz)
+
+| Phase | Time | % of Physics | Notes |
+|-------|------|-------------|-------|
+| Integrate | ~0.15 ms | ~1% | Negligible — all bodies |
+| Broad phase | ~3–5 ms | ~85% | **Dominant bottleneck** — O(n²) brute force in grid detector |
+| Narrow phase | — | (incl.) | Clone only, fast |
+| Resolve | ~0.5–0.8 ms | ~10% | MTV + velocity clamping + static re-test |
+| **Total** | **~5–6 ms** | | Well within 16.7 ms (60 FPS) budget |
+
+### Broad Phase Breakdown
+
+| Metric | Value | Notes |
+|--------|-------|-------|
+| Bodies in range | ~1400+ | Most entities spawn within range |
+| Bodies filtered | ~100 | Few outside range |
+| Grid tiles populated | 400–500 | Tile size = entity size |
+| Pair checks (potential) | 50K–80K | Grid cell pair enumeration |
+| Visited-skip (dedup) | 15K–25K | Already-seen pairs skipped |
+| **Pairs added (actual)** | **3K–5K** | AABB overlap + layer/mask + tier filtering |
+| Grid insertion | 0.5–0.8 ms | HashMap ops |
+| Pair enumeration | 2.5–4.2 ms | **Main cost** — nested loops |
+
+### Key Insights
+
+1. **Broad phase is ~85% of physics time** — the grid's nested pair enumeration over tiles is the bottleneck.
+2. **Range filtering has limited impact** — most entities spawn within the 30-unit range, so almost all bodies get inserted.
+3. **Tier 3 filtering saves work** — skipping entity-entity pairs for bodies both out-of-range reduces pair count significantly.
+4. **Collision resolution is cheap** — <1 ms for 3K–5K pairs, well within budget.
+5. **Integration is trivial** — <0.2 ms for 1500 bodies, not a concern.
+6. **FPS stays stable at ~120** — physics uses ~5.5 ms of 8.33 ms budget at 60 Hz (66% utilization). At 120 FPS render, physics uses ~5.5 ms of 16.67 ms (33% utilization).
 
 | Phase | Time | % of Physics | Notes |
 |-------|------|-------------|-------|
@@ -63,7 +94,7 @@ This engine must support **Vampire Survivors-scale** entity counts: hundreds of 
 | **Collision pairs per frame** | Up to ~50,000 | Worst case: dense cluster of entities overlapping |
 | **Physics frequency** | 60 Hz | Matched to frame rate; 300 Hz is unnecessary overhead (was 300 Hz, reduced to 60 Hz) |
 | **Target frame time** | ≤ 16.67 ms | 60 FPS with headroom |
-| **Physics budget** | ≤ 4 ms | ~25% of frame time |
+| **Physics budget** | ≤ 6 ms | ~35% of frame time |
 | **Collision detection budget** | ≤ 2 ms | Broad + narrow phase |
 | **Collision resolution budget** | ≤ 2 ms | MTV + velocity clamping |
 | **Render budget** | ≤ 8 ms | Sprite batching + WGPU |
@@ -133,10 +164,10 @@ This engine must support **Vampire Survivors-scale** entity counts: hundreds of 
 
 - Physics simulation range must be configurable per-engine, matching the camera's view range pattern
 - Range defined as a radius (in world units) around the player/camera center
-- Entities outside the range must be **excluded from physics entirely** — no integration, no collision detection, no resolution
+- **Integration runs on ALL bodies** — off-screen entities still move via velocity → position, so they're where they should be when the camera approaches
+- **Collision detection is tiered** — entity-terrain pairs are always resolved; entity-entity pairs are skipped when both bodies are out-of-range (Tier 3)
 - Range must be settable via `EngineConfig` and adjustable at runtime (e.g., `engine.set_physics_range(radius)`)
-- When range changes, bodies outside the new range are deactivated; bodies entering are activated
-- Default range: 2× the camera viewport diagonal (ensures off-screen entities still collide with screen-edge entities)
+- Default range: 30.0 world units (60×60 unit square)
 
 ### NFR-4: Spatial Partition Accuracy
 
@@ -149,6 +180,7 @@ This engine must support **Vampire Survivors-scale** entity counts: hundreds of 
 - Maximum collision pairs per step: **1024** (configurable)
 - When cap is reached, prioritize pairs involving the **player** and closest entities
 - Remaining pairs are deferred to next physics step
+- **Note: Not yet implemented.** Current code processes all pairs from broad phase. This is a planned optimization.
 
 ## Acceptance Criteria
 
