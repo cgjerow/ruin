@@ -2,9 +2,7 @@ use std::time::Instant;
 
 use ruin_bitmaps::masks_overlap_layers;
 use ruin_bvh::BVH;
-use ruin_ecs::physics_2d::{
-    body_in_range, AABB, Body2D, BodyType2D, CollisionDetector, CollisionPair, Point2D,
-};
+use ruin_ecs::physics_2d::{AABB, Body2D, BodyType2D, CollisionDetector, CollisionPair, Point2D};
 
 pub struct BvhCollisionDetector {
     player_position: Point2D,
@@ -50,12 +48,16 @@ impl CollisionDetector for BvhCollisionDetector {
             if bodies[i].colliders.is_empty() {
                 continue;
             }
-            let a_in_range = body_in_range(&bodies[i], center, range);
+            if !bodies[i].in_range(center, range) {
+                continue;
+            }
             for j in (i + 1)..body_count {
                 if bodies[j].colliders.is_empty() {
                     continue;
                 }
-                let b_in_range = body_in_range(&bodies[j], center, range);
+                if !bodies[j].in_range(center, range) {
+                    continue;
+                }
 
                 // Tier 3: both out-of-range, entity-entity → skip
                 if !a_in_range && !b_in_range {

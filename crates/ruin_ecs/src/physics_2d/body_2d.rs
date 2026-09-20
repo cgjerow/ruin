@@ -285,6 +285,15 @@ impl Body2D {
         self.colliders.push(collider);
     }
 
+    /// Check if this body's AABB center is within range of the given center point.
+    #[inline]
+    pub fn in_range(&self, center: Point2D, range: f32) -> bool {
+        let body_center = self.aabb_superset.center();
+        let dx = (body_center.x - center.x).abs();
+        let dy = (body_center.y - center.y).abs();
+        dx <= range && dy <= range
+    }
+
     /// Recompute world-space AABBs from the current position.
     /// Must be called after any position change outside of `integrate`
     /// so subsequent collision checks see up-to-date bounds.

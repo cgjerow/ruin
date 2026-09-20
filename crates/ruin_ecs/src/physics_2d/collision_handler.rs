@@ -1,13 +1,5 @@
 use crate::physics_2d::{body_2d::Index, Body2D, BodyType2D, Point2D};
 
-/// Check if a body's AABB center is within range of the center point.
-pub fn body_in_range(body: &Body2D, center: Point2D, range: f32) -> bool {
-    let body_center = body.aabb_superset.center();
-    let dx = (body_center.x - center.x).abs();
-    let dy = (body_center.y - center.y).abs();
-    dx <= range && dy <= range
-}
-
 #[derive(Debug, Clone)]
 pub struct CollisionPair {
     pub a: Index,

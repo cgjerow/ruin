@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
 use ruin_bitmaps::masks_overlap_layers;
-use ruin_ecs::physics_2d::{
-    body_in_range, Body2D, BodyType2D, CollisionDetector, CollisionPair, Index, Point2D, Unit,
-};
+use ruin_ecs::physics_2d::{Body2D, BodyType2D, CollisionDetector, CollisionPair, Index, Point2D, Unit, AABB};
 
 type GridCoord = (i32, i32);
 
@@ -83,16 +81,8 @@ impl CollisionDetector for GridSpaceCollisionDetector {
         let mut bodies_inserted = 0;
         let mut bodies_out_of_range = 0;
         let range_sq = (range + self.grid.tile_size) * (range + self.grid.tile_size);
-        for (i, body) in bodies.iter().enumerate() {
-            if body.colliders.is_empty() {
-                continue;
-            }
-
-            let dx = body.position.x - center.x;
-            let dy = body.position.y - center.y;
-            if !matches!(body.body_type(), BodyType2D::Static)
-                && dx * dx + dy * dy > range_sq
-            {
+        for (i, body) in bodies.iter().filter(|b| !b.colliders.is_empty()).enumerate() {
+            if !body.in_range(center, range) {
                 bodies_out_of_range += 1;
             }
             bodies_inserted += 1;
@@ -131,8 +121,8 @@ impl CollisionDetector for GridSpaceCollisionDetector {
                         let a = dynamic[i];
                         let b = dynamic[j];
                         if visited.insert((a.min(b), a.max(b))) {
-                            let a_in_range = body_in_range(&bodies[a], center, range);
-                            let b_in_range = body_in_range(&bodies[b], center, range);
+                            let a_in_range = bodies[a].in_range(center, range);
+                            let b_in_range = bodies[b].in_range(center, range);
                             if !a_in_range && !b_in_range {
                                 continue;
                             }
