@@ -2177,6 +2177,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruin_events"
+version = "0.1.0-dev"
+
+[[package]]
 name = "ruin_graphics"
 version = "0.1.0-dev"
 dependencies = [

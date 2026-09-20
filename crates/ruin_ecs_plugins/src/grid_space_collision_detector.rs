@@ -2,7 +2,8 @@ use std::{collections::HashMap, time::Instant};
 
 use ruin_bitmaps::masks_overlap_layers;
 use ruin_ecs::physics_2d::{
-    Body2D, BodyType2D, CollisionDetector, CollisionPair, Index, Point2D, Unit, AABB,
+    body_in_range, is_terrain, Body2D, BodyType2D, CollisionDetector, CollisionPair, Index,
+    Point2D, Unit,
 };
 
 type GridCoord = (i32, i32);
@@ -69,20 +70,33 @@ impl GridSpaceCollisionDetector {
 }
 
 impl CollisionDetector for GridSpaceCollisionDetector {
-    fn update_player_position(&mut self, position: Point2D) {
+    fn update_player_position(&mut self, position: Point2D, _physics_range: f32) {
         self.player_position = position;
     }
 
-    fn broad_phase(&mut self, bodies: &Vec<Body2D>) -> Vec<CollisionPair> {
-        let _i = Instant::now();
+    fn broad_phase(&mut self, bodies: &Vec<Body2D>, center: Point2D, range: f32) -> Vec<CollisionPair> {
+        let t0 = Instant::now();
         self.grid.dynamic_tiles.clear();
         self.grid.static_tiles.clear();
 
-        for (i, body) in bodies
-            .iter()
-            .filter(|b| !b.colliders.is_empty())
-            .enumerate()
-        {
+        // Insert all collidable bodies. Entity-entity pairs for out-of-range
+        // bodies are skipped during pair generation (Tier 3); entity-terrain
+        // pairs are always generated so walls stay solid everywhere.
+        let mut bodies_inserted = 0;
+        let mut bodies_out_of_range = 0;
+        let range_sq = (range + self.grid.tile_size) * (range + self.grid.tile_size);
+        for (i, body) in bodies.iter().enumerate() {
+            if body.colliders.is_empty() {
+                continue;
+            }
+
+            let dx = body.position.x - center.x;
+            let dy = body.position.y - center.y;
+            if !is_terrain(body) && dx * dx + dy * dy > range_sq {
+                bodies_out_of_range += 1;
+            }
+            bodies_inserted += 1;
+
             let target_map =
                 if matches!(body.body_type(), BodyType2D::Rigid | BodyType2D::Kinematic) {
                     &mut self.grid.dynamic_tiles
@@ -92,30 +106,39 @@ impl CollisionDetector for GridSpaceCollisionDetector {
 
             Self::insert_body_into_grid(target_map, body, i, self.grid.tile_size);
         }
-        //println!("Inserts {:?}", i.elapsed().as_secs_f64());
-        let _i = Instant::now();
+        let t1 = t0.elapsed();
 
         let mut pairs = Vec::new();
-        let tile_size = self.grid.tile_size;
-        let center_tile_x = (self.player_position.x / tile_size).floor() as i32;
-        let center_tile_y = (self.player_position.y / tile_size).floor() as i32;
-        let radius = self.grid.grid_radius;
-
-        let mut visited = std::collections::HashSet::new();
         static EMPTY_VEC: Vec<usize> = Vec::new();
+        let mut pairs_checked = 0;
+        let mut pairs_added = 0;
+        let mut visited_skipped = 0;
+        let mut visited = std::collections::HashSet::new();
 
-        // Process dynamic tiles
+        let tile_size = self.grid.tile_size;
+        let center_tile_x = (center.x / tile_size).floor() as i32;
+        let center_tile_y = (center.y / tile_size).floor() as i32;
+        let range_tiles = (range / tile_size).ceil() as i32;
+
+        // Entity-terrain everywhere; entity-entity only near the player.
         for (&tile, dynamic) in &self.grid.dynamic_tiles {
-            if (tile.0 - center_tile_x).abs() <= radius && (tile.1 - center_tile_y).abs() <= radius
-            {
-                let static_ = self.grid.static_tiles.get(&tile).unwrap_or(&EMPTY_VEC);
+            let static_ = self.grid.static_tiles.get(&tile).unwrap_or(&EMPTY_VEC);
+            let tile_in_range = (tile.0 - center_tile_x).abs() <= range_tiles
+                && (tile.1 - center_tile_y).abs() <= range_tiles;
 
-                // Dynamic vs dynamic within the tile
+            if tile_in_range {
                 for i in 0..dynamic.len() {
                     for j in (i + 1)..dynamic.len() {
+                        pairs_checked += 1;
                         let a = dynamic[i];
                         let b = dynamic[j];
                         if visited.insert((a.min(b), a.max(b))) {
+                            let a_in_range = body_in_range(&bodies[a], center, range);
+                            let b_in_range = body_in_range(&bodies[b], center, range);
+                            if !a_in_range && !b_in_range {
+                                continue;
+                            }
+
                             if (masks_overlap_layers(
                                 bodies[a].masks_superset(),
                                 bodies[b].layers_superset(),
@@ -125,21 +148,51 @@ impl CollisionDetector for GridSpaceCollisionDetector {
                             )) && bodies[a].aabb_superset.overlaps(&bodies[b].aabb_superset)
                             {
                                 pairs.push(CollisionPair { a, b });
+                                pairs_added += 1;
                             }
+                        } else {
+                            visited_skipped += 1;
                         }
                     }
                 }
+            }
 
-                // Dynamic vs static within the tile
-                for &a in dynamic {
-                    for &b in static_ {
-                        if visited.insert((a.min(b), a.max(b))) {
-                            if bodies[a].aabb_superset.overlaps(&bodies[b].aabb_superset) {
-                                pairs.push(CollisionPair { a, b });
-                            }
+            // Dynamic vs static — always (terrain stays solid off-screen)
+            for &a in dynamic {
+                for &b in static_ {
+                    pairs_checked += 1;
+                    if visited.insert((a.min(b), a.max(b))) {
+                        if bodies[a].aabb_superset.overlaps(&bodies[b].aabb_superset) {
+                            pairs.push(CollisionPair { a, b });
+                            pairs_added += 1;
                         }
+                    } else {
+                        visited_skipped += 1;
                     }
                 }
+            }
+        }
+        let t2 = t0.elapsed();
+
+        // Log broad-phase stats every 60 steps
+        static mut BP_COUNTER: u32 = 0;
+        unsafe { BP_COUNTER += 1; }
+        if unsafe { BP_COUNTER % 60 } == 0 {
+            let n_tiles = self.grid.dynamic_tiles.len() + self.grid.static_tiles.len();
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("/tmp/ruin_physics.log")
+            {
+                use std::io::Write;
+                let _ = writeln!(
+                    f,
+                    "[broad_phase] inserted={} out_of_range={} tiles={} pairs_checked={} visited_skip={} pairs_added={} time={:.3}ms (insert={:.3}ms)",
+                    bodies_inserted, bodies_out_of_range, n_tiles,
+                    pairs_checked, visited_skipped, pairs_added,
+                    t2.as_secs_f64() * 1000.0,
+                    t1.as_secs_f64() * 1000.0,
+                );
             }
         }
 

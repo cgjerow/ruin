@@ -278,6 +278,7 @@ end
 --
 
 local count = 0;
+local target_entity_count = 1500;
 local function handle_ui_input(input, is_pressed, mouse_position)
 	WORLD.unpause()
 	count = 0
@@ -316,36 +317,61 @@ function ruin.update(dt)
 	end
 	if WORLD.is_paused() then return end
 
-
-	local x = math.random(0, 100)
-	local y = math.random(0, 100)
-	local flip_x = math.random(0, 1)
-	local flip_y = math.random(0, 1)
-	if flip_x == 1 then
-		y = y * -1
+	-- Batch spawn entities at start instead of 1 per frame
+	if count < target_entity_count then
+		local batch_size = 50
+		local remaining = target_entity_count - count
+		local to_spawn = math.min(batch_size, remaining)
+		for i = 1, to_spawn do
+			local x = math.random(-20, 20)
+			local y = math.random(-20, 20)
+			local s = skelly.new(x, y)
+			s.is_skelly = true
+			count = count + 1
+			s.id = ENGINE_HANDLES.create_body(s)
+		end
 	end
-	if flip_y == 1 then
-		x = x * -1
-	end
-
-
-	if (count < 1000) then
-		local s = skelly.new(x, y)
-		s.is_skelly = true
-		count = count + 1
-		s.id = ENGINE_HANDLES.create_body(s)
-	end
-	-- FPS calculation
+	-- FPS debug output (every 5 seconds to avoid spam)
 	fps_debug.frame_count = fps_debug.frame_count + 1
 	fps_debug.time_accum = fps_debug.time_accum + dt
 
 	local id = WORLD.player_id()
 
-	if fps_debug.time_accum >= 1.0 then
-		print("UPDATE FPS: ", fps_debug.frame_count)
-		print(count)
+	if fps_debug.time_accum >= 5.0 then
+		print(string.format("FPS: %d | Entities: %d", fps_debug.frame_count, count))
 		fps_debug.frame_count = 0
 		fps_debug.time_accum = 0
+	end
+
+	-- Arena containment log (walls at ±25, thickness 2 → outer face ±26)
+	if not arena_log_timer then arena_log_timer = 0 end
+	arena_log_timer = arena_log_timer + dt
+	if arena_log_timer >= 0.5 then
+		arena_log_timer = 0
+		local escaped, in_band, worst, wx, wy = 0, 0, 0, 0, 0
+		for eid, ent in pairs(CONFIG.entities) do
+			if ent.is_skelly then
+				local p = engine.get_position_2d(eid)
+				local ax, ay = math.abs(p[1]), math.abs(p[2])
+				local breach = math.max(ax - 24, ay - 24, 0)
+				if ax > 26 or ay > 26 then
+					escaped = escaped + 1
+				elseif ax > 24 or ay > 24 then
+					in_band = in_band + 1
+				end
+				if breach > worst then
+					worst, wx, wy = breach, p[1], p[2]
+				end
+			end
+		end
+		if escaped > 0 or in_band > 0 then
+			print(string.format(
+				"[arena-lua] escaped=%d in_wall_band=%d worst_breach=%.2f at (%.1f,%.1f)",
+				escaped, in_band, worst, wx, wy
+			))
+		else
+			print(string.format("[arena-lua] all skellys inside walls (n≈%d)", count))
+		end
 	end
 
 	if (WORLD.is_game_over()) then return end
@@ -438,7 +464,9 @@ function ruin.update(dt)
 end
 
 function ruin.load()
-	load_pre_game_screen()
+	-- Skip menu, go straight to game world
+	WORLD.unpause()
+	load_game_world()
 	-- function ruin.load()
 	--[[
 	engine.create_ui_scene({

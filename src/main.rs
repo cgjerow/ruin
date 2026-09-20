@@ -18,6 +18,8 @@ fn load_engine_config() -> EngineConfig {
         .get("camera_config")
         .unwrap_or(scriptor.lua.create_table().unwrap());
     let debug_enabled: bool = config_table.get("debug_enabled").unwrap_or(false);
+    let physics_range: f32 = config_table.get("physics_range").unwrap_or(30.0);
+    let physics_fps: u64 = config_table.get("physics_fps").unwrap_or(60);
     return EngineConfig {
         fps,
         debug_enabled,
@@ -27,6 +29,8 @@ fn load_engine_config() -> EngineConfig {
         virtual_resolution_height,
         dimensions: Dimensions::Two,
         camera: CameraOption::Follow,
+        physics_range,
+        physics_fps,
         camera2d_config: Camera2DConfig {
             zoom: camera2d_config.get("zoom").unwrap_or(15.0),
             initial_position: [
