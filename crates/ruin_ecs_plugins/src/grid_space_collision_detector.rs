@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Instant};
+use std::collections::HashMap;
 
 use ruin_bitmaps::masks_overlap_layers;
 use ruin_ecs::physics_2d::{
@@ -75,7 +75,6 @@ impl CollisionDetector for GridSpaceCollisionDetector {
     }
 
     fn broad_phase(&mut self, bodies: &Vec<Body2D>, center: Point2D, range: f32) -> Vec<CollisionPair> {
-        let t0 = Instant::now();
         self.grid.dynamic_tiles.clear();
         self.grid.static_tiles.clear();
 
@@ -106,8 +105,6 @@ impl CollisionDetector for GridSpaceCollisionDetector {
 
             Self::insert_body_into_grid(target_map, body, i, self.grid.tile_size);
         }
-        let t1 = t0.elapsed();
-
         let mut pairs = Vec::new();
         static EMPTY_VEC: Vec<usize> = Vec::new();
         let mut pairs_checked = 0;
@@ -172,30 +169,6 @@ impl CollisionDetector for GridSpaceCollisionDetector {
                 }
             }
         }
-        let t2 = t0.elapsed();
-
-        // Log broad-phase stats every 60 steps
-        static mut BP_COUNTER: u32 = 0;
-        unsafe { BP_COUNTER += 1; }
-        if unsafe { BP_COUNTER % 60 } == 0 {
-            let n_tiles = self.grid.dynamic_tiles.len() + self.grid.static_tiles.len();
-            if let Ok(mut f) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("/tmp/ruin_physics.log")
-            {
-                use std::io::Write;
-                let _ = writeln!(
-                    f,
-                    "[broad_phase] inserted={} out_of_range={} tiles={} pairs_checked={} visited_skip={} pairs_added={} time={:.3}ms (insert={:.3}ms)",
-                    bodies_inserted, bodies_out_of_range, n_tiles,
-                    pairs_checked, visited_skipped, pairs_added,
-                    t2.as_secs_f64() * 1000.0,
-                    t1.as_secs_f64() * 1000.0,
-                );
-            }
-        }
-
         pairs
     }
 
