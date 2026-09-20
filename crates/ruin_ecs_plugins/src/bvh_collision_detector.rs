@@ -24,6 +24,10 @@ impl CollisionDetector for BvhCollisionDetector {
     }
 
     fn broad_phase(&mut self, bodies: &Vec<Body2D>, center: Point2D, range: f32) -> Vec<CollisionPair> {
+        // TODO: Implement BVH-based broad phase query.
+        // Currently builds a BVH but never queries it — falls back to O(n²) brute force.
+        // BVH build commented out until query logic is implemented.
+        /*
         let mut bvh = BVH::build(
             &mut bodies
                 .iter()
@@ -34,11 +38,13 @@ impl CollisionDetector for BvhCollisionDetector {
         );
         //println!("Inserts {:?}", i.elapsed().as_secs_f64());
         let _i = Instant::now();
+        */
 
         let mut pairs = Vec::new();
 
         // TODO: Query BVH for overlapping pairs within range
         // For now, fall back to grid-style tier filtering on all bodies
+        /*
         let body_count = bodies.len();
         for i in 0..body_count {
             if bodies[i].colliders.is_empty() {
@@ -71,6 +77,7 @@ impl CollisionDetector for BvhCollisionDetector {
                 }
             }
         }
+        */
 
         pairs
     }

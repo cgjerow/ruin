@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Instant};
+use std::collections::HashMap;
 
 use cgmath::{InnerSpace, Vector2};
 use ruin_bitmaps::MaskLayerBitmap;
@@ -360,96 +360,15 @@ impl PhysicsWorld {
     }
 
     pub fn step(&mut self, dt: TimeUnit) {
-        let t0 = Instant::now();
         self.integrate(dt);
-        let t1 = t0.elapsed();
-        //
+
         self.collision_detector
             .update_player_position(self.player_pos, self.physics_range);
         let overlaps = self.collision_detector
             .broad_phase(&self.bodies, self.player_pos, self.physics_range);
         let overlaps = self.collision_detector.narrow_phase(&overlaps);
-        let t2 = t0.elapsed();
-        //
+
         self.collision_resolver.resolve(&mut self.bodies, &overlaps);
-        let t3 = t0.elapsed();
-
-        // Escape / wall-breach diagnostics (visible in `cargo run` stdout)
-        static mut LOG_COUNTER: u32 = 0;
-        static mut ESCAPE_LOG_COUNTER: u32 = 0;
-        unsafe {
-            LOG_COUNTER += 1;
-            ESCAPE_LOG_COUNTER += 1;
-        }
-        // Arena walls sit at ±25 with thickness 2 → solid band ≈[24,26].
-        // Log anyone past the inner face; shout if past the outer face.
-        if unsafe { ESCAPE_LOG_COUNTER % 30 } == 0 {
-            let mut inside_wall = 0u32;
-            let mut escaped = 0u32;
-            let mut worst = 0.0f32;
-            let mut worst_pos = (0.0f32, 0.0f32);
-            for body in &self.bodies {
-                if !matches!(body.body_type(), BodyType2D::Rigid) {
-                    continue;
-                }
-                let ax = body.position.x.abs();
-                let ay = body.position.y.abs();
-                let outside_inner = ax > 24.0 || ay > 24.0;
-                let outside_outer = ax > 26.0 || ay > 26.0;
-                if outside_inner {
-                    inside_wall += 1;
-                }
-                if outside_outer {
-                    escaped += 1;
-                }
-                let breach = (ax - 24.0).max(0.0).max((ay - 24.0).max(0.0));
-                if breach > worst {
-                    worst = breach;
-                    worst_pos = (body.position.x, body.position.y);
-                }
-            }
-            if inside_wall > 0 || escaped > 0 {
-                eprintln!(
-                    "[arena] step={} rigid_in_wall_band={} escaped_past_walls={} worst_breach={:.3} at ({:.2},{:.2}) pairs={}",
-                    unsafe { LOG_COUNTER },
-                    inside_wall,
-                    escaped,
-                    worst,
-                    worst_pos.0,
-                    worst_pos.1,
-                    overlaps.len(),
-                );
-            }
-        }
-
-        // Log physics timing every 60 steps to avoid spam
-        if unsafe { LOG_COUNTER % 60 } == 0 {
-            let n_bodies = self.bodies.len();
-            let n_pairs = overlaps.len();
-            if let Ok(mut f) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("/tmp/ruin_physics.log")
-            {
-                use std::io::Write;
-                let _ = writeln!(
-                    f,
-                    "[physics] bodies={} pairs={} integrate={:.3}ms broad={:.3}ms resolve={:.3}ms total={:.3}ms",
-                    n_bodies,
-                    n_pairs,
-                    t1.as_secs_f64() * 1000.0,
-                    (t2 - t1).as_secs_f64() * 1000.0,
-                    (t3 - t2).as_secs_f64() * 1000.0,
-                    t3.as_secs_f64() * 1000.0,
-                );
-            }
-            eprintln!(
-                "[physics] bodies={} pairs={} resolve={:.3}ms",
-                n_bodies,
-                n_pairs,
-                (t3 - t2).as_secs_f64() * 1000.0,
-            );
-        }
     }
 
     fn integrate(&mut self, dt: TimeUnit) {
