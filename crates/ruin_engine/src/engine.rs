@@ -73,6 +73,8 @@ pub struct EngineConfig {
     pub dimensions: Dimensions,
     pub camera: CameraOption,
     pub camera2d_config: Camera2DConfig,
+    pub physics_range: f32,
+    pub physics_fps: u64,
 }
 
 impl Engine {
@@ -88,7 +90,7 @@ impl Engine {
         Self {
             mouse_pos: [0.0, 0.0],
             player: 0,
-            physics_tick_rate: 1.0 / 300.0,
+            physics_tick_rate: 1.0 / config.physics_fps as f32,
             physics_accumulator: 0.0,
             lua_context: lua_executor,
             window: None,
@@ -107,6 +109,7 @@ impl Engine {
                 Box::new(GridSpaceCollisionDetector::new(3.0, 100)),
                 // Box::new(BvhCollisionDetector::new()),
                 Box::new(SimpleCollideAndSlideCollisionResolver::new(0.0)),
+                config.physics_range,
             ),
             physics_paused: true, // assume starting in "paused"
             canvas: Canvas::new(
@@ -206,6 +209,10 @@ impl Engine {
 
     fn unpause_physics(&mut self) {
         self.physics_paused = false
+    }
+
+    fn set_physics_range(&mut self, range: f32) {
+        self.physics.physics_range = range;
     }
 
     fn apply_force_2d(&mut self, id: Entity, fx: f32, fy: f32) {
@@ -510,6 +517,13 @@ impl Engine {
             lua_engine,
             unpause_physics,
             ()
+        );
+        expose_fn!(
+            self.lua_context.lua,
+            self_ptr,
+            lua_engine,
+            set_physics_range,
+            (range: f32)
         );
 
         let now_ns = self

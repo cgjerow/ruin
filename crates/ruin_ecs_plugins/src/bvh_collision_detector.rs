@@ -1,10 +1,8 @@
-use std::{collections::HashMap, time::Instant};
+use std::time::Instant;
 
 use ruin_bitmaps::masks_overlap_layers;
 use ruin_bvh::BVH;
-use ruin_ecs::physics_2d::{
-    Body2D, BodyType2D, CollisionDetector, CollisionPair, Index, Point2D, Unit, AABB,
-};
+use ruin_ecs::physics_2d::{AABB, Body2D, BodyType2D, CollisionDetector, CollisionPair, Point2D};
 
 pub struct BvhCollisionDetector {
     player_position: Point2D,
@@ -19,11 +17,15 @@ impl BvhCollisionDetector {
 }
 
 impl CollisionDetector for BvhCollisionDetector {
-    fn update_player_position(&mut self, position: Point2D) {
+    fn update_player_position(&mut self, position: Point2D, _physics_range: f32) {
         self.player_position = position;
     }
 
-    fn broad_phase(&mut self, bodies: &Vec<Body2D>) -> Vec<CollisionPair> {
+    fn broad_phase(&mut self, bodies: &Vec<Body2D>, center: Point2D, range: f32) -> Vec<CollisionPair> {
+        // TODO: Implement BVH-based broad phase query.
+        // Currently builds a BVH but never queries it — falls back to O(n²) brute force.
+        // BVH build commented out until query logic is implemented.
+        /*
         let mut bvh = BVH::build(
             &mut bodies
                 .iter()
@@ -34,44 +36,48 @@ impl CollisionDetector for BvhCollisionDetector {
         );
         //println!("Inserts {:?}", i.elapsed().as_secs_f64());
         let _i = Instant::now();
+        */
 
         let mut pairs = Vec::new();
-        // Process dynamic tiles
-        /*
-        for (&tile, dynamic) in &self.grid.dynamic_tiles {
-            if (tile.0 - center_tile_x).abs() <= radius && (tile.1 - center_tile_y).abs() <= radius
-            {
-                let static_ = self.grid.static_tiles.get(&tile).unwrap_or(&EMPTY_VEC);
 
-                // Dynamic vs dynamic within the tile
-                for i in 0..dynamic.len() {
-                    for j in (i + 1)..dynamic.len() {
-                        let a = dynamic[i];
-                        let b = dynamic[j];
-                        if visited.insert((a.min(b), a.max(b))) {
-                            if (masks_overlap_layers(
-                                bodies[a].masks_superset(),
-                                bodies[b].layers_superset(),
-                            ) || masks_overlap_layers(
-                                bodies[b].masks_superset(),
-                                bodies[a].layers_superset(),
-                            )) && bodies[a].aabb_superset.overlaps(&bodies[b].aabb_superset)
-                            {
-                                pairs.push(CollisionPair { a, b });
-                            }
-                        }
+        // TODO: Query BVH for overlapping pairs within range
+        // For now, fall back to grid-style tier filtering on all bodies
+        /*
+        let body_count = bodies.len();
+        for i in 0..body_count {
+            if bodies[i].colliders.is_empty() {
+                continue;
+            }
+            if !bodies[i].in_range(center, range) {
+                continue;
+            }
+            for j in (i + 1)..body_count {
+                if bodies[j].colliders.is_empty() {
+                    continue;
+                }
+                if !bodies[j].in_range(center, range) {
+                    continue;
+                }
+
+                // Tier 3: both out-of-range, entity-entity → skip
+                if !a_in_range && !b_in_range {
+                    if !matches!(bodies[i].body_type(), BodyType2D::Static)
+                        && !matches!(bodies[j].body_type(), BodyType2D::Static)
+                    {
+                        continue;
                     }
                 }
 
-                // Dynamic vs static within the tile
-                for &a in dynamic {
-                    for &b in static_ {
-                        if visited.insert((a.min(b), a.max(b))) {
-                            if bodies[a].aabb_superset.overlaps(&bodies[b].aabb_superset) {
-                                pairs.push(CollisionPair { a, b });
-                            }
-                        }
-                    }
+                if bodies[i].aabb_superset.overlaps(&bodies[j].aabb_superset)
+                    && (masks_overlap_layers(
+                        bodies[i].masks_superset(),
+                        bodies[j].layers_superset(),
+                    ) || masks_overlap_layers(
+                        bodies[j].masks_superset(),
+                        bodies[i].layers_superset(),
+                    ))
+                {
+                    pairs.push(CollisionPair { a: i, b: j });
                 }
             }
         }

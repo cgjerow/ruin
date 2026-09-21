@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Instant};
+use std::collections::HashMap;
 
 use cgmath::{InnerSpace, Vector2};
 use ruin_bitmaps::MaskLayerBitmap;
@@ -285,6 +285,34 @@ impl Body2D {
         self.colliders.push(collider);
     }
 
+    /// Check if this body's AABB center is within range of the given center point.
+    #[inline]
+    pub fn in_range(&self, center: Point2D, range: f32) -> bool {
+        let body_center = self.aabb_superset.center();
+        let dx = (body_center.x - center.x).abs();
+        let dy = (body_center.y - center.y).abs();
+        dx <= range && dy <= range
+    }
+
+    /// Recompute world-space AABBs from the current position.
+    /// Must be called after any position change outside of `integrate`
+    /// so subsequent collision checks see up-to-date bounds.
+    pub fn sync_aabbs(&mut self) {
+        self.aabbs.clear();
+        for collider in &self.colliders {
+            let center = self.position + collider.offset;
+            let aabb = collider.compute_aabb(center);
+            self.aabbs.push(AABBMasksAndLayers {
+                aabb,
+                masks: collider.masks,
+                layers: collider.layers,
+            });
+        }
+        if !self.aabbs.is_empty() {
+            self.aabb_superset = ShapeSystem::superset(&self.aabbs);
+        }
+    }
+
     pub fn integrate(&mut self, dt: TimeUnit) {
         if !self.is_active {
             return;
@@ -293,21 +321,7 @@ impl Body2D {
         match self.body_type {
             BodyType2D::Rigid | BodyType2D::Kinematic => {
                 self.position += self.velocity * dt;
-
-                self.aabbs.clear();
-                for collider in &self.colliders {
-                    let center = self.position + collider.offset;
-                    let aabb = collider.compute_aabb(center);
-                    self.aabbs.push(AABBMasksAndLayers {
-                        aabb,
-                        masks: collider.masks,
-                        layers: collider.layers,
-                    });
-                }
-
-                if self.aabbs.len() > 0 {
-                    self.aabb_superset = ShapeSystem::superset(&self.aabbs);
-                }
+                self.sync_aabbs();
             }
             _ => {}
         }
@@ -320,17 +334,20 @@ pub struct PhysicsWorld {
     collision_detector: Box<dyn CollisionDetector>,
     collision_resolver: Box<dyn CollisionResolver>,
     player_pos: Point2D,
+    pub physics_range: f32,
 }
 
 impl PhysicsWorld {
     pub fn new(
         collision_detector: Box<dyn CollisionDetector>,
         collision_resolver: Box<dyn CollisionResolver>,
+        physics_range: f32,
     ) -> Self {
         PhysicsWorld {
             bodies: Vec::new(),
             entity_map: HashMap::new(),
             player_pos: Point2D { x: 0.0, y: 0.0 },
+            physics_range,
             collision_detector,
             collision_resolver,
         }
@@ -352,20 +369,15 @@ impl PhysicsWorld {
     }
 
     pub fn step(&mut self, dt: TimeUnit) {
-        let _i = Instant::now();
         self.integrate(dt);
-        //println!("Integrate {:?}", i.elapsed().as_secs_f64());
-        //
-        let _i = Instant::now();
+
         self.collision_detector
-            .update_player_position(self.player_pos);
-        let overlaps = self.collision_detector.broad_phase(&self.bodies);
+            .update_player_position(self.player_pos, self.physics_range);
+        let overlaps = self.collision_detector
+            .broad_phase(&self.bodies, self.player_pos, self.physics_range);
         let overlaps = self.collision_detector.narrow_phase(&overlaps);
-        //println!("overlaps {:?}", i.elapsed().as_secs_f64());
-        //
-        let _i = Instant::now();
+
         self.collision_resolver.resolve(&mut self.bodies, &overlaps);
-        //println!("Resolves {:?}", i.elapsed().as_secs_f64());
     }
 
     fn integrate(&mut self, dt: TimeUnit) {
